@@ -276,7 +276,7 @@ function toast(message) {
 }
 
 function serverUrl() {
-  return localStorage.getItem('arcana-server') || new URLSearchParams(location.search).get('server') || 'ws://localhost:8080';
+  return 'wss://vps65228.publiccloud.com.br/ws' || new URLSearchParams(location.search).get('server');
 }
 
 function localizeState(state) {
