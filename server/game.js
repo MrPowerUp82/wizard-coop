@@ -27,7 +27,7 @@ export function difficultyAt(time, playerCount = 1) {
 }
 
 export function createGameState() {
-  return { time: 0, players: {}, enemies: [], shots: [], gems: [], spawn: 0, over: false, cleanup: 0 };
+  return { time: 0, players: {}, enemies: [], shots: [], gems: [], spawn: 0, spawnCursor: 0, over: false, cleanup: 0 };
 }
 
 export function createPlayer(id, name, color = 0) {
@@ -35,7 +35,7 @@ export function createPlayer(id, name, color = 0) {
     id, name, color, x: color * 55, y: 0, hp: 100, maxHp: 100, xp: 0, level: 1,
     alive: true, input: { x: 0, y: 0 }, speed: 190, damage: 14, attackDelay: 0.62,
     attackCooldown: 0, projectiles: 1, pickupRadius: 105, armor: 0,
-    hitCooldown: 0, powers: {}, pendingPowers: null
+    hitCooldown: 0, invulnerableFor: 0, powers: {}, pendingPowers: null
   };
 }
 
@@ -60,6 +60,7 @@ export function applyPower(player, powerId) {
   if (powerId === 'magnet') player.pickupRadius += 55;
   if (powerId === 'armor') player.armor += 1.5;
   player.pendingPowers = null;
+  player.invulnerableFor = 3;
   return true;
 }
 
@@ -87,6 +88,7 @@ export function updateGame(s, dt, random = Math.random) {
 
   for (const p of alive) {
     p.hitCooldown = Math.max(0, p.hitCooldown - dt);
+    p.invulnerableFor = Math.max(0, p.invulnerableFor - dt);
     p.attackCooldown -= dt;
     if (!p.pendingPowers) {
       p.x += p.input.x * p.speed * dt;
@@ -95,17 +97,22 @@ export function updateGame(s, dt, random = Math.random) {
   }
 
   s.spawn -= dt;
-  if (s.spawn <= 0 && s.enemies.length < LIMITS.enemies) {
+  const adaptiveLimit = Math.min(LIMITS.enemies, 28 + Math.floor(s.time / 5) + alive.length * 18);
+  if (s.spawn <= 0 && s.enemies.length < adaptiveLimit) {
     s.spawn = difficulty.spawnInterval;
-    for (let n = 0; n < difficulty.spawnCount && s.enemies.length < LIMITS.enemies; n++) {
-      const focus = alive[Math.floor(random() * alive.length)];
-      const angle = random() * Math.PI * 2;
+    const batchSize = Math.min(difficulty.spawnCount, adaptiveLimit - s.enemies.length, 6);
+    const angleOffset = random() * Math.PI * 2;
+    for (let n = 0; n < batchSize; n++) {
+      const focus = alive[(s.spawnCursor + n) % alive.length];
+      const angle = angleOffset + n * (Math.PI * 2 / batchSize) + random() * 0.25;
+      const distance = 520 + random() * 120;
       const roll = random();
       const type = s.time < 40 ? (roll < 0.72 ? 'slime' : 'bat') : roll < 0.48 ? 'slime' : roll < 0.76 ? 'bat' : roll < 0.93 ? 'eye' : 'brute';
       const baseHp = { slime: 20, bat: 15, eye: 30, brute: 75 }[type];
       const hp = baseHp * difficulty.hpScale;
-      s.enemies.push({ id: entityId(), x: focus.x + Math.cos(angle) * 560, y: focus.y + Math.sin(angle) * 560, hp, maxHp: hp, type, age: 0, farFor: 0 });
+      s.enemies.push({ id: entityId(), x: focus.x + Math.cos(angle) * distance, y: focus.y + Math.sin(angle) * distance, hp, maxHp: hp, type, age: 0 });
     }
+    s.spawnCursor = (s.spawnCursor + batchSize) % alive.length;
   }
 
   for (const p of alive) {
@@ -127,7 +134,7 @@ export function updateGame(s, dt, random = Math.random) {
     const baseSpeed = enemy.type === 'bat' ? 98 : enemy.type === 'brute' ? 47 : enemy.type === 'eye' ? 60 : 66;
     enemy.x += Math.cos(angle) * baseSpeed * difficulty.speedScale * dt;
     enemy.y += Math.sin(angle) * baseSpeed * difficulty.speedScale * dt;
-    if (distanceSq(enemy, target) < 34 ** 2 && target.hitCooldown <= 0 && !target.pendingPowers) {
+    if (distanceSq(enemy, target) < 34 ** 2 && target.hitCooldown <= 0 && !target.pendingPowers && target.invulnerableFor <= 0) {
       const baseDamage = { slime: 9, bat: 7, eye: 12, brute: 20 }[enemy.type];
       target.hp = Math.max(0, target.hp - Math.max(2, baseDamage * difficulty.damageScale - target.armor));
       target.hitCooldown = 0.48;

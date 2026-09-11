@@ -61,7 +61,14 @@ test('jogador fica invulnerável enquanto escolhe um poder', () => {
   assert.equal(player.alive, true);
 
   applyPower(player, 'arcane');
-  updateGame(state, 0.5, fixedRandom);
+  assert.equal(player.invulnerableFor, 3);
+  updateGame(state, 2.9, fixedRandom);
+  assert.equal(player.hp, 1);
+  assert.equal(player.alive, true);
+  state.enemies[0].x = player.x;
+  state.enemies[0].y = player.y;
+  state.enemies[0].hp = 1000;
+  updateGame(state, 0.2, fixedRandom);
   assert.equal(player.hp, 0);
   assert.equal(player.alive, false);
 });

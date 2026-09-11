@@ -95,7 +95,7 @@ requestAnimationFrame(menuLoop);
 function startOffline() {
   game = createGameState();
   game.offline = true;
-  game.players.me = createPlayer('me', 'Arcanista', 0);
+  game.players.me = createPlayer('me', playerName(), 0);
   shownPowers = '';
   defeatShown = false;
   showGame('SOZINHO');
@@ -193,7 +193,7 @@ function render(time) {
   for (const player of Object.values(game.players)) {
     if (visible(player.x, player.y, camX, camY)) {
       const alive = player.alive !== false;
-      if (alive && player.pendingPowers?.length) {
+      if (alive && (player.pendingPowers?.length || player.invulnerableFor > 0)) {
         const pulse = 40 + Math.sin(time / 130) * 4;
         ctx.strokeStyle = 'rgba(126, 237, 205, .82)';
         ctx.lineWidth = 2;
@@ -209,12 +209,48 @@ function render(time) {
     index++;
   }
   ctx.restore();
+  renderTeammateArrows(me, camX, camY);
 
   $('#hpBar').style.width = `${Math.max(0, me.hp / me.maxHp) * 100}%`;
   $('#xpBar').style.width = `${Math.min(1, me.xp / xpNeeded(me.level)) * 100}%`;
   $('#level').textContent = `NÍVEL ${me.level}`;
   $('#timer').textContent = format(game.time || 0);
   renderPlayers();
+}
+
+function renderTeammateArrows(me, camX, camY) {
+  if (game.offline) return;
+  for (const player of Object.values(game.players)) {
+    if (player === me || player.alive === false) continue;
+    const screenX = player.x - camX;
+    const screenY = player.y - camY;
+    if (screenX >= 45 && screenX <= W - 45 && screenY >= 65 && screenY <= H - 55) continue;
+    const dx = player.x - me.x;
+    const dy = player.y - me.y;
+    const angle = Math.atan2(dy, dx);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const reach = Math.min(
+      (W / 2 - 55) / Math.max(0.001, Math.abs(cos)),
+      (H / 2 - 75) / Math.max(0.001, Math.abs(sin))
+    );
+    const x = W / 2 + cos * reach;
+    const y = H / 2 + sin * reach;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = '#83e1c4';
+    ctx.shadowColor = '#42b995';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(15, 0); ctx.lineTo(-9, -9); ctx.lineTo(-5, 0); ctx.lineTo(-9, 9);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#b8f3e1';
+    ctx.font = '600 9px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${player.name} • ${Math.round(Math.hypot(dx, dy) / 10)}m`, x, y + 22);
+  }
 }
 
 function format(value) {
@@ -253,6 +289,7 @@ function showGame(label, room = '') {
   $('#modeLabel').textContent = label;
   $('#roomPill').classList.toggle('hidden', !room);
   $('#roomPill').querySelector('b').textContent = room;
+  $('#playerName').textContent = (game?.players.me?.name || playerName()).toUpperCase();
 }
 
 function endGame() {
@@ -276,7 +313,11 @@ function toast(message) {
 }
 
 function serverUrl() {
-  return 'wss://vps65228.publiccloud.com.br/ws' || new URLSearchParams(location.search).get('server');
+  return new URLSearchParams(location.search).get('server') || localStorage.getItem('arcana-server') || 'wss://vps65228.publiccloud.com.br/ws';
+}
+
+function playerName() {
+  return ($('#playerNameInput').value.trim() || 'Arcanista').slice(0, 16);
 }
 
 function localizeState(state) {
@@ -289,7 +330,7 @@ function connect(action, code = '') {
   try { socket = new WebSocket(serverUrl()); } catch { toast('Endereço do servidor inválido'); return; }
   $('#lobby').classList.remove('hidden');
   $('#lobbyStatus').textContent = 'Conectando ao servidor…';
-  socket.onopen = () => socket.send(JSON.stringify({ type: action, room: code, name: 'Arcanista' }));
+  socket.onopen = () => socket.send(JSON.stringify({ type: action, room: code, name: playerName() }));
   socket.onerror = () => { $('#lobbyStatus').textContent = 'Não foi possível alcançar o servidor.'; };
   socket.onmessage = ({ data }) => {
     const message = JSON.parse(data);
@@ -343,3 +384,5 @@ $('#defeatExit').onclick = endGame;
 $('#settingsBtn').onclick = () => $('#settings').classList.toggle('hidden');
 $('#serverUrl').value = serverUrl();
 $('#saveServer').onclick = () => { localStorage.setItem('arcana-server', $('#serverUrl').value.trim()); toast('Servidor salvo'); };
+$('#playerNameInput').value = localStorage.getItem('arcana-player-name') || '';
+$('#playerNameInput').addEventListener('change', () => localStorage.setItem('arcana-player-name', playerName()));

@@ -62,6 +62,32 @@
 
 .player-dot.dead { filter: grayscale(1); opacity: 0.4; }
 
+.profile-box {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.profile-box span {
+  display: block;
+  margin-bottom: 6px;
+  color: #708b86;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.profile-box input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid rgba(118, 213, 185, 0.22);
+  border-radius: 7px;
+  outline: none;
+  background: rgba(8, 18, 25, 0.84);
+  color: #bdf7e5;
+}
+
+.profile-box input:focus { border-color: #65c9ab; }
+
 @media (max-width: 620px) {
   .power-choices { grid-template-columns: 1fr; }
   .power-choice { min-height: 88px; }
