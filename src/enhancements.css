@@ -1,0 +1,68 @@
+.power-card {
+  width: min(94vw, 680px);
+}
+
+.power-choices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.power-choice {
+  min-height: 150px;
+  padding: 18px 14px;
+  border: 1px solid #315d53;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #142a2c, #0b171e);
+  text-align: left;
+  transition: 0.18s;
+}
+
+.power-choice:hover {
+  transform: translateY(-4px);
+  border-color: #77dfbd;
+  box-shadow: 0 12px 35px rgba(67, 210, 167, 0.13);
+}
+
+.power-choice i {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 15px;
+  border-radius: 50%;
+  background: #204b43;
+  color: #91ebce;
+  font-style: normal;
+  font-size: 18px;
+}
+
+.power-choice b {
+  display: block;
+  margin-bottom: 7px;
+  color: #b6f3df;
+  font: 700 13px Cinzel;
+}
+
+.power-choice small {
+  color: #829997;
+  line-height: 1.45;
+}
+
+.defeat-rune { color: #d36273; }
+.final-stats {
+  margin: 22px 0;
+  padding: 13px;
+  border-block: 1px solid #243d3b;
+  color: #9eb8b3;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.player-dot.dead { filter: grayscale(1); opacity: 0.4; }
+
+@media (max-width: 620px) {
+  .power-choices { grid-template-columns: 1fr; }
+  .power-choice { min-height: 88px; }
+}

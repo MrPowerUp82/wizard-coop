@@ -1,0 +1,19 @@
+{
+  "name": "arcana-coop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "server": "node server/server.js",
+    "test": "node --test server/*.test.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "vite": "^7.1.5"
+  }
+}
