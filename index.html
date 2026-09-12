@@ -68,7 +68,17 @@
           <span class="rune defeat-rune">◆</span><h2 id="defeatTitle">Você caiu</h2>
           <p id="defeatText">A noite reclamou mais uma alma.</p>
           <div id="finalStats" class="final-stats"></div>
+          <button id="spectateBtn" class="primary compact hidden">Observar aliados</button>
           <button id="defeatExit" class="primary compact">Voltar ao menu</button>
+        </div>
+      </section>
+
+      <section id="pauseModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+        <div class="modal-card">
+          <span class="rune">Ⅱ</span><h2 id="pauseTitle">Ritual pausado</h2>
+          <p>Respire. A floresta pode esperar.</p>
+          <button id="resumeBtn" class="primary compact">Continuar batalha</button>
+          <button class="text-btn backBtn">Voltar ao menu</button>
         </div>
       </section>
 
@@ -78,11 +88,12 @@
         <div class="room-pill hidden" id="roomPill">SALA <b>------</b></div>
         <div class="players" id="players"></div>
         <div class="controls-hint">WASD / SETAS PARA MOVER <span>•</span> ATAQUE AUTOMÁTICO</div>
-        <button id="exitBtn" class="exit">×</button>
+        <button id="pauseBtn" class="exit pause" aria-label="Pausar partida" title="Pausar (Esc)">Ⅱ</button>
+        <button id="exitBtn" class="exit" aria-label="Voltar ao menu">×</button>
         <div id="joystick"><i></i></div>
       </section>
 
-      <div id="toast" class="toast"></div>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

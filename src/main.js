@@ -38,6 +38,9 @@ let lastInputAt = 0;
 let touching = false;
 let shownPowers = '';
 let defeatShown = false;
+let gameOverShown = false;
+let paused = false;
+let animationFrame = 0;
 const keys = new Set();
 
 function resize() {
@@ -54,6 +57,7 @@ addEventListener('resize', resize);
 resize();
 
 function drawSprite(name, x, y, size, rotation = 0, alpha = 1) {
+  if (!atlas.complete || !atlas.naturalWidth) return;
   const [sx, sy] = sprites[name];
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -88,19 +92,23 @@ function menuLoop(time) {
   for (let radius = 140; radius < 350; radius += 48) {
     ctx.beginPath(); ctx.arc(x, y, radius + Math.sin(time / 1800 + radius) * 5, 0, Math.PI * 2); ctx.stroke();
   }
-  requestAnimationFrame(menuLoop);
+  animationFrame = requestAnimationFrame(menuLoop);
 }
-requestAnimationFrame(menuLoop);
+animationFrame = requestAnimationFrame(menuLoop);
 
 function startOffline() {
+  cancelAnimationFrame(animationFrame);
+  resetInput();
+  paused = false;
   game = createGameState();
   game.offline = true;
   game.players.me = createPlayer('me', playerName(), 0);
   shownPowers = '';
   defeatShown = false;
+  gameOverShown = false;
   showGame('SOZINHO');
   last = performance.now();
-  requestAnimationFrame(loop);
+  animationFrame = requestAnimationFrame(loop);
 }
 
 function loop(now) {
@@ -111,7 +119,7 @@ function loop(now) {
   const me = game.players.me;
   if (game.offline) {
     if (me?.alive && !me.pendingPowers) me.input = input;
-    updateGame(game, dt);
+    if (!paused && !me?.pendingPowers?.length) updateGame(game, dt);
   } else if (socket?.readyState === 1 && me && me.alive !== false) {
     const changed = input.x !== lastSentInput.x || input.y !== lastSentInput.y;
     if (changed || now - lastInputAt >= 100) {
@@ -122,7 +130,7 @@ function loop(now) {
   }
   syncOverlays();
   render(now);
-  requestAnimationFrame(loop);
+  animationFrame = requestAnimationFrame(loop);
 }
 
 function syncOverlays() {
@@ -136,7 +144,7 @@ function syncOverlays() {
     $('#powerModal').classList.add('hidden');
   }
   if (me.alive === false && !defeatShown) showDefeat(game.over);
-  if (game.over && !defeatShown) showDefeat(true);
+  if (game.over && !gameOverShown) showDefeat(true);
 }
 
 function showPowerChoices(choices) {
@@ -163,11 +171,13 @@ function choosePower(id) {
 
 function showDefeat(allDead) {
   defeatShown = true;
+  gameOverShown = allDead;
   const me = game.players.me;
   $('#defeatTitle').textContent = allDead ? 'Ritual encerrado' : 'Você caiu';
   $('#defeatText').textContent = allDead ? 'Nenhum arcanista permaneceu de pé.' : 'Você agora observa os aliados sobreviventes.';
   $('#finalStats').textContent = `TEMPO ${format(game.time)}  •  NÍVEL ${me.level}`;
   $('#defeatModal').classList.remove('hidden');
+  $('#spectateBtn').classList.toggle('hidden', allDead);
 }
 
 function visible(x, y, camX, camY, margin = 110) {
@@ -178,7 +188,8 @@ function render(time) {
   const me = game.players.me || Object.values(game.players)[0];
   if (!me) return;
   backdrop(time);
-  const camX = me.x - W / 2, camY = me.y - H / 2;
+  const focus = me.alive === false ? Object.values(game.players).find(p => p.alive !== false) || me : me;
+  const camX = focus.x - W / 2, camY = focus.y - H / 2;
   ctx.save();
   ctx.translate(-camX, -camY);
   for (const gem of game.gems || []) if (visible(gem.x, gem.y, camX, camY)) drawSprite('gem', gem.x, gem.y, 28, 0, Math.min(0.9, gem.ttl / 4));
@@ -209,7 +220,7 @@ function render(time) {
     index++;
   }
   ctx.restore();
-  renderTeammateArrows(me, camX, camY);
+  renderTeammateArrows(focus, camX, camY);
 
   $('#hpBar').style.width = `${Math.max(0, me.hp / me.maxHp) * 100}%`;
   $('#xpBar').style.width = `${Math.min(1, me.xp / xpNeeded(me.level)) * 100}%`;
@@ -264,7 +275,13 @@ function readInput() {
   if (x || y) { const length = Math.hypot(x, y); input = { x: x / length, y: y / length }; }
   else if (!touching) input = { x: 0, y: 0 };
 }
-addEventListener('keydown', event => keys.add(event.key.toLowerCase()));
+addEventListener('keydown', event => {
+  if (event.target instanceof HTMLInputElement) return;
+  const key = event.key.toLowerCase();
+  if (game && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) event.preventDefault();
+  if (key === 'escape' && !event.repeat) togglePause();
+  keys.add(key);
+});
 addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
 
 const joystick = $('#joystick');
@@ -280,7 +297,23 @@ function touchMove(event) {
 }
 joystick.addEventListener('pointerdown', event => { touching = true; joystick.setPointerCapture(event.pointerId); touchMove(event); });
 joystick.addEventListener('pointermove', touchMove);
-joystick.addEventListener('pointerup', () => { touching = false; input = { x: 0, y: 0 }; knob.style.transform = ''; });
+function resetInput() {
+  keys.clear();
+  touching = false;
+  input = { x: 0, y: 0 };
+  knob.style.transform = '';
+  if (game?.offline && game.players.me) game.players.me.input = input;
+  if (socket?.readyState === 1) socket.send(JSON.stringify({ type: 'input', ...input }));
+}
+for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) joystick.addEventListener(event, resetInput);
+function togglePause(force) {
+  if (!game?.offline || game.over) return;
+  paused = typeof force === 'boolean' ? force : !paused;
+  resetInput();
+  $('#pauseModal').classList.toggle('hidden', !paused);
+}
+addEventListener('blur', () => { resetInput(); togglePause(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { resetInput(); togglePause(true); } });
 
 function showGame(label, room = '') {
   $('#menu').classList.add('hidden');
@@ -290,18 +323,24 @@ function showGame(label, room = '') {
   $('#roomPill').classList.toggle('hidden', !room);
   $('#roomPill').querySelector('b').textContent = room;
   $('#playerName').textContent = (game?.players.me?.name || playerName()).toUpperCase();
+  $('#pauseBtn').classList.toggle('hidden', !game?.offline);
 }
 
 function endGame() {
+  cancelAnimationFrame(animationFrame);
+  resetInput();
+  paused = false;
   game = null;
-  socket?.close();
+  const previousSocket = socket;
   socket = null;
+  previousSocket?.close();
   $('#hud').classList.add('hidden');
   $('#lobby').classList.add('hidden');
   $('#powerModal').classList.add('hidden');
   $('#defeatModal').classList.add('hidden');
+  $('#pauseModal').classList.add('hidden');
   $('#menu').classList.remove('hidden');
-  requestAnimationFrame(menuLoop);
+  animationFrame = requestAnimationFrame(menuLoop);
 }
 
 function toast(message) {
@@ -327,14 +366,22 @@ function localizeState(state) {
 }
 
 function connect(action, code = '') {
+  if (socket) return;
   try { socket = new WebSocket(serverUrl()); } catch { toast('Endereço do servidor inválido'); return; }
+  const connection = socket;
+  $('#roomCode').textContent = '------';
+  $('#startBtn').disabled = true;
   $('#lobby').classList.remove('hidden');
   $('#lobbyStatus').textContent = 'Conectando ao servidor…';
-  socket.onopen = () => socket.send(JSON.stringify({ type: action, room: code, name: playerName() }));
-  socket.onerror = () => { $('#lobbyStatus').textContent = 'Não foi possível alcançar o servidor.'; };
+  socket.onopen = () => { if (socket === connection) connection.send(JSON.stringify({ type: action, room: code, name: playerName() })); };
+  socket.onerror = () => { if (socket === connection) $('#lobbyStatus').textContent = 'Não foi possível alcançar o servidor.'; };
   socket.onmessage = ({ data }) => {
-    const message = JSON.parse(data);
+    if (socket !== connection) return;
+    let message;
+    try { message = JSON.parse(data); } catch { return; }
+    if (!message || typeof message !== 'object') return;
     if (message.type === 'joined') {
+      $('#startBtn').disabled = false;
       socket.playerId = message.playerId; socket.room = message.room;
       $('#roomCode').textContent = message.room;
       $('#lobbyStatus').textContent = `${message.count} jogador(es) no ritual`;
@@ -342,14 +389,26 @@ function connect(action, code = '') {
     }
     if (message.type === 'lobby') $('#lobbyStatus').textContent = `${message.count} jogador(es) no ritual`;
     if (message.type === 'start') {
+      cancelAnimationFrame(animationFrame);
+      resetInput();
       game = { offline: false, ...localizeState(message.state) };
-      shownPowers = ''; defeatShown = false;
-      showGame('CO-OP', socket.room); last = performance.now(); requestAnimationFrame(loop);
+      shownPowers = ''; defeatShown = false; gameOverShown = false;
+      showGame('CO-OP', socket.room); last = performance.now(); animationFrame = requestAnimationFrame(loop);
     }
     if (message.type === 'state' && game) game = { offline: false, ...localizeState(message.state) };
-    if (message.type === 'error') toast(message.message);
+    if (message.type === 'error') {
+      connection.failure = message.message;
+      toast(message.message);
+      $('#lobbyStatus').textContent = message.message;
+      if (!connection.playerId) connection.close();
+    }
   };
-  socket.onclose = () => { if (game) { toast('Conexão encerrada'); setTimeout(endGame, 900); } };
+  socket.onclose = () => {
+    if (socket !== connection) return;
+    socket = null;
+    if (game) { endGame(); toast('Conexão encerrada. Você pode iniciar outro ritual.'); }
+    else { $('#lobbyStatus').textContent = connection.failure || 'Conexão encerrada. Cancele para tentar novamente.'; $('#startBtn').disabled = true; }
+  };
 }
 
 function renderPlayers() {
@@ -376,11 +435,18 @@ $('#joinBtn').onclick = () => {
   const code = $('#roomInput').value.trim().toUpperCase();
   code.length < 4 ? toast('Digite o código da sala') : connect('join', code);
 };
-$('#startBtn').onclick = () => socket?.send(JSON.stringify({ type: 'start' }));
-$('#roomCode').onclick = async () => { await navigator.clipboard?.writeText($('#roomCode').textContent); toast('Código copiado'); };
+$('#startBtn').onclick = () => { if (socket?.readyState === 1) socket.send(JSON.stringify({ type: 'start' })); };
+$('#roomCode').onclick = async () => {
+  if (!socket?.room) return;
+  try { await navigator.clipboard.writeText(socket.room); toast('Código copiado'); }
+  catch { toast(`Compartilhe o código: ${socket.room}`); }
+};
 document.querySelectorAll('.backBtn').forEach(button => { button.onclick = endGame; });
 $('#exitBtn').onclick = endGame;
 $('#defeatExit').onclick = endGame;
+$('#spectateBtn').onclick = () => $('#defeatModal').classList.add('hidden');
+$('#pauseBtn').onclick = () => togglePause();
+$('#resumeBtn').onclick = () => togglePause(false);
 $('#settingsBtn').onclick = () => $('#settings').classList.toggle('hidden');
 $('#serverUrl').value = serverUrl();
 $('#saveServer').onclick = () => { localStorage.setItem('arcana-server', $('#serverUrl').value.trim()); toast('Servidor salvo'); };

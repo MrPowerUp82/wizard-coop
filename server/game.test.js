@@ -1,11 +1,55 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DROP_TTL, LIMITS, applyPower, createGameState, createPlayer,
+  DROP_TTL, LIMITS, POWERS, applyPower, createGameState, createPlayer,
   difficultyAt, updateGame, xpNeeded
 } from './game.js';
 
 const fixedRandom = () => 0.25;
+
+test('XP excedente oferece o próximo nível sem exigir outra coleta', () => {
+  const state = createGameState();
+  const player = createPlayer('p1', 'Teste');
+  state.players.p1 = player;
+  state.spawn = 999;
+  player.xp = xpNeeded(1) + xpNeeded(2);
+  updateGame(state, 0.016, fixedRandom);
+  assert.equal(player.level, 2);
+  assert.equal(applyPower(player, player.pendingPowers[0]), true);
+  updateGame(state, 0.016, fixedRandom);
+  assert.equal(player.level, 3);
+  assert.equal(player.pendingPowers.length, 3);
+  assert.equal(player.xp, 0);
+});
+
+test('todos os poderes no máximo não bloqueiam movimento ou níveis', () => {
+  const state = createGameState();
+  const player = createPlayer('p1', 'Teste');
+  state.players.p1 = player;
+  state.spawn = 999;
+  player.powers = Object.fromEntries(Object.entries(POWERS).map(([id, power]) => [id, power.max]));
+  player.xp = xpNeeded(1) + xpNeeded(2);
+  player.input = { x: 1, y: 0 };
+  updateGame(state, 0.016, fixedRandom);
+  assert.equal(player.level, 3);
+  assert.equal(player.pendingPowers, null);
+  assert.ok(player.x > 0);
+});
+
+test('jogador morto neste frame não coleta XP nem recupera vida', () => {
+  const state = createGameState();
+  const player = createPlayer('p1', 'Teste');
+  state.players.p1 = player;
+  state.spawn = 999;
+  player.hp = 1;
+  state.enemies.push({ id: 'e1', x: 0, y: 0, hp: 100, maxHp: 100, type: 'brute', age: 0 });
+  state.gems.push({ x: 0, y: 0, value: xpNeeded(1), ttl: DROP_TTL });
+  updateGame(state, 0.016, fixedRandom);
+  assert.equal(player.alive, false);
+  assert.equal(player.hp, 0);
+  assert.equal(player.xp, 0);
+  assert.equal(player.pendingPowers, null);
+});
 
 test('jogador morre, para de se mover e encerra quando todos caem', () => {
   const state = createGameState();

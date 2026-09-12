@@ -2,6 +2,16 @@
   width: min(94vw, 680px);
 }
 
+.exit.pause { right: 65px; }
+#pauseModal { z-index: 10; }
+#joystick { touch-action: none; }
+.modal { overflow-y: auto; padding: 18px 0; }
+button:focus-visible, input:focus-visible { outline: 2px solid #a7ead0; outline-offset: 4px; }
+button:disabled { opacity: .45; cursor: wait; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
+}
+
 .power-choices {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

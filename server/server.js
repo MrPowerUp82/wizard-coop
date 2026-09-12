@@ -22,24 +22,32 @@ function broadcast(room, message) {
 }
 
 function join(ws, room, name) {
+  if (room.state.over) return send(ws, { type: 'error', message: 'Este ritual já terminou. Crie uma nova sala.' });
   if (room.clients.size >= 4) return send(ws, { type: 'error', message: 'A sala está cheia.' });
   ws.room = room;
   ws.id = crypto.randomUUID();
   ws.messages = 0;
   ws.rateWindow = Date.now();
   room.clients.add(ws);
-  room.state.players[ws.id] = createPlayer(ws.id, (name || 'Arcanista').slice(0, 16), (room.clients.size - 1) % 4);
+  room.state.players[ws.id] = createPlayer(ws.id, (typeof name === 'string' && name.trim() || 'Arcanista').slice(0, 16), (room.clients.size - 1) % 4);
   send(ws, { type: 'joined', room: room.code, playerId: ws.id, count: room.clients.size });
   broadcast(room, { type: 'lobby', count: room.clients.size });
 }
 
 wss.on('connection', ws => {
+  ws.messages = 0;
+  ws.rateWindow = Date.now();
+  ws.on('error', () => ws.close());
   ws.on('message', raw => {
     const now = Date.now();
     if (now - (ws.rateWindow || 0) > 1000) { ws.rateWindow = now; ws.messages = 0; }
     if (++ws.messages > 50) return;
     let message;
     try { message = JSON.parse(raw); } catch { return; }
+    if (!message || typeof message !== 'object' || Array.isArray(message)) return;
+    if (ws.room && (message.type === 'create' || message.type === 'join')) {
+      return send(ws, { type: 'error', message: 'Você já está em uma sala.' });
+    }
 
     if (message.type === 'create') {
       const roomCode = createCode();
@@ -95,4 +103,4 @@ function start(room) {
   }, 1000 / TICK);
 }
 
-console.log(`Arcana Survivors server listening on :${PORT}`);
+wss.on('listening', () => console.log(`Arcana Survivors server listening on :${wss.address().port}`));

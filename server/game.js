@@ -70,7 +70,8 @@ function grantXp(player, amount, random) {
     player.xp -= xpNeeded(player.level);
     player.level += 1;
     player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.1);
-    player.pendingPowers = availablePowers(player, random);
+    const choices = availablePowers(player, random);
+    player.pendingPowers = choices.length ? choices : null;
   }
 }
 
@@ -87,6 +88,7 @@ export function updateGame(s, dt, random = Math.random) {
   const difficulty = difficultyAt(s.time, alive.length);
 
   for (const p of alive) {
+    if (!p.pendingPowers) grantXp(p, 0, random);
     p.hitCooldown = Math.max(0, p.hitCooldown - dt);
     p.invulnerableFor = Math.max(0, p.invulnerableFor - dt);
     p.attackCooldown -= dt;
@@ -160,9 +162,11 @@ export function updateGame(s, dt, random = Math.random) {
   s.shots = s.shots.filter(shot => shot.ttl > 0).slice(-LIMITS.shots);
   s.enemies = s.enemies.filter(enemy => enemy.hp > 0);
 
+  const survivors = alive.filter(p => p.alive);
   for (const gem of s.gems) {
     gem.ttl -= dt;
-    const target = nearest(gem, alive);
+    if (gem.ttl <= 0 || !survivors.length) continue;
+    const target = nearest(gem, survivors);
     const d2 = distanceSq(gem, target);
     if (d2 < target.pickupRadius ** 2) {
       const angle = Math.atan2(target.y - gem.y, target.x - gem.x);

@@ -15,7 +15,17 @@ Em outro terminal:
 npm run server
 ```
 
-O menu usa `ws://localhost:8080` por padrão. Em produção, abra **Configurar servidor** ou use `?server=wss://jogo.seudominio.com/ws`.
+Para conectar ao backend local, abra `http://localhost:5173/?server=ws://localhost:8080`. Sem configuração, o menu usa o endereço remoto definido em `src/main.js`. Em produção, abra **Configurar servidor** ou use `?server=wss://jogo.seudominio.com/ws`.
+
+## Controles e validação
+
+- **WASD / setas**: movimento; ataques são automáticos.
+- **Esc / botão Ⅱ**: pausa e retoma a partida offline. Trocar de janela pausa automaticamente.
+- **Novo poder**: no modo offline, a simulação espera sua escolha.
+- **Observar aliados**: após cair no co-op, acompanhe um sobrevivente até o ritual terminar.
+- **Celular**: use o controle virtual; cancelar o toque interrompe o movimento.
+
+Execute `npm test` para validar a simulação e o protocolo WebSocket, e `npm run build` para gerar o frontend de produção.
 
 ## Publicar o frontend no GitHub Pages
 
