@@ -2,7 +2,7 @@ import { WebSocketServer } from 'ws';
 import crypto from 'node:crypto';
 import { applyPower, createGameState, createPlayer, publicState, updateGame } from './game.js';
 
-const PORT = Number(process.env.PORT || 8080);
+const PORT = Number(process.env.PORT || 8081);
 const TICK = 30;
 const rooms = new Map();
 const wss = new WebSocketServer({ port: PORT, maxPayload: 4096 });
@@ -99,7 +99,8 @@ function start(room) {
     const dt = Math.min((now - previous) / 1000, 0.08);
     previous = now;
     updateGame(room.state, dt);
-    if (++frames % 3 === 0) broadcast(room, { type: 'state', state: publicState(room.state) });
+    if (++frames % 3 === 0 || room.state.over) broadcast(room, { type: 'state', state: publicState(room.state) });
+    if (room.state.over) clearInterval(room.timer);
   }, 1000 / TICK);
 }
 

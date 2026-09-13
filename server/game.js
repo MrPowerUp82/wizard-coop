@@ -1,4 +1,6 @@
-export const LIMITS = Object.freeze({ enemies: 180, shots: 320, drops: 220 });
+import { ENEMIES, PHASES, PHASE_DURATION, TRANSITION_DURATION } from './phases.js';
+
+export const LIMITS = Object.freeze({ enemies: 180, shots: 320, drops: 220, hazards: 12 });
 export const DROP_TTL = 24;
 
 export const POWERS = Object.freeze({
@@ -27,7 +29,8 @@ export function difficultyAt(time, playerCount = 1) {
 }
 
 export function createGameState() {
-  return { time: 0, players: {}, enemies: [], shots: [], gems: [], spawn: 0, spawnCursor: 0, over: false, cleanup: 0 };
+  return { time: 0, players: {}, enemies: [], shots: [], gems: [], hazards: [], spawn: 0, spawnCursor: 0, over: false, cleanup: 0,
+    phase: 0, phaseTime: 0, phaseStatus: 'horde', transitionTime: 0, victory: false };
 }
 
 export function createPlayer(id, name, color = 0) {
@@ -79,12 +82,61 @@ const distanceSq = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 const nearest = (origin, entities) => entities.reduce((a, b) => distanceSq(origin, b) < distanceSq(origin, a) ? b : a);
 const entityId = () => globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
+function hurt(player, damage) {
+  if (!player.alive || player.hitCooldown > 0 || player.pendingPowers || player.invulnerableFor > 0) return;
+  player.hp = Math.max(0, player.hp - Math.max(2, damage - player.armor));
+  player.hitCooldown = 0.48;
+  if (!player.hp) {
+    player.alive = false;
+    player.input = { x: 0, y: 0 };
+    player.pendingPowers = null;
+  }
+}
+
+function summonBoss(s, alive) {
+  const type = PHASES[s.phase].boss;
+  const hp = ENEMIES[type].hp * (1 + (alive.length - 1) * 0.65);
+  s.enemies = [{ id: entityId(), type, boss: true, hp, maxHp: hp, age: 0,
+    x: alive[0].x + 330, y: alive[0].y - 180, attackCooldown: 2.5 }];
+  s.shots = [];
+  s.phaseStatus = 'boss';
+}
+
+function bossAttack(s, enemy, target, dt) {
+  enemy.attackCooldown -= dt;
+  if (enemy.attackCooldown > 0) return;
+  enemy.attackCooldown = enemy.type === 'demon' ? 3.4 : 4.5;
+  const centers = enemy.type === 'treant' ? [{ x: enemy.x, y: enemy.y }]
+    : enemy.type === 'lich' ? [{ x: target.x, y: target.y }]
+      : [-1, 0, 1].map(n => ({ x: target.x + n * 140, y: target.y }));
+  for (const center of centers) {
+    if (s.hazards.length >= LIMITS.hazards) break;
+    s.hazards.push({ ...center, radius: enemy.type === 'treant' ? 175 : 100,
+      warning: 1.3, ttl: 1.65, damage: ENEMIES[enemy.type].damage + 8, fired: false });
+  }
+}
+
 export function updateGame(s, dt, random = Math.random) {
   if (s.over) return;
   const players = Object.values(s.players);
   const alive = players.filter(p => p.alive);
   if (!alive.length) { s.over = players.length > 0; return; }
   s.time += dt;
+  if (s.phaseStatus === 'transition') {
+    s.transitionTime = Math.max(0, s.transitionTime - dt);
+    if (!s.transitionTime) {
+      s.phase++;
+      s.phaseTime = 0;
+      s.phaseStatus = 'horde';
+      s.spawn = 0;
+      for (const p of alive) { p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.35); p.invulnerableFor = 3; }
+    }
+    return;
+  }
+  if (s.phaseStatus === 'horde') {
+    s.phaseTime = Math.min(PHASE_DURATION, s.phaseTime + dt);
+    if (s.phaseTime >= PHASE_DURATION) summonBoss(s, alive);
+  }
   const difficulty = difficultyAt(s.time, alive.length);
 
   for (const p of alive) {
@@ -100,7 +152,7 @@ export function updateGame(s, dt, random = Math.random) {
 
   s.spawn -= dt;
   const adaptiveLimit = Math.min(LIMITS.enemies, 28 + Math.floor(s.time / 5) + alive.length * 18);
-  if (s.spawn <= 0 && s.enemies.length < adaptiveLimit) {
+  if (s.phaseStatus === 'horde' && s.spawn <= 0 && s.enemies.length < adaptiveLimit) {
     s.spawn = difficulty.spawnInterval;
     const batchSize = Math.min(difficulty.spawnCount, adaptiveLimit - s.enemies.length, 6);
     const angleOffset = random() * Math.PI * 2;
@@ -109,8 +161,8 @@ export function updateGame(s, dt, random = Math.random) {
       const angle = angleOffset + n * (Math.PI * 2 / batchSize) + random() * 0.25;
       const distance = 520 + random() * 120;
       const roll = random();
-      const type = s.time < 40 ? (roll < 0.72 ? 'slime' : 'bat') : roll < 0.48 ? 'slime' : roll < 0.76 ? 'bat' : roll < 0.93 ? 'eye' : 'brute';
-      const baseHp = { slime: 20, bat: 15, eye: 30, brute: 75 }[type];
+      const type = PHASES[s.phase].enemies[roll < 0.6 ? 0 : 1];
+      const baseHp = ENEMIES[type].hp;
       const hp = baseHp * difficulty.hpScale;
       s.enemies.push({ id: entityId(), x: focus.x + Math.cos(angle) * distance, y: focus.y + Math.sin(angle) * distance, hp, maxHp: hp, type, age: 0 });
     }
@@ -133,26 +185,29 @@ export function updateGame(s, dt, random = Math.random) {
     enemy.age += dt;
     const target = nearest(enemy, alive);
     const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
-    const baseSpeed = enemy.type === 'bat' ? 98 : enemy.type === 'brute' ? 47 : enemy.type === 'eye' ? 60 : 66;
+    if (enemy.hp <= 0) continue;
+    const baseSpeed = ENEMIES[enemy.type].speed;
     enemy.x += Math.cos(angle) * baseSpeed * difficulty.speedScale * dt;
     enemy.y += Math.sin(angle) * baseSpeed * difficulty.speedScale * dt;
-    if (distanceSq(enemy, target) < 34 ** 2 && target.hitCooldown <= 0 && !target.pendingPowers && target.invulnerableFor <= 0) {
-      const baseDamage = { slime: 9, bat: 7, eye: 12, brute: 20 }[enemy.type];
-      target.hp = Math.max(0, target.hp - Math.max(2, baseDamage * difficulty.damageScale - target.armor));
-      target.hitCooldown = 0.48;
-      if (target.hp <= 0) {
-        target.alive = false;
-        target.input = { x: 0, y: 0 };
-        target.pendingPowers = null;
-      }
+    if (enemy.boss) bossAttack(s, enemy, target, dt);
+    if (distanceSq(enemy, target) < (enemy.boss ? ENEMIES[enemy.type].radius + 15 : 34) ** 2) hurt(target, ENEMIES[enemy.type].damage * difficulty.damageScale);
+  }
+
+  for (const hazard of s.hazards) {
+    hazard.warning -= dt;
+    hazard.ttl -= dt;
+    if (hazard.warning <= 0 && !hazard.fired) {
+      hazard.fired = true;
+      for (const p of alive) if (distanceSq(hazard, p) < hazard.radius ** 2) hurt(p, hazard.damage);
     }
   }
+  s.hazards = s.hazards.filter(h => h.ttl > 0);
 
   for (const shot of s.shots) {
     shot.x += shot.vx * dt; shot.y += shot.vy * dt; shot.ttl -= dt;
     if (shot.ttl <= 0) continue;
     for (const enemy of s.enemies) {
-      if (enemy.hp > 0 && distanceSq(shot, enemy) < 29 ** 2) {
+      if (enemy.hp > 0 && distanceSq(shot, enemy) < (enemy.boss ? ENEMIES[enemy.type].radius : 29) ** 2) {
         enemy.hp -= shot.damage; shot.ttl = 0;
         if (enemy.hp <= 0) s.gems.push({ x: enemy.x, y: enemy.y, value: enemy.type === 'brute' ? 3 : 1, ttl: DROP_TTL });
         break;
@@ -179,16 +234,26 @@ export function updateGame(s, dt, random = Math.random) {
   if (s.cleanup <= 0) {
     s.cleanup = 0.75;
     s.gems = s.gems.filter(gem => !gem.dead && gem.ttl > 0 && alive.some(p => distanceSq(gem, p) < 1500 ** 2)).slice(-LIMITS.drops);
-    s.enemies = s.enemies.filter(enemy => enemy.age < 75 && alive.some(p => distanceSq(enemy, p) < 1450 ** 2)).slice(-LIMITS.enemies);
+    s.enemies = s.enemies.filter(enemy => enemy.boss || (enemy.age < 75 && alive.some(p => distanceSq(enemy, p) < 1450 ** 2))).slice(-LIMITS.enemies);
   } else {
     s.gems = s.gems.filter(gem => !gem.dead);
   }
   if (players.every(p => !p.alive)) s.over = true;
+  if (!s.over && s.phaseStatus === 'boss' && !s.enemies.some(e => e.boss)) {
+    s.enemies = []; s.shots = []; s.gems = []; s.hazards = [];
+    if (s.phase === PHASES.length - 1) {
+      s.victory = true; s.over = true; s.phaseStatus = 'complete';
+      for (const p of players) p.pendingPowers = null;
+    } else {
+      s.phaseStatus = 'transition'; s.transitionTime = TRANSITION_DURATION;
+    }
+  }
 }
 
 export function publicState(s) {
   return {
-    time: s.time, over: s.over,
+    time: s.time, over: s.over, victory: s.victory, phase: s.phase, phaseTime: s.phaseTime,
+    phaseStatus: s.phaseStatus, transitionTime: s.transitionTime, hazards: s.hazards,
     players: Object.fromEntries(Object.entries(s.players).map(([id, p]) => [id, { ...p, input: undefined, attackCooldown: undefined, hitCooldown: undefined }])),
     enemies: s.enemies, shots: s.shots, gems: s.gems
   };

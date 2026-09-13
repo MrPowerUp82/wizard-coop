@@ -1,12 +1,22 @@
 import './style.css';
 import './enhancements.css';
 import { POWERS, applyPower, createGameState, createPlayer, updateGame, xpNeeded } from '../server/game.js';
+import { ENEMIES, PHASES, PHASE_DURATION } from '../server/phases.js';
+import { drawTerrain } from './terrain.js';
 
 const $ = selector => document.querySelector(selector);
 const canvas = $('#game');
 const ctx = canvas.getContext('2d');
 const atlas = new Image();
 atlas.src = './assets/sprites.webp';
+const phaseAtlas = new Image();
+phaseAtlas.src = './assets/phases.png';
+// Source bounds follow the generated atlas (1254 × 1254).
+const phaseSprites = {
+  mushroom: [0, 0, 418, 442], beetle: [418, 0, 408, 442], treant: [826, 0, 428, 440],
+  skeleton: [0, 442, 418, 410], wraith: [418, 442, 408, 410], lich: [826, 440, 428, 408],
+  imp: [0, 852, 418, 402], scorpion: [418, 852, 408, 402], demon: [826, 848, 428, 406]
+};
 
 const CELL = 313.5;
 const sprites = {
@@ -41,6 +51,7 @@ let defeatShown = false;
 let gameOverShown = false;
 let paused = false;
 let animationFrame = 0;
+let shownPhase = '';
 const keys = new Set();
 
 function resize() {
@@ -57,13 +68,14 @@ addEventListener('resize', resize);
 resize();
 
 function drawSprite(name, x, y, size, rotation = 0, alpha = 1) {
-  if (!atlas.complete || !atlas.naturalWidth) return;
-  const [sx, sy] = sprites[name];
+  const source = phaseSprites[name] ? phaseAtlas : atlas;
+  if (!source.complete || !source.naturalWidth) return;
+  const bounds = phaseSprites[name] || [sprites[name][0] * CELL, sprites[name][1] * CELL, CELL, CELL];
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(x, y);
   ctx.rotate(rotation);
-  ctx.drawImage(atlas, sx * CELL, sy * CELL, CELL, CELL, -size / 2, -size / 2, size, size);
+  ctx.drawImage(source, ...bounds, -size / 2, -size / 2, size, size);
   ctx.restore();
 }
 
@@ -106,6 +118,7 @@ function startOffline() {
   shownPowers = '';
   defeatShown = false;
   gameOverShown = false;
+  shownPhase = '';
   showGame('SOZINHO');
   last = performance.now();
   animationFrame = requestAnimationFrame(loop);
@@ -173,9 +186,10 @@ function showDefeat(allDead) {
   defeatShown = true;
   gameOverShown = allDead;
   const me = game.players.me;
-  $('#defeatTitle').textContent = allDead ? 'Ritual encerrado' : 'Você caiu';
-  $('#defeatText').textContent = allDead ? 'Nenhum arcanista permaneceu de pé.' : 'Você agora observa os aliados sobreviventes.';
-  $('#finalStats').textContent = `TEMPO ${format(game.time)}  •  NÍVEL ${me.level}`;
+  $('#defeatTitle').textContent = game.victory ? 'Ritual concluído!' : allDead ? 'Ritual encerrado' : 'Você caiu';
+  $('#defeatText').textContent = game.victory ? 'Os três guardiões caíram. A aurora pertence aos arcanistas.' : allDead ? 'Nenhum arcanista permaneceu de pé.' : 'Você agora observa os aliados sobreviventes.';
+  $('#finalStats').textContent = `TEMPO ${format(game.time)}  •  NÍVEL ${me.level}  •  FASE ${(game.phase || 0) + 1}/3`;
+  $('#defeatModal').classList.toggle('victory', Boolean(game.victory));
   $('#defeatModal').classList.remove('hidden');
   $('#spectateBtn').classList.toggle('hidden', allDead);
 }
@@ -187,16 +201,26 @@ function visible(x, y, camX, camY, margin = 110) {
 function render(time) {
   const me = game.players.me || Object.values(game.players)[0];
   if (!me) return;
-  backdrop(time);
   const focus = me.alive === false ? Object.values(game.players).find(p => p.alive !== false) || me : me;
   const camX = focus.x - W / 2, camY = focus.y - H / 2;
+  drawTerrain(ctx, game.phase || 0, camX, camY, W, H);
   ctx.save();
   ctx.translate(-camX, -camY);
+  for (const hazard of game.hazards || []) {
+    ctx.beginPath(); ctx.arc(hazard.x, hazard.y, hazard.radius, 0, Math.PI * 2);
+    ctx.fillStyle = hazard.fired ? 'rgba(255,150,75,.55)' : 'rgba(245,85,80,.12)'; ctx.fill();
+    ctx.strokeStyle = hazard.fired ? '#ffc778' : '#ef7f78'; ctx.lineWidth = 2; ctx.stroke();
+    if (!hazard.fired) {
+      ctx.beginPath(); ctx.arc(hazard.x, hazard.y, hazard.radius * Math.max(0, 1 - hazard.warning / 1.3), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
   for (const gem of game.gems || []) if (visible(gem.x, gem.y, camX, camY)) drawSprite('gem', gem.x, gem.y, 28, 0, Math.min(0.9, gem.ttl / 4));
   for (const shot of game.shots || []) if (visible(shot.x, shot.y, camX, camY)) drawSprite('bolt', shot.x, shot.y, 38, Math.atan2(shot.vy, shot.vx));
   for (const enemy of game.enemies || []) {
     if (!visible(enemy.x, enemy.y, camX, camY)) continue;
-    drawSprite(enemy.type, enemy.x, enemy.y, enemy.type === 'brute' ? 76 : 54);
+    drawSprite(enemy.type, enemy.x, enemy.y, ENEMIES[enemy.type]?.size || (enemy.type === 'brute' ? 76 : 64));
+    if (enemy.boss) continue;
     ctx.fillStyle = '#10151a'; ctx.fillRect(enemy.x - 20, enemy.y - 34, 40, 3);
     ctx.fillStyle = '#b95465'; ctx.fillRect(enemy.x - 20, enemy.y - 34, 40 * Math.max(0, enemy.hp / enemy.maxHp), 3);
   }
@@ -226,7 +250,33 @@ function render(time) {
   $('#xpBar').style.width = `${Math.min(1, me.xp / xpNeeded(me.level)) * 100}%`;
   $('#level').textContent = `NÍVEL ${me.level}`;
   $('#timer').textContent = format(game.time || 0);
+  renderPhase();
   renderPlayers();
+}
+
+function renderPhase() {
+  const phase = PHASES[game.phase || 0];
+  const state = game.phaseStatus || 'horde';
+  const key = `${game.phase}:${state}`;
+  if (shownPhase !== key) {
+    shownPhase = key;
+    $('#phaseName').textContent = `${(game.phase || 0) + 1} / 3 · ${phase.name}`;
+    $('#phasePanel').style.setProperty('--phase-color', phase.color);
+    if (state === 'boss') toast(`${phase.bossName} despertou! Evite os círculos de ataque.`);
+    else if (state === 'horde') toast(`Fase ${(game.phase || 0) + 1}: ${phase.name}`);
+  }
+  $('#phaseTime').textContent = state === 'horde' ? `${format(Math.ceil(PHASE_DURATION - (game.phaseTime || 0)))} ATÉ O CHEFE`
+    : state === 'boss' ? 'DERROTE O GUARDIÃO' : state === 'transition' ? 'GUARDIÃO DERROTADO' : 'CAMPANHA CONCLUÍDA';
+  $('#phaseProgress').style.width = `${Math.min(100, (game.phaseTime || 0) / PHASE_DURATION * 100)}%`;
+  const boss = game.enemies.find(e => e.boss);
+  $('#bossPanel').classList.toggle('hidden', !boss);
+  if (boss) {
+    $('#bossName').textContent = phase.bossName;
+    $('#bossHp').style.width = `${Math.max(0, boss.hp / boss.maxHp * 100)}%`;
+    $('#bossHealth').textContent = `${Math.ceil(boss.hp)} / ${Math.ceil(boss.maxHp)}`;
+  }
+  $('#phaseTransition').classList.toggle('hidden', state !== 'transition');
+  if (state === 'transition') $('#transitionText').textContent = `${PHASES[(game.phase || 0) + 1]?.name} · ${Math.ceil(game.transitionTime)}s`;
 }
 
 function renderTeammateArrows(me, camX, camY) {
@@ -392,7 +442,7 @@ function connect(action, code = '') {
       cancelAnimationFrame(animationFrame);
       resetInput();
       game = { offline: false, ...localizeState(message.state) };
-      shownPowers = ''; defeatShown = false; gameOverShown = false;
+      shownPowers = ''; defeatShown = false; gameOverShown = false; shownPhase = '';
       showGame('CO-OP', socket.room); last = performance.now(); animationFrame = requestAnimationFrame(loop);
     }
     if (message.type === 'state' && game) game = { offline: false, ...localizeState(message.state) };

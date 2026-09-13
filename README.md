@@ -65,6 +65,25 @@ location /ws {
 - Dificuldade progressiva com limites de entidades e drops temporários
 - Offline sem servidor
 - Salas co-op por código com servidor autoritativo
-- Sprites WebP em atlas
+- Atlas de sprites WebP e PNG com transparência
+- Campanha de três fases, seis inimigos temáticos e três chefes
 
-Próximas evoluções naturais: chefes, novas armas, persistência, reconexão e ressurreição cooperativa.
+## Campanha
+
+| Fase | Chão e inimigos | Chefe |
+| --- | --- | --- |
+| Bosque Desperto | Terra e musgo, cogumelos e besouros de espinhos | Raiz Ancestral: impacto em área ao redor do chefe |
+| Cripta Glacial | Lajes congeladas, esqueletos e espectros | Rei do Inverno: explosão marcada na posição de um jogador |
+| Abismo de Brasas | Basalto e fissuras, diabretes e escorpiões | Coração da Caldeira: três áreas de explosão simultâneas |
+
+Cada horda dura **300 segundos de simulação**. Ao completar esse tempo, os inimigos comuns dão lugar ao chefe. A próxima fase começa somente após derrotá-lo, com uma passagem de quatro segundos e cura de 35% da vida máxima para sobreviventes. Níveis e poderes são preservados. O tempo dos chefes e das passagens é adicional aos 15 minutos de hordas; pausa e escolha de poder offline congelam a simulação. A derrota do terceiro chefe concede vitória ao grupo.
+
+Ataques especiais têm aviso de 1,3 segundo: saia do círculo antes de ele se preencher. Chefes não expiram pela limpeza de entidades e sua vida escala com o número de sobreviventes no momento da invocação. Jogadores derrotados continuam como espectadores.
+
+O servidor mantém os limites de entidades, com no máximo 12 áreas de ataque, e interrompe o timer após vitória ou derrota. Os pisos são pequenos tiles gerados uma vez no navegador; o atlas novo também é carregado apenas no cliente. Isso não substitui um teste de carga na VPS de 1 CPU/500 MB.
+
+Arte: `public/assets/phases.png`, gerada com a ferramenta integrada de imagens. Prompt e mapeamento em `public/assets/phases-art.md`. Regras e balanceamento em `server/phases.js`; texturas de chão em `src/terrain.js`.
+
+Para atualizar o co-op, publique o frontend e atualize também os arquivos da pasta `server`, incluindo `phases.js`, reiniciando o processo Node. Um backend antigo não executa a campanha nova.
+
+Próximas evoluções naturais: novas armas, persistência, reconexão e ressurreição cooperativa.

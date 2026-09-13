@@ -42,7 +42,7 @@
         <aside class="preview-card">
           <div class="moon"></div>
           <div class="sprite-preview"></div>
-          <div class="preview-copy"><strong>O BOSQUE DESPERTOU</strong><span>Magia automática • hordas infinitas • até 4 jogadores</span></div>
+          <div class="preview-copy"><strong>TRÊS REINOS. UM ÚLTIMO RITUAL.</strong><span>3 fases de 5 minutos • 3 chefes • até 4 jogadores</span></div>
         </aside>
       </main>
 
@@ -87,6 +87,9 @@
         <div class="timer"><b id="timer">00:00</b><span id="modeLabel">SOZINHO</span></div>
         <div class="room-pill hidden" id="roomPill">SALA <b>------</b></div>
         <div class="players" id="players"></div>
+        <div id="phasePanel" class="phase-panel"><b id="phaseName"></b><span id="phaseTime"></span><div class="bar"><i id="phaseProgress"></i></div></div>
+        <div id="bossPanel" class="boss-panel hidden"><div><b id="bossName"></b><span id="bossHealth"></span></div><div class="bar"><i id="bossHp"></i></div><small>Saia dos círculos antes que se preencham</small></div>
+        <div id="phaseTransition" class="phase-transition hidden"><small>PASSAGEM ABERTA</small><strong id="transitionText"></strong><span>Os sobreviventes recuperam 35% da vida máxima</span></div>
         <div class="controls-hint">WASD / SETAS PARA MOVER <span>•</span> ATAQUE AUTOMÁTICO</div>
         <button id="pauseBtn" class="exit pause" aria-label="Pausar partida" title="Pausar (Esc)">Ⅱ</button>
         <button id="exitBtn" class="exit" aria-label="Voltar ao menu">×</button>
