@@ -1,6 +1,6 @@
 import './style.css';
 import './enhancements.css';
-import { POWERS, applyPower, createGameState, createPlayer, updateGame, xpNeeded } from '../server/game.js';
+import { POWERS, REVIVE, SPECIAL, SPELLS, activateSpecial, applyPower, createGameState, createPlayer, updateGame, xpNeeded } from '../server/game.js';
 import { ENEMIES, PHASES, PHASE_DURATION } from '../server/phases.js';
 import { drawTerrain } from './terrain.js';
 
@@ -53,6 +53,10 @@ let paused = false;
 let animationFrame = 0;
 let shownPhase = '';
 let selectedVisibility = 'open';
+const savedCharacter = Number(localStorage.getItem('arcana-character') ?? 0);
+let selectedCharacter = Number.isInteger(savedCharacter) && savedCharacter >= 0 && savedCharacter < 4 ? savedCharacter : 0;
+const characterNames = ['Azul', 'Vermelho', 'Verde', 'Roxo'];
+const characterEffects = ['Desacelera inimigos', 'Explode em área', 'Atravessa 3 inimigos', 'Lâmina larga, até 2 alvos'];
 const keys = new Set();
 
 function resize() {
@@ -115,7 +119,7 @@ function startOffline() {
   paused = false;
   game = createGameState();
   game.offline = true;
-  game.players.me = createPlayer('me', playerName(), 0);
+  game.players.me = createPlayer('me', playerName(), selectedCharacter);
   shownPowers = '';
   defeatShown = false;
   gameOverShown = false;
@@ -157,6 +161,12 @@ function syncOverlays() {
     shownPowers = '';
     $('#powerModal').classList.add('hidden');
   }
+  if (me.alive && defeatShown && !game.over) {
+    defeatShown = false;
+    $('#defeatModal').classList.add('hidden');
+    resetInput();
+    toast('Você foi ressuscitado!');
+  }
   if (me.alive === false && !defeatShown) showDefeat(game.over);
   if (game.over && !gameOverShown) showDefeat(true);
 }
@@ -188,8 +198,8 @@ function showDefeat(allDead) {
   gameOverShown = allDead;
   const me = game.players.me;
   $('#defeatTitle').textContent = game.victory ? 'Ritual concluído!' : allDead ? 'Ritual encerrado' : 'Você caiu';
-  $('#defeatText').textContent = game.victory ? 'Os três guardiões caíram. A aurora pertence aos arcanistas.' : allDead ? 'Nenhum arcanista permaneceu de pé.' : 'Você agora observa os aliados sobreviventes.';
-  $('#finalStats').textContent = `TEMPO ${format(game.time)}  •  NÍVEL ${me.level}  •  FASE ${(game.phase || 0) + 1}/3`;
+  $('#defeatText').textContent = game.victory ? 'Os três guardiões caíram. A aurora pertence aos arcanistas.' : allDead ? 'Nenhum arcanista permaneceu de pé.' : 'Um aliado pode ressuscitar você ficando parado junto ao seu corpo por 4 segundos.';
+  $('#finalStats').textContent = `TEMPO ${format(game.time)}  •  NÍVEL ${me.level}  •  FASE ${(game.phase || 0) + 1}/3  •  MOEDAS ${me.coins || 0}`;
   $('#defeatModal').classList.toggle('victory', Boolean(game.victory));
   $('#defeatModal').classList.remove('hidden');
   $('#spectateBtn').classList.toggle('hidden', allDead);
@@ -216,8 +226,19 @@ function render(time) {
       ctx.stroke();
     }
   }
-  for (const gem of game.gems || []) if (visible(gem.x, gem.y, camX, camY)) drawSprite('gem', gem.x, gem.y, 28, 0, Math.min(0.9, gem.ttl / 4));
-  for (const shot of game.shots || []) if (visible(shot.x, shot.y, camX, camY)) drawSprite('bolt', shot.x, shot.y, 38, Math.atan2(shot.vy, shot.vx));
+  for (const gem of game.gems || []) if (visible(gem.x, gem.y, camX, camY)) drawSprite(gem.type || 'gem', gem.x, gem.y, 28, 0, Math.min(0.9, gem.ttl / 4));
+  for (const shot of game.shots || []) if (visible(shot.x, shot.y, camX, camY)) {
+    const spell = SPELLS[shot.color ?? 0];
+    ctx.save();
+    if (shot.color === 3) ctx.filter = 'hue-rotate(55deg)';
+    drawSprite(spell.sprite, shot.x, shot.y, shot.special ? 65 : spell.sprite === 'blade' ? 52 : 38, Math.atan2(shot.vy, shot.vx));
+    ctx.restore();
+  }
+  for (const shot of game.enemyShots || []) if (visible(shot.x, shot.y, camX, camY)) {
+    ctx.strokeStyle = '#ff6666'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(shot.x, shot.y, 21, 0, Math.PI * 2); ctx.stroke();
+    drawSprite(shot.sprite, shot.x, shot.y, 42, Math.atan2(shot.vy, shot.vx));
+  }
   for (const enemy of game.enemies || []) {
     if (!visible(enemy.x, enemy.y, camX, camY)) continue;
     drawSprite(enemy.type, enemy.x, enemy.y, ENEMIES[enemy.type]?.size || (enemy.type === 'brute' ? 76 : 64));
@@ -229,6 +250,12 @@ function render(time) {
   for (const player of Object.values(game.players)) {
     if (visible(player.x, player.y, camX, camY)) {
       const alive = player.alive !== false;
+      if (!alive && !game.over) {
+        ctx.strokeStyle = '#eaaa91'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(player.x, player.y, REVIVE.radius, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#8dffcc'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(player.x, player.y, REVIVE.radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (player.reviveProgress || 0) / REVIVE.seconds); ctx.stroke();
+      }
       if (alive && (player.pendingPowers?.length || player.invulnerableFor > 0)) {
         const pulse = 40 + Math.sin(time / 130) * 4;
         ctx.strokeStyle = 'rgba(126, 237, 205, .82)';
@@ -240,7 +267,7 @@ function render(time) {
       drawSprite(playerSprites[player.color ?? index % 4], player.x, player.y, 68, 0, alive ? 1 : 0.28);
       ctx.font = '600 10px Inter'; ctx.textAlign = 'center';
       ctx.fillStyle = alive ? '#c6eee2' : '#8b5961';
-      ctx.fillText(alive ? (player.name || 'Aliado') : 'DERROTADO', player.x, player.y - 41);
+      ctx.fillText(alive ? (player.name || 'Aliado') : game.over ? 'DERROTADO' : `REVIVER · ${Math.ceil(REVIVE.seconds - (player.reviveProgress || 0))}s`, player.x, player.y - (alive ? 41 : 65));
     }
     index++;
   }
@@ -251,6 +278,16 @@ function render(time) {
   $('#xpBar').style.width = `${Math.min(1, me.xp / xpNeeded(me.level)) * 100}%`;
   $('#level').textContent = `NÍVEL ${me.level}`;
   $('#timer').textContent = format(game.time || 0);
+  const charge = me.specialCharge || 0;
+  const spell = SPELLS[me.color ?? 0];
+  $('#spellName').textContent = spell.name;
+  $('#specialFill').style.width = `${charge}%`;
+  $('#specialBtn').disabled = charge < SPECIAL.max || !me.alive || paused || Boolean(me.pendingPowers) || game.over || game.phaseStatus === 'transition';
+  $('#specialBtn').textContent = charge >= SPECIAL.max ? '✦ Especial · ESPAÇO' : `✦ Especial ${charge}%`;
+  $('#coinCount').textContent = `Moedas: ${me.coins || 0}`;
+  $('#reviveHint').textContent = game.over ? '' : me.alive
+    ? me.reviving ? 'Ressuscitando aliado… fique parado.' : game.offline ? '' : 'Para reviver um aliado, pare junto ao corpo por 4s.'
+    : me.reviveBy ? `Aliado ressuscitando você… ${Math.ceil(REVIVE.seconds - me.reviveProgress)}s` : 'Aguarde um aliado chegar até seu corpo.';
   renderPhase();
   renderPlayers();
 }
@@ -263,7 +300,7 @@ function renderPhase() {
     shownPhase = key;
     $('#phaseName').textContent = `${(game.phase || 0) + 1} / 3 · ${phase.name}`;
     $('#phasePanel').style.setProperty('--phase-color', phase.color);
-    if (state === 'boss') toast(`${phase.bossName} despertou! Evite os círculos de ataque.`);
+    if (state === 'boss') toast(`${phase.bossName} despertou! Desvie das áreas e dos projéteis.`);
     else if (state === 'horde') toast(`Fase ${(game.phase || 0) + 1}: ${phase.name}`);
   }
   $('#phaseTime').textContent = state === 'horde' ? `${format(Math.ceil(PHASE_DURATION - (game.phaseTime || 0)))} ATÉ O CHEFE`
@@ -283,7 +320,7 @@ function renderPhase() {
 function renderTeammateArrows(me, camX, camY) {
   if (game.offline) return;
   for (const player of Object.values(game.players)) {
-    if (player === me || player.alive === false) continue;
+    if (player === me) continue;
     const screenX = player.x - camX;
     const screenY = player.y - camY;
     if (screenX >= 45 && screenX <= W - 45 && screenY >= 65 && screenY <= H - 55) continue;
@@ -301,7 +338,7 @@ function renderTeammateArrows(me, camX, camY) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
-    ctx.fillStyle = '#83e1c4';
+    ctx.fillStyle = player.alive === false ? '#ffb58e' : '#83e1c4';
     ctx.shadowColor = '#42b995';
     ctx.shadowBlur = 12;
     ctx.beginPath();
@@ -311,7 +348,7 @@ function renderTeammateArrows(me, camX, camY) {
     ctx.fillStyle = '#b8f3e1';
     ctx.font = '600 9px Inter';
     ctx.textAlign = 'center';
-    ctx.fillText(`${player.name} • ${Math.round(Math.hypot(dx, dy) / 10)}m`, x, y + 22);
+    ctx.fillText(`${player.alive === false ? 'REVIVER ' : ''}${player.name} • ${Math.round(Math.hypot(dx, dy) / 10)}m`, x, y + 22);
   }
 }
 
@@ -331,6 +368,7 @@ addEventListener('keydown', event => {
   const key = event.key.toLowerCase();
   if (game && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) event.preventDefault();
   if (key === 'escape' && !event.repeat) togglePause();
+  if (key === ' ' && !event.repeat) useSpecial();
   keys.add(key);
 });
 addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
@@ -374,6 +412,7 @@ function showGame(label, room = '') {
   $('#roomPill').classList.toggle('hidden', !room);
   $('#roomPill').querySelector('b').textContent = room;
   $('#playerName').textContent = (game?.players.me?.name || playerName()).toUpperCase();
+  $('.avatar').style.backgroundPosition = `${(game?.players.me?.color ?? 0) * 100 / 3}% 0`;
   $('#pauseBtn').classList.toggle('hidden', !game?.offline);
 }
 
@@ -480,15 +519,62 @@ function fetchOpenRooms() {
   };
 }
 
+function renderCharacterPicker(element, selected, players, ownId, onChoose, disabled = false) {
+  const focused = element.contains(document.activeElement) ? document.activeElement?.dataset.color : undefined;
+  element.replaceChildren();
+  SPELLS.forEach((spell, color) => {
+    const occupant = players.find(p => p.color === color && p.id !== ownId);
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'character-option'; button.dataset.color = color;
+    button.setAttribute('aria-pressed', String(color === selected));
+    button.style.setProperty('--character-color', spell.tint);
+    button.disabled = disabled || Boolean(occupant);
+    const portrait = document.createElement('span');
+    portrait.className = 'character-portrait'; portrait.setAttribute('aria-hidden', 'true');
+    portrait.style.backgroundPosition = `${color * 100 / 3}% 0`;
+    const title = document.createElement('b'); title.textContent = characterNames[color];
+    const power = document.createElement('span'); power.textContent = spell.name;
+    const detail = document.createElement('small');
+    detail.textContent = occupant ? `Em uso: ${occupant.name}` : characterEffects[color];
+    button.append(portrait, title, power, detail);
+    button.onclick = () => onChoose(color);
+    element.append(button);
+  });
+  if (focused !== undefined) element.querySelector(`[data-color="${focused}"]`)?.focus();
+}
+
+function selectCharacter(color) {
+  selectedCharacter = color;
+  localStorage.setItem('arcana-character', String(color));
+  renderCharacterPicker($('#characterPicker'), color, [], null, selectCharacter);
+  $('.sprite-preview').style.backgroundPosition = `${color * 100 / 3}% 0`;
+}
+
 function connect(action, code = '', visibility = 'closed') {
   if (socket) return;
   try { socket = new WebSocket(serverUrl()); } catch { toast('Endereço do servidor inválido'); return; }
   const connection = socket;
+  let lobbyPlayers = [];
+  let lobbyRunning = false;
+  function requestEntry(color) {
+    if (socket !== connection || connection.readyState !== 1) return;
+    connection.send(JSON.stringify({ type: action, room: code, name: playerName(), visibility, color }));
+  }
+  function renderLobbyCharacters(disabled = false) {
+    renderCharacterPicker($('#lobbyCharacters'), connection.playerId ? connection.color : selectedCharacter,
+      lobbyPlayers, connection.playerId, color => {
+        if (socket !== connection || connection.readyState !== 1) return;
+        if (connection.playerId) connection.send(JSON.stringify({ type: 'selectCharacter', color }));
+        else { selectCharacter(color); requestEntry(color); }
+      }, disabled || lobbyRunning);
+  }
   $('#roomCode').textContent = '------';
   $('#startBtn').disabled = true;
   $('#lobby').classList.remove('hidden');
   $('#lobbyStatus').textContent = 'Conectando ao servidor…';
-  socket.onopen = () => { if (socket === connection) connection.send(JSON.stringify({ type: action, room: code, name: playerName(), visibility })); };
+  $('#lobbyCharacterHint').textContent = 'Você pode trocar de personagem antes da batalha.';
+  renderLobbyCharacters(true);
+  socket.onopen = () => requestEntry(selectedCharacter);
   socket.onerror = () => { if (socket === connection) $('#lobbyStatus').textContent = 'Não foi possível alcançar o servidor.'; };
   socket.onmessage = ({ data }) => {
     if (socket !== connection) return;
@@ -496,8 +582,10 @@ function connect(action, code = '', visibility = 'closed') {
     try { message = JSON.parse(data); } catch { return; }
     if (!message || typeof message !== 'object') return;
     if (message.type === 'joined') {
-      $('#startBtn').disabled = false;
+      connection.failure = null;
       socket.playerId = message.playerId; socket.room = message.room;
+      connection.color = message.color;
+      if (Number.isInteger(message.color)) selectCharacter(message.color);
       $('#roomCode').textContent = message.room;
       $('#lobbyStatus').textContent = `${message.count} jogador(es) no ritual`;
       $('#lobbyVisibility').textContent = message.visibility === 'open'
@@ -505,7 +593,17 @@ function connect(action, code = '', visibility = 'closed') {
         : 'Sala fechada — entrada somente pelo código';
       if (action === 'join') socket.send(JSON.stringify({ type: 'ready' }));
     }
-    if (message.type === 'lobby') $('#lobbyStatus').textContent = `${message.count} jogador(es) no ritual`;
+    if (message.type === 'lobby') {
+      $('#lobbyStatus').textContent = `${message.count} jogador(es) no ritual`;
+      lobbyPlayers = message.players || [];
+      lobbyRunning = Boolean(message.running);
+      const mine = lobbyPlayers.find(p => p.id === connection.playerId);
+      if (mine) { connection.color = mine.color; selectCharacter(mine.color); }
+      $('#startBtn').disabled = message.hostId !== connection.playerId || lobbyRunning;
+      $('#lobbyCharacterHint').textContent = message.hostId === connection.playerId
+        ? 'Escolha seu personagem e comece quando todos estiverem prontos.' : 'Escolha seu personagem e aguarde o anfitrião começar.';
+      renderLobbyCharacters();
+    }
     if (message.type === 'start') {
       cancelAnimationFrame(animationFrame);
       resetInput();
@@ -518,12 +616,19 @@ function connect(action, code = '', visibility = 'closed') {
       connection.failure = message.message;
       toast(message.message);
       $('#lobbyStatus').textContent = message.message;
+      if (message.code === 'CHARACTER_TAKEN') {
+        lobbyPlayers = message.players || [];
+        $('#lobbyCharacterHint').textContent = connection.playerId ? 'Escolha um personagem livre.' : 'Selecione um personagem livre abaixo para entrar.';
+        renderLobbyCharacters();
+        return;
+      }
       if (!connection.playerId) connection.close();
     }
   };
   socket.onclose = () => {
     if (socket !== connection) return;
     socket = null;
+    renderLobbyCharacters(true);
     if (game) { endGame(); toast('Conexão encerrada. Você pode iniciar outro ritual.'); }
     else { $('#lobbyStatus').textContent = connection.failure || 'Conexão encerrada. Cancele para tentar novamente.'; $('#startBtn').disabled = true; }
   };
@@ -547,6 +652,13 @@ function renderPlayers() {
 }
 
 $('#offlineBtn').onclick = startOffline;
+selectCharacter(selectedCharacter);
+function useSpecial() {
+  if (!game || paused || game.over || !game.players.me?.alive || game.players.me.pendingPowers) return;
+  if (game.offline) activateSpecial(game, 'me');
+  else if (socket?.readyState === 1) socket.send(JSON.stringify({ type: 'special' }));
+}
+$('#specialBtn').onclick = useSpecial;
 $('#createBtn').onclick = () => {
   $('#joinBox').classList.add('hidden');
   const createBox = $('#createBox');

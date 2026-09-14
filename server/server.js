@@ -1,6 +1,6 @@
 import { WebSocketServer } from 'ws';
 import crypto from 'node:crypto';
-import { applyPower, createGameState, createPlayer, publicState, updateGame } from './game.js';
+import { activateSpecial, applyPower, createGameState, createPlayer, publicState, updateGame } from './game.js';
 
 const PORT = Number(process.env.PORT || 8081);
 const MAX_ROOMS = Number(process.env.MAX_ROOMS ?? 3);
@@ -36,17 +36,30 @@ function openRoomList() {
     }));
 }
 
-function join(ws, room, name) {
+const roomPlayers = room => Object.values(room.state.players).map(({ id, name, color }) => ({ id, name, color }));
+function lobbyState(room) {
+  return { type: 'lobby', count: room.clients.size, visibility: room.visibility,
+    players: roomPlayers(room), hostId: room.host.id, running: room.running };
+}
+function characterTaken(ws, room) {
+  return send(ws, { type: 'error', code: 'CHARACTER_TAKEN', message: 'Este personagem já está em uso. Escolha outro para entrar.',
+    players: roomPlayers(room) });
+}
+
+function join(ws, room, name, requestedColor) {
   if (room.state.over) return send(ws, { type: 'error', message: 'Este ritual já terminou. Crie uma nova sala.' });
   if (room.clients.size >= 4) return send(ws, { type: 'error', message: 'A sala está cheia.' });
+  const usedColors = new Set(Object.values(room.state.players).map(p => p.color));
+  const color = requestedColor ?? [0, 1, 2, 3].find(value => !usedColors.has(value));
+  if (usedColors.has(color)) return characterTaken(ws, room);
   ws.room = room;
   ws.id = crypto.randomUUID();
   ws.messages = 0;
   ws.rateWindow = Date.now();
   room.clients.add(ws);
-  room.state.players[ws.id] = createPlayer(ws.id, (typeof name === 'string' && name.trim() || 'Arcanista').slice(0, 16), (room.clients.size - 1) % 4);
-  send(ws, { type: 'joined', room: room.code, playerId: ws.id, count: room.clients.size, visibility: room.visibility });
-  broadcast(room, { type: 'lobby', count: room.clients.size, visibility: room.visibility });
+  room.state.players[ws.id] = createPlayer(ws.id, (typeof name === 'string' && name.trim() || 'Arcanista').slice(0, 16), color);
+  send(ws, { type: 'joined', room: room.code, playerId: ws.id, color, count: room.clients.size, visibility: room.visibility });
+  broadcast(room, lobbyState(room));
 }
 
 wss.on('connection', ws => {
@@ -66,6 +79,11 @@ wss.on('connection', ws => {
     if (ws.room && (message.type === 'create' || message.type === 'join')) {
       return send(ws, { type: 'error', message: 'Você já está em uma sala.' });
     }
+    if (['create', 'join', 'selectCharacter'].includes(message.type)
+      && (message.color !== undefined || message.type === 'selectCharacter')
+      && (!Number.isInteger(message.color) || message.color < 0 || message.color > 3)) {
+      return send(ws, { type: 'error', message: 'Personagem inválido.' });
+    }
 
     if (message.type === 'create') {
       if (rooms.size >= MAX_ROOMS) {
@@ -75,10 +93,16 @@ wss.on('connection', ws => {
       const visibility = message.visibility === 'open' ? 'open' : 'closed';
       const room = { code: roomCode, host: ws, clients: new Set(), state: createGameState(), running: false, visibility };
       rooms.set(roomCode, room);
-      join(ws, room, message.name);
+      join(ws, room, message.name, message.color);
     } else if (message.type === 'join') {
       const room = rooms.get(String(message.room || '').toUpperCase());
-      room ? join(ws, room, message.name) : send(ws, { type: 'error', message: 'Sala não encontrada.' });
+      room ? join(ws, room, message.name, message.color) : send(ws, { type: 'error', message: 'Sala não encontrada.' });
+    } else if (message.type === 'selectCharacter' && ws.room) {
+      const room = ws.room;
+      if (room.running || room.state.over) return send(ws, { type: 'error', message: 'O personagem só pode ser trocado antes da batalha.' });
+      if (Object.values(room.state.players).some(p => p.id !== ws.id && p.color === message.color)) return characterTaken(ws, room);
+      room.state.players[ws.id].color = message.color;
+      broadcast(room, lobbyState(room));
     } else if (message.type === 'start' && ws.room?.host === ws) {
       start(ws.room);
     } else if (message.type === 'ready' && ws.room?.running) {
@@ -92,6 +116,8 @@ wss.on('connection', ws => {
       player.input = player.alive && !player.pendingPowers ? { x, y } : { x: 0, y: 0 };
     } else if (message.type === 'choosePower' && ws.room?.state.players[ws.id]) {
       applyPower(ws.room.state.players[ws.id], String(message.power || ''));
+    } else if (message.type === 'special' && ws.room?.running) {
+      activateSpecial(ws.room.state, ws.id);
     }
   });
 
@@ -105,7 +131,7 @@ wss.on('connection', ws => {
       rooms.delete(room.code);
     } else {
       if (room.host === ws) room.host = [...room.clients][0];
-      broadcast(room, { type: 'lobby', count: room.clients.size, visibility: room.visibility });
+      broadcast(room, lobbyState(room));
     }
   });
 });

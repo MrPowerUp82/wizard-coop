@@ -1,7 +1,15 @@
 import { ENEMIES, PHASES, PHASE_DURATION, TRANSITION_DURATION } from './phases.js';
 
-export const LIMITS = Object.freeze({ enemies: 180, shots: 320, drops: 220, hazards: 12 });
+export const LIMITS = Object.freeze({ enemies: 180, shots: 320, enemyShots: 96, drops: 220, hazards: 12 });
 export const DROP_TTL = 24;
+export const REVIVE = Object.freeze({ seconds: 4, radius: 44, health: 0.4 });
+export const SPECIAL = Object.freeze({ max: 100, crystal: 25, shots: 12 });
+export const SPELLS = Object.freeze([
+  { name: 'Raio glacial', sprite: 'bolt', tint: '#76dfff', speed: 490, radius: 29, pierce: 1, slow: true },
+  { name: 'Bola de fogo', sprite: 'fire', tint: '#ff9955', speed: 430, radius: 29, pierce: 1, splash: 75 },
+  { name: 'Espinho', sprite: 'thorn', tint: '#92ed68', speed: 560, radius: 29, pierce: 3 },
+  { name: 'Lâmina lunar', sprite: 'blade', tint: '#c4a0ff', speed: 400, radius: 48, pierce: 2 }
+]);
 
 export const POWERS = Object.freeze({
   arcane: { title: 'Poder arcano', max: 5 },
@@ -29,7 +37,7 @@ export function difficultyAt(time, playerCount = 1) {
 }
 
 export function createGameState() {
-  return { time: 0, players: {}, enemies: [], shots: [], gems: [], hazards: [], spawn: 0, spawnCursor: 0, over: false, cleanup: 0,
+  return { time: 0, players: {}, enemies: [], shots: [], enemyShots: [], gems: [], hazards: [], spawn: 0, spawnCursor: 0, over: false, cleanup: 0,
     phase: 0, phaseTime: 0, phaseStatus: 'horde', transitionTime: 0, victory: false };
 }
 
@@ -38,7 +46,8 @@ export function createPlayer(id, name, color = 0) {
     id, name, color, x: color * 55, y: 0, hp: 100, maxHp: 100, xp: 0, level: 1,
     alive: true, input: { x: 0, y: 0 }, speed: 190, damage: 14, attackDelay: 0.62,
     attackCooldown: 0, projectiles: 1, pickupRadius: 105, armor: 0,
-    hitCooldown: 0, invulnerableFor: 0, powers: {}, pendingPowers: null
+    hitCooldown: 0, invulnerableFor: 0, powers: {}, pendingPowers: null,
+    specialCharge: 0, coins: 0, reviveProgress: 0, reviveBy: null, reviving: null
   };
 }
 
@@ -82,6 +91,59 @@ const distanceSq = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 const nearest = (origin, entities) => entities.reduce((a, b) => distanceSq(origin, b) < distanceSq(origin, a) ? b : a);
 const entityId = () => globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
+function playerShot(p, angle, special = false) {
+  const spell = SPELLS[p.color];
+  return { x: p.x, y: p.y, vx: Math.cos(angle) * spell.speed, vy: Math.sin(angle) * spell.speed,
+    ttl: special ? 2 : 1.55, damage: p.damage * (special ? 3 : 1), color: p.color, special,
+    pierce: spell.pierce, hitIds: [] };
+}
+
+export function activateSpecial(s, playerId) {
+  const p = s.players[playerId];
+  if (!p?.alive || s.over || s.phaseStatus === 'transition' || p.pendingPowers || p.specialCharge < SPECIAL.max
+    || s.shots.length + SPECIAL.shots > LIMITS.shots) return false;
+  p.specialCharge = 0;
+  for (let n = 0; n < SPECIAL.shots; n++) s.shots.push(playerShot(p, n * Math.PI * 2 / SPECIAL.shots, true));
+  return true;
+}
+
+function dropLoot(s, enemy, random) {
+  const add = (type, value) => {
+    if (s.gems.length < LIMITS.drops) s.gems.push({ x: enemy.x, y: enemy.y, type, value, ttl: DROP_TTL });
+  };
+  add('gem', enemy.type === 'brute' ? 3 : 1);
+  const roll = random();
+  if (roll < 0.12) add('heart', 25);
+  else if (roll < 0.32) add('greenGem', SPECIAL.crystal);
+  else if (roll < 0.52) add('coin', 1);
+}
+
+function damageEnemy(s, enemy, damage, random, slow = false) {
+  if (enemy.hp <= 0) return;
+  enemy.hp -= damage;
+  if (slow) enemy.slowFor = 1.2;
+  if (enemy.hp <= 0) dropLoot(s, enemy, random);
+}
+
+function reviveAllies(players, fallen, dt) {
+  for (const p of players) p.reviving = null;
+  for (const p of fallen) {
+    const canHelp = helper => helper.alive && !helper.pendingPowers && !helper.reviving
+      && !helper.input.x && !helper.input.y && distanceSq(helper, p) <= REVIVE.radius ** 2;
+    const helper = players.find(other => other.id === p.reviveBy && canHelp(other)) || players.find(canHelp);
+    if (!helper) { p.reviveProgress = 0; p.reviveBy = null; continue; }
+    if (p.reviveBy !== helper.id) p.reviveProgress = 0;
+    p.reviveBy = helper.id;
+    helper.reviving = p.id;
+    p.reviveProgress = Math.min(REVIVE.seconds, p.reviveProgress + dt);
+    if (p.reviveProgress >= REVIVE.seconds) {
+      p.alive = true; p.hp = p.maxHp * REVIVE.health; p.invulnerableFor = 3;
+      p.input = { x: 0, y: 0 }; p.hitCooldown = 0; p.pendingPowers = null;
+      p.reviveProgress = 0; p.reviveBy = null; helper.reviving = null;
+    }
+  }
+}
+
 function hurt(player, damage) {
   if (!player.alive || player.hitCooldown > 0 || player.pendingPowers || player.invulnerableFor > 0) return;
   player.hp = Math.max(0, player.hp - Math.max(2, damage - player.armor));
@@ -90,6 +152,8 @@ function hurt(player, damage) {
     player.alive = false;
     player.input = { x: 0, y: 0 };
     player.pendingPowers = null;
+    player.reviveProgress = 0;
+    player.reviveBy = null;
   }
 }
 
@@ -97,9 +161,24 @@ function summonBoss(s, alive) {
   const type = PHASES[s.phase].boss;
   const hp = ENEMIES[type].hp * (1 + (alive.length - 1) * 0.65);
   s.enemies = [{ id: entityId(), type, boss: true, hp, maxHp: hp, age: 0,
-    x: alive[0].x + 330, y: alive[0].y - 180, attackCooldown: 2.5 }];
+    x: alive[0].x + 330, y: alive[0].y - 180, attackCooldown: 2.5, rangedCooldown: 1.5 }];
   s.shots = [];
   s.phaseStatus = 'boss';
+}
+
+function bossRangedAttack(s, enemy, target, dt) {
+  enemy.rangedCooldown = (enemy.rangedCooldown ?? 1.5) - dt;
+  if (enemy.rangedCooldown > 0) return;
+  enemy.rangedCooldown = enemy.type === 'demon' ? 2.4 : 3;
+  const sprite = enemy.type === 'treant' ? 'thorn' : enemy.type === 'lich' ? 'bolt' : 'fire';
+  const count = enemy.type === 'demon' ? 5 : 3;
+  const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+  for (let n = 0; n < count && s.enemyShots.length < LIMITS.enemyShots; n++) {
+    const direction = angle + (n - (count - 1) / 2) * 0.23;
+    const speed = enemy.type === 'lich' ? 230 : 200;
+    s.enemyShots.push({ x: enemy.x, y: enemy.y, vx: Math.cos(direction) * speed, vy: Math.sin(direction) * speed,
+      sprite, ttl: 4, damage: ENEMIES[enemy.type].damage, radius: 14 });
+  }
 }
 
 function bossAttack(s, enemy, target, dt) {
@@ -120,6 +199,7 @@ export function updateGame(s, dt, random = Math.random) {
   if (s.over) return;
   const players = Object.values(s.players);
   const alive = players.filter(p => p.alive);
+  const fallen = players.filter(p => !p.alive);
   if (!alive.length) { s.over = players.length > 0; return; }
   s.time += dt;
   if (s.phaseStatus === 'transition') {
@@ -177,7 +257,7 @@ export function updateGame(s, dt, random = Math.random) {
     for (let n = 0; n < p.projectiles && s.shots.length < LIMITS.shots; n++) {
       const spread = (n - (p.projectiles - 1) / 2) * 0.16;
       const angle = baseAngle + spread;
-      s.shots.push({ x: p.x, y: p.y, vx: Math.cos(angle) * 490, vy: Math.sin(angle) * 490, ttl: 1.55, damage: p.damage });
+      s.shots.push(playerShot(p, angle));
     }
   }
 
@@ -186,10 +266,11 @@ export function updateGame(s, dt, random = Math.random) {
     const target = nearest(enemy, alive);
     const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
     if (enemy.hp <= 0) continue;
-    const baseSpeed = ENEMIES[enemy.type].speed;
+    enemy.slowFor = Math.max(0, (enemy.slowFor || 0) - dt);
+    const baseSpeed = ENEMIES[enemy.type].speed * (enemy.slowFor > 0 ? (enemy.boss ? 0.85 : 0.6) : 1);
     enemy.x += Math.cos(angle) * baseSpeed * difficulty.speedScale * dt;
     enemy.y += Math.sin(angle) * baseSpeed * difficulty.speedScale * dt;
-    if (enemy.boss) bossAttack(s, enemy, target, dt);
+    if (enemy.boss) { bossAttack(s, enemy, target, dt); bossRangedAttack(s, enemy, target, dt); }
     if (distanceSq(enemy, target) < (enemy.boss ? ENEMIES[enemy.type].radius + 15 : 34) ** 2) hurt(target, ENEMIES[enemy.type].damage * difficulty.damageScale);
   }
 
@@ -203,31 +284,60 @@ export function updateGame(s, dt, random = Math.random) {
   }
   s.hazards = s.hazards.filter(h => h.ttl > 0);
 
+  for (const shot of s.enemyShots) {
+    shot.x += shot.vx * dt; shot.y += shot.vy * dt; shot.ttl -= dt;
+    if (shot.ttl <= 0) continue;
+    for (const p of alive) {
+      if (p.alive && distanceSq(shot, p) < (shot.radius + 18) ** 2) {
+        hurt(p, shot.damage); shot.ttl = 0; break;
+      }
+    }
+  }
+  s.enemyShots = s.enemyShots.filter(shot => shot.ttl > 0).slice(-LIMITS.enemyShots);
+
   for (const shot of s.shots) {
     shot.x += shot.vx * dt; shot.y += shot.vy * dt; shot.ttl -= dt;
     if (shot.ttl <= 0) continue;
+    const spell = SPELLS[shot.color ?? 0];
+    shot.hitIds ??= [];
+    shot.pierce ??= spell.pierce;
     for (const enemy of s.enemies) {
-      if (enemy.hp > 0 && distanceSq(shot, enemy) < (enemy.boss ? ENEMIES[enemy.type].radius : 29) ** 2) {
-        enemy.hp -= shot.damage; shot.ttl = 0;
-        if (enemy.hp <= 0) s.gems.push({ x: enemy.x, y: enemy.y, value: enemy.type === 'brute' ? 3 : 1, ttl: DROP_TTL });
-        break;
+      if (enemy.hp > 0 && !shot.hitIds.includes(enemy.id)
+        && distanceSq(shot, enemy) < (enemy.boss ? ENEMIES[enemy.type].radius + spell.radius - 29 : spell.radius) ** 2) {
+        shot.hitIds.push(enemy.id);
+        damageEnemy(s, enemy, shot.damage, random, spell.slow);
+        if (spell.splash) {
+          for (const other of s.enemies) if (other !== enemy && distanceSq(enemy, other) < spell.splash ** 2)
+            damageEnemy(s, other, shot.damage * 0.6, random);
+        }
+        if (--shot.pierce <= 0) { shot.ttl = 0; break; }
       }
     }
   }
   s.shots = s.shots.filter(shot => shot.ttl > 0).slice(-LIMITS.shots);
   s.enemies = s.enemies.filter(enemy => enemy.hp > 0);
 
-  const survivors = alive.filter(p => p.alive);
+  reviveAllies(players, fallen, dt);
+  const survivors = players.filter(p => p.alive);
   for (const gem of s.gems) {
     gem.ttl -= dt;
     if (gem.ttl <= 0 || !survivors.length) continue;
-    const target = nearest(gem, survivors);
+    const eligible = survivors.filter(p => gem.type === 'heart' ? p.hp < p.maxHp : gem.type === 'greenGem' ? p.specialCharge < SPECIAL.max : true);
+    if (!eligible.length) continue;
+    const target = nearest(gem, eligible);
     const d2 = distanceSq(gem, target);
     if (d2 < target.pickupRadius ** 2) {
       const angle = Math.atan2(target.y - gem.y, target.x - gem.x);
-      gem.x += Math.cos(angle) * 350 * dt; gem.y += Math.sin(angle) * 350 * dt;
+      const step = Math.min(Math.sqrt(d2), 350 * dt);
+      gem.x += Math.cos(angle) * step; gem.y += Math.sin(angle) * step;
     }
-    if (distanceSq(gem, target) < 24 ** 2) { gem.dead = true; grantXp(target, gem.value, random); }
+    if (distanceSq(gem, target) < 24 ** 2) {
+      gem.dead = true;
+      if (gem.type === 'heart') target.hp = Math.min(target.maxHp, target.hp + gem.value);
+      else if (gem.type === 'greenGem') target.specialCharge = Math.min(SPECIAL.max, target.specialCharge + gem.value);
+      else if (gem.type === 'coin') target.coins += gem.value;
+      else grantXp(target, gem.value, random);
+    }
   }
 
   s.cleanup -= dt;
@@ -236,11 +346,11 @@ export function updateGame(s, dt, random = Math.random) {
     s.gems = s.gems.filter(gem => !gem.dead && gem.ttl > 0 && alive.some(p => distanceSq(gem, p) < 1500 ** 2)).slice(-LIMITS.drops);
     s.enemies = s.enemies.filter(enemy => enemy.boss || (enemy.age < 75 && alive.some(p => distanceSq(enemy, p) < 1450 ** 2))).slice(-LIMITS.enemies);
   } else {
-    s.gems = s.gems.filter(gem => !gem.dead);
+    s.gems = s.gems.filter(gem => !gem.dead && gem.ttl > 0).slice(-LIMITS.drops);
   }
   if (players.every(p => !p.alive)) s.over = true;
   if (!s.over && s.phaseStatus === 'boss' && !s.enemies.some(e => e.boss)) {
-    s.enemies = []; s.shots = []; s.gems = []; s.hazards = [];
+    s.enemies = []; s.shots = []; s.enemyShots = []; s.gems = []; s.hazards = [];
     if (s.phase === PHASES.length - 1) {
       s.victory = true; s.over = true; s.phaseStatus = 'complete';
       for (const p of players) p.pendingPowers = null;
@@ -255,6 +365,6 @@ export function publicState(s) {
     time: s.time, over: s.over, victory: s.victory, phase: s.phase, phaseTime: s.phaseTime,
     phaseStatus: s.phaseStatus, transitionTime: s.transitionTime, hazards: s.hazards,
     players: Object.fromEntries(Object.entries(s.players).map(([id, p]) => [id, { ...p, input: undefined, attackCooldown: undefined, hitCooldown: undefined }])),
-    enemies: s.enemies, shots: s.shots, gems: s.gems
+    enemies: s.enemies, shots: s.shots.map(({ hitIds, ...shot }) => shot), enemyShots: s.enemyShots, gems: s.gems
   };
 }

@@ -24,6 +24,11 @@
             <span>NOME DO ARCANO</span>
             <input id="playerNameInput" maxlength="16" autocomplete="nickname" placeholder="Arcanista" />
           </label>
+          <section class="character-select" aria-label="Escolha seu personagem">
+            <span class="setup-label">ESCOLHA SEU PERSONAGEM</span>
+            <div id="characterPicker" class="character-grid" role="group" aria-label="Personagem para jogar"></div>
+            <small>Escolha para offline ou co-op. Cada personagem é único por sala.</small>
+          </section>
           <div class="menu-actions">
             <button id="offlineBtn" class="primary"><span class="button-icon">◆</span><b>Jogar offline</b><small>Sobreviva no seu ritmo</small></button>
             <button id="createBtn"><span class="button-icon">✦</span><b>Criar sala co-op</b><small>Abra um ritual para amigos</small></button>
@@ -66,6 +71,8 @@
           <span class="rune">✦</span><h2>Ritual criado</h2><p id="lobbyVisibility">Compartilhe o código com seus aliados</p>
           <button id="roomCode" class="room-code" title="Copiar código">------</button>
           <small id="lobbyStatus">Conectando ao servidor…</small>
+          <div id="lobbyCharacters" class="character-grid" role="group" aria-label="Personagens da sala"></div>
+          <small id="lobbyCharacterHint">Você pode trocar de personagem antes da batalha.</small>
           <button id="startBtn" class="primary compact">Começar batalha</button>
           <button class="text-btn backBtn">Cancelar</button>
         </div>
@@ -103,7 +110,14 @@
         <div class="room-pill hidden" id="roomPill">SALA <b>------</b></div>
         <div class="players" id="players"></div>
         <div id="phasePanel" class="phase-panel"><b id="phaseName"></b><span id="phaseTime"></span><div class="bar"><i id="phaseProgress"></i></div></div>
-        <div id="bossPanel" class="boss-panel hidden"><div><b id="bossName"></b><span id="bossHealth"></span></div><div class="bar"><i id="bossHp"></i></div><small>Saia dos círculos antes que se preencham</small></div>
+        <div id="bossPanel" class="boss-panel hidden"><div><b id="bossName"></b><span id="bossHealth"></span></div><div class="bar"><i id="bossHp"></i></div><small>Desvie dos projéteis vermelhos e saia dos círculos</small></div>
+        <div class="special-panel">
+          <b id="spellName">Raio glacial</b><span id="coinCount">Moedas: 0</span>
+          <div class="bar special-bar"><i id="specialFill"></i></div>
+          <button id="specialBtn" class="compact" disabled>✦ Especial 0%</button>
+          <small>Cristais verdes carregam o especial</small>
+        </div>
+        <p id="reviveHint" class="revive-hint" role="status"></p>
         <div id="phaseTransition" class="phase-transition hidden"><small>PASSAGEM ABERTA</small><strong id="transitionText"></strong><span>Os sobreviventes recuperam 35% da vida máxima</span></div>
         <div class="controls-hint">WASD / SETAS PARA MOVER <span>•</span> ATAQUE AUTOMÁTICO</div>
         <button id="pauseBtn" class="exit pause" aria-label="Pausar partida" title="Pausar (Esc)">Ⅱ</button>

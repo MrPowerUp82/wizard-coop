@@ -54,10 +54,12 @@ test('morte do chefe abre transição, limpa ataques e inicia novos cinco minuto
   const s = bossFixture();
   s.enemies[0].hp = 0;
   s.hazards.push({ x: 0, y: 0, radius: 100, warning: 3, ttl: 4 });
+  s.enemyShots.push({ x: 800, y: 800, vx: 100, vy: 0, ttl: 4, radius: 14 });
   updateGame(s, 0.01);
   assert.equal(s.phaseStatus, 'transition');
   assert.equal(s.hazards.length, 0);
   assert.equal(s.shots.length, 0);
+  assert.equal(s.enemyShots.length, 0);
   s.players.p0.hp = 10;
   updateGame(s, TRANSITION_DURATION - 0.01);
   assert.equal(s.phase, 0);
@@ -135,6 +137,8 @@ test('campanha completa atravessa três hordas e chefes sem exceder limites', ()
     if (s.phaseStatus === 'boss') bosses.add(s.phase);
     assert.ok(s.enemies.length <= LIMITS.enemies);
     assert.ok(s.shots.length <= LIMITS.shots);
+    assert.ok(s.enemyShots.length <= LIMITS.enemyShots);
+    assert.ok(s.gems.length <= LIMITS.drops);
     assert.ok(s.hazards.length <= LIMITS.hazards);
   }
   assert.deepEqual([...bosses], [0, 1, 2]);

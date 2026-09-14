@@ -32,6 +32,10 @@ test('servidor tolera mensagens inválidas e preserva a sala após entrada dupli
   const started = await receive('start');
   assert.equal(Object.keys(started.state.players).length, 1);
   assert.equal(started.state.players[joined.playerId].name, 'Arcanista');
+  ws.send(JSON.stringify({ type: 'special', playerId: joined.playerId, specialCharge: 100 }));
+  const state = (await receive('state')).state;
+  assert.equal(state.players[joined.playerId].specialCharge, 0);
+  assert.ok(state.shots.every(shot => !shot.special));
   assert.equal(child.exitCode, null);
 });
 
