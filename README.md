@@ -113,8 +113,14 @@ O arquivo-fonte é `public/assets/sprites.webp`; o build copia o atlas para `dis
 
 Escolha o personagem no menu para jogar offline, criar uma sala ou entrar pelo código/lista pública. A última escolha fica salva no navegador e o avatar do HUD acompanha o personagem. No co-op, cada personagem só pode estar ocupado por um jogador na mesma sala, inclusive se ele estiver caído. Se a escolha estiver ocupada, selecione outro personagem na janela de entrada. Na sala de espera, é possível trocar para um personagem livre; a escolha fica fixa quando a batalha começa. Ao desconectar, o personagem fica disponível novamente. Salas diferentes podem usar os mesmos personagens.
 
-Cada inimigo derrotado gera XP azul e pode gerar um item adicional: coração (12%), cristal verde (20%) ou moeda (20%). Corações curam 25 sem ultrapassar a vida máxima. Cristais verdes carregam 25% do especial. Quem está com vida/carga cheia deixa esses itens para os aliados. Moedas contam pontos da partida, exibidos no HUD e no resultado; ainda não há loja ou persistência. Drops expiram após 24 segundos e respeitam o limite total de 220.
+Cada inimigo derrotado gera XP azul e pode gerar um item adicional: coração (5%), cristal verde (20%) ou moeda (20%). Corações curam 25 sem ultrapassar a vida máxima. Cristais verdes carregam 25% do especial. Quem está com vida/carga cheia deixa esses itens para os aliados. Moedas contam pontos da partida, exibidos no HUD e no resultado; ainda não há loja ou persistência. Drops expiram após 24 segundos e respeitam o limite total de 220.
 
 Há no máximo 320 projéteis aliados, 96 projéteis inimigos e 12 áreas de ataque. Projéteis inimigos expiram após quatro segundos e são removidos ao derrotar o chefe. O especial só consome carga quando há espaço para os 12 projéteis. Ressurreição, dano e carga são controlados pelo servidor no co-op.
+
+## Animações
+
+Os atlas originais continuam intactos. As animações são procedurais no Canvas: respiração e balanço ao andar, flutuação de criaturas, gesto de conjuração, breve destaque ao sofrer dano, desaparecimento de inimigos e efeitos de ressurreição, nível e especial. Magias ganham rastros; lâminas giram; drops flutuam e moedas giram.
+
+As transformações são apenas visuais e não alteram posições, alcance de ressurreição, colisões ou dano. O co-op transmite um contador e a direção da conjuração junto ao estado habitual; não aumenta a frequência das mensagens. O navegador limita partículas e efeitos a 128, descarta estados de entidades removidas e congela as animações na pausa offline e na escolha de poderes offline. A preferência do sistema por movimento reduzido desativa balanços, partículas, rastros e giros; os avisos de perigo e o progresso da ressurreição continuam visíveis.
 
 Próximas evoluções naturais: novas armas, loja de moedas, persistência e reconexão.

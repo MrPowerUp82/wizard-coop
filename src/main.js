@@ -3,6 +3,7 @@ import './enhancements.css';
 import { POWERS, REVIVE, SPECIAL, SPELLS, activateSpecial, applyPower, createGameState, createPlayer, updateGame, xpNeeded } from '../server/game.js';
 import { ENEMIES, PHASES, PHASE_DURATION } from '../server/phases.js';
 import { drawTerrain } from './terrain.js';
+import { createAnimator, drawEffects } from './animation.js';
 
 const $ = selector => document.querySelector(selector);
 const canvas = $('#game');
@@ -58,6 +59,8 @@ let selectedCharacter = Number.isInteger(savedCharacter) && savedCharacter >= 0 
 const characterNames = ['Azul', 'Vermelho', 'Verde', 'Roxo'];
 const characterEffects = ['Desacelera inimigos', 'Explode em área', 'Atravessa 3 inimigos', 'Lâmina larga, até 2 alvos'];
 const keys = new Set();
+const animator = createAnimator();
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
 function resize() {
   dpr = Math.min(devicePixelRatio, 2);
@@ -72,7 +75,7 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-function drawSprite(name, x, y, size, rotation = 0, alpha = 1) {
+function drawSprite(name, x, y, size, rotation = 0, alpha = 1, sx = 1, sy = 1, flash = 0) {
   const source = phaseSprites[name] ? phaseAtlas : atlas;
   if (!source.complete || !source.naturalWidth) return;
   const bounds = phaseSprites[name] || [sprites[name][0] * CELL, sprites[name][1] * CELL, CELL, CELL];
@@ -80,7 +83,29 @@ function drawSprite(name, x, y, size, rotation = 0, alpha = 1) {
   ctx.globalAlpha = alpha;
   ctx.translate(x, y);
   ctx.rotate(rotation);
+  ctx.scale(sx, sy);
+  if (flash > 0) ctx.filter = `brightness(${1 + flash * 0.65})`;
   ctx.drawImage(source, ...bounds, -size / 2, -size / 2, size, size);
+  ctx.restore();
+}
+
+function drawActor(name, entity, size, key) {
+  const pose = animator.pose(key);
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${pose.alpha * 0.24})`;
+  ctx.beginPath(); ctx.ellipse(entity.x, entity.y + size * 0.36, size * 0.28, size * 0.09, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  drawSprite(name, entity.x + pose.x, entity.y + pose.y, size, pose.rotation, pose.alpha, pose.sx, pose.sy, pose.flash);
+}
+
+function drawTrail(shot, color) {
+  if (reducedMotion.matches) return;
+  const speed = Math.hypot(shot.vx, shot.vy) || 1;
+  const length = shot.special ? 42 : 24;
+  ctx.save(); ctx.globalAlpha = shot.special ? 0.45 : 0.25;
+  ctx.strokeStyle = color; ctx.lineWidth = shot.special ? 6 : 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(shot.x, shot.y);
+  ctx.lineTo(shot.x - shot.vx / speed * length, shot.y - shot.vy / speed * length); ctx.stroke();
   ctx.restore();
 }
 
@@ -147,6 +172,7 @@ function loop(now) {
     }
   }
   syncOverlays();
+  animator.update(game, dt, { paused: paused || (game.offline && Boolean(me?.pendingPowers?.length)), reduced: reducedMotion.matches });
   render(now);
   animationFrame = requestAnimationFrame(loop);
 }
@@ -210,6 +236,7 @@ function visible(x, y, camX, camY, margin = 110) {
 }
 
 function render(time) {
+  time = animator.time * 1000;
   const me = game.players.me || Object.values(game.players)[0];
   if (!me) return;
   const focus = me.alive === false ? Object.values(game.players).find(p => p.alive !== false) || me : me;
@@ -226,22 +253,31 @@ function render(time) {
       ctx.stroke();
     }
   }
-  for (const gem of game.gems || []) if (visible(gem.x, gem.y, camX, camY)) drawSprite(gem.type || 'gem', gem.x, gem.y, 28, 0, Math.min(0.9, gem.ttl / 4));
+  for (const gem of game.gems || []) if (visible(gem.x, gem.y, camX, camY)) {
+    const phase = time / 350 + gem.x * 0.017 + gem.y * 0.013;
+    const bob = reducedMotion.matches ? 0 : Math.sin(phase) * 3;
+    const spin = !reducedMotion.matches && gem.type === 'coin' ? 0.2 + Math.abs(Math.cos(phase)) * 0.8 : 1;
+    drawSprite(gem.type || 'gem', gem.x, gem.y + bob, 28, 0, Math.min(0.9, gem.ttl / 4), spin);
+  }
   for (const shot of game.shots || []) if (visible(shot.x, shot.y, camX, camY)) {
     const spell = SPELLS[shot.color ?? 0];
+    drawTrail(shot, spell.tint);
     ctx.save();
     if (shot.color === 3) ctx.filter = 'hue-rotate(55deg)';
-    drawSprite(spell.sprite, shot.x, shot.y, shot.special ? 65 : spell.sprite === 'blade' ? 52 : 38, Math.atan2(shot.vy, shot.vx));
+    const spin = spell.sprite === 'blade' && !reducedMotion.matches ? time / 110 : 0;
+    const pulse = reducedMotion.matches ? 1 : 1 + Math.sin(time / 65 + shot.ttl * 5) * 0.06;
+    drawSprite(spell.sprite, shot.x, shot.y, (shot.special ? 65 : spell.sprite === 'blade' ? 52 : 38) * pulse, Math.atan2(shot.vy, shot.vx) + spin);
     ctx.restore();
   }
   for (const shot of game.enemyShots || []) if (visible(shot.x, shot.y, camX, camY)) {
+    drawTrail(shot, '#ff7777');
     ctx.strokeStyle = '#ff6666'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(shot.x, shot.y, 21, 0, Math.PI * 2); ctx.stroke();
     drawSprite(shot.sprite, shot.x, shot.y, 42, Math.atan2(shot.vy, shot.vx));
   }
   for (const enemy of game.enemies || []) {
     if (!visible(enemy.x, enemy.y, camX, camY)) continue;
-    drawSprite(enemy.type, enemy.x, enemy.y, ENEMIES[enemy.type]?.size || (enemy.type === 'brute' ? 76 : 64));
+    drawActor(enemy.type, enemy, ENEMIES[enemy.type]?.size || (enemy.type === 'brute' ? 76 : 64), `e:${enemy.id}`);
     if (enemy.boss) continue;
     ctx.fillStyle = '#10151a'; ctx.fillRect(enemy.x - 20, enemy.y - 34, 40, 3);
     ctx.fillStyle = '#b95465'; ctx.fillRect(enemy.x - 20, enemy.y - 34, 40 * Math.max(0, enemy.hp / enemy.maxHp), 3);
@@ -255,22 +291,32 @@ function render(time) {
         ctx.beginPath(); ctx.arc(player.x, player.y, REVIVE.radius, 0, Math.PI * 2); ctx.stroke();
         ctx.strokeStyle = '#8dffcc'; ctx.lineWidth = 5;
         ctx.beginPath(); ctx.arc(player.x, player.y, REVIVE.radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (player.reviveProgress || 0) / REVIVE.seconds); ctx.stroke();
+        if (player.reviveProgress > 0 && !reducedMotion.matches) {
+          ctx.fillStyle = '#9dffca';
+          for (let i = 0; i < 3; i++) {
+            const angle = time / 450 + i * Math.PI * 2 / 3;
+            ctx.beginPath(); ctx.arc(player.x + Math.cos(angle) * REVIVE.radius, player.y + Math.sin(angle) * REVIVE.radius, 3, 0, Math.PI * 2); ctx.fill();
+          }
+        }
       }
       if (alive && (player.pendingPowers?.length || player.invulnerableFor > 0)) {
-        const pulse = 40 + Math.sin(time / 130) * 4;
+        const pulse = 40 + (reducedMotion.matches ? 0 : Math.sin(time / 130) * 4);
         ctx.strokeStyle = 'rgba(126, 237, 205, .82)';
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(player.x, player.y, pulse, 0, Math.PI * 2); ctx.stroke();
         ctx.fillStyle = 'rgba(87, 215, 180, .08)';
         ctx.beginPath(); ctx.arc(player.x, player.y, pulse, 0, Math.PI * 2); ctx.fill();
       }
-      drawSprite(playerSprites[player.color ?? index % 4], player.x, player.y, 68, 0, alive ? 1 : 0.28);
+      drawActor(playerSprites[player.color ?? index % 4], player, 68, `p:${player.id}`);
       ctx.font = '600 10px Inter'; ctx.textAlign = 'center';
       ctx.fillStyle = alive ? '#c6eee2' : '#8b5961';
       ctx.fillText(alive ? (player.name || 'Aliado') : game.over ? 'DERROTADO' : `REVIVER · ${Math.ceil(REVIVE.seconds - (player.reviveProgress || 0))}s`, player.x, player.y - (alive ? 41 : 65));
     }
     index++;
   }
+  drawEffects(ctx, animator, (fx, progress) => {
+    drawSprite(fx.type, fx.x, fx.y + progress * 10, (ENEMIES[fx.type]?.size || 64) * (1 - progress * 0.35), progress * 0.3, (1 - progress) * 0.65);
+  }, (x, y) => visible(x, y, camX, camY));
   ctx.restore();
   renderTeammateArrows(focus, camX, camY);
 
@@ -405,6 +451,7 @@ addEventListener('blur', () => { resetInput(); togglePause(true); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { resetInput(); togglePause(true); } });
 
 function showGame(label, room = '') {
+  animator.reset();
   $('#menu').classList.add('hidden');
   $('#lobby').classList.add('hidden');
   $('#hud').classList.remove('hidden');
@@ -417,6 +464,7 @@ function showGame(label, room = '') {
 }
 
 function endGame() {
+  animator.reset();
   cancelAnimationFrame(animationFrame);
   resetInput();
   paused = false;
@@ -645,7 +693,7 @@ function renderPlayers() {
     const dot = document.createElement('div');
     const alive = player.alive !== false;
     dot.className = `player-dot${alive ? '' : ' dead'}`;
-    dot.style.backgroundPosition = `${-(player.color ?? index) * 100 / 3}% 0`;
+    dot.style.backgroundPosition = `${(player.color ?? index) * 100 / 3}% 0`;
     dot.title = `${player.name}${alive ? '' : ' — derrotado'}`;
     element.append(dot);
   });

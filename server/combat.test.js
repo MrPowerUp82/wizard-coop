@@ -119,7 +119,7 @@ test('coração e cristal ficam para quem precisa; derrotados não coletam', () 
 });
 
 test('mortes geram todos os drops e respeitam limite mesmo antes da limpeza', () => {
-  for (const [roll, type] of [[0.05, 'heart'], [0.2, 'greenGem'], [0.4, 'coin'], [0.9, null]]) {
+  for (const [roll, type] of [[0, 'heart'], [0.0499, 'heart'], [0.05, 'greenGem'], [0.2499, 'greenGem'], [0.25, 'coin'], [0.4499, 'coin'], [0.45, null], [0.9, null]]) {
     const { s } = fixture();
     s.enemies = [enemy('a', 200, 0, 1)];
     s.shots = [{ x: 200, y: 0, vx: 0, vy: 0, ttl: 1, damage: 10, color: 0 }];

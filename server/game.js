@@ -47,7 +47,8 @@ export function createPlayer(id, name, color = 0) {
     alive: true, input: { x: 0, y: 0 }, speed: 190, damage: 14, attackDelay: 0.62,
     attackCooldown: 0, projectiles: 1, pickupRadius: 105, armor: 0,
     hitCooldown: 0, invulnerableFor: 0, powers: {}, pendingPowers: null,
-    specialCharge: 0, coins: 0, reviveProgress: 0, reviveBy: null, reviving: null
+    specialCharge: 0, coins: 0, reviveProgress: 0, reviveBy: null, reviving: null,
+    castCount: 0, castAngle: 0
   };
 }
 
@@ -103,6 +104,7 @@ export function activateSpecial(s, playerId) {
   if (!p?.alive || s.over || s.phaseStatus === 'transition' || p.pendingPowers || p.specialCharge < SPECIAL.max
     || s.shots.length + SPECIAL.shots > LIMITS.shots) return false;
   p.specialCharge = 0;
+  p.castCount++;
   for (let n = 0; n < SPECIAL.shots; n++) s.shots.push(playerShot(p, n * Math.PI * 2 / SPECIAL.shots, true));
   return true;
 }
@@ -113,9 +115,9 @@ function dropLoot(s, enemy, random) {
   };
   add('gem', enemy.type === 'brute' ? 3 : 1);
   const roll = random();
-  if (roll < 0.12) add('heart', 25);
-  else if (roll < 0.32) add('greenGem', SPECIAL.crystal);
-  else if (roll < 0.52) add('coin', 1);
+  if (roll < 0.05) add('heart', 25);
+  else if (roll < 0.25) add('greenGem', SPECIAL.crystal);
+  else if (roll < 0.45) add('coin', 1);
 }
 
 function damageEnemy(s, enemy, damage, random, slow = false) {
@@ -254,6 +256,7 @@ export function updateGame(s, dt, random = Math.random) {
     p.attackCooldown = p.attackDelay;
     const target = nearest(p, s.enemies);
     const baseAngle = Math.atan2(target.y - p.y, target.x - p.x);
+    if (s.shots.length < LIMITS.shots) { p.castCount++; p.castAngle = baseAngle; }
     for (let n = 0; n < p.projectiles && s.shots.length < LIMITS.shots; n++) {
       const spread = (n - (p.projectiles - 1) / 2) * 0.16;
       const angle = baseAngle + spread;

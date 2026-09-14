@@ -1,0 +1,98 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createAnimator, MAX_EFFECTS } from '../src/animation.js';
+import { createGameState, createPlayer, updateGame, publicState } from './game.js';
+
+function fixture() {
+  const game = createGameState();
+  game.players.p = createPlayer('p', 'Mago');
+  game.spawn = 999;
+  return game;
+}
+
+test('animação observa snapshots sem alterar simulação, colisões ou protocolo', () => {
+  const game = fixture();
+  const animator = createAnimator();
+  animator.update(game, 0.016);
+  game.players.p.x = 4; game.players.p.hp = 80;
+  game.players.p.castCount++;
+  const snapshot = JSON.stringify(game);
+  animator.update(game, 0.016);
+  assert.equal(JSON.stringify(game), snapshot);
+  assert.ok(animator.pose('p:p').flash > 0);
+  assert.ok(animator.effects.length > 0);
+  assert.notEqual(animator.pose('p:p').rotation, 0);
+  assert.equal(game.players.p.x, 4);
+});
+
+test('pausa congela efeitos; movimento reduzido mantém legibilidade sem partículas', () => {
+  const game = fixture(); const animator = createAnimator();
+  animator.update(game, 0.016);
+  game.players.p.hp = 75;
+  animator.update(game, 0.016);
+  const effects = JSON.stringify(animator.effects);
+  const pose = animator.pose('p:p'); const time = animator.time;
+  animator.update(game, 1, { paused: true });
+  assert.equal(animator.time, time);
+  assert.equal(JSON.stringify(animator.effects), effects);
+  assert.deepEqual(animator.pose('p:p'), pose);
+  game.players.p.alive = false;
+  animator.update(game, 0.016, { reduced: true });
+  assert.equal(animator.effects.length, 0);
+  assert.deepEqual(animator.pose('p:p'), { x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 0.28, flash: 0 });
+});
+
+test('morte, ressurreição e especial produzem efeitos e removem estados antigos', () => {
+  const game = fixture(); const animator = createAnimator();
+  animator.update(game, 0.016);
+  game.players.p.alive = false; game.players.p.hp = 0;
+  animator.update(game, 0.016);
+  assert.ok(animator.pose('p:p').alpha < 1);
+  for (let n = 0; n < 40; n++) animator.update(game, 0.05);
+  assert.equal(animator.effects.length, 0);
+  game.players.p.alive = true; game.players.p.hp = 40;
+  animator.update(game, 0.016);
+  assert.ok(animator.effects.some(fx => fx.radius === 65));
+  game.players.p.specialCharge = 100;
+  animator.update(game, 0.016);
+  game.players.p.specialCharge = 0;
+  animator.update(game, 0.016);
+  assert.ok(animator.effects.some(fx => fx.radius === 95));
+  game.players = {};
+  animator.update(game, 0.016);
+  assert.equal(animator.actorCount, 0);
+  animator.reset();
+  assert.equal(animator.effects.length, 0);
+  assert.equal(animator.time, 0);
+});
+
+test('hordas e impactos simultâneos respeitam orçamento visual e limpeza', () => {
+  const game = fixture(); const animator = createAnimator();
+  game.enemies = Array.from({ length: 180 }, (_, i) => ({ id: String(i), type: 'mushroom', x: i, y: 0, hp: 20 }));
+  animator.update(game, 0.016);
+  for (const enemy of game.enemies) enemy.hp = 1;
+  animator.update(game, 0.016);
+  assert.equal(animator.effects.length, MAX_EFFECTS);
+  game.enemies = [];
+  animator.update(game, 0.016);
+  assert.ok(animator.effects.length <= MAX_EFFECTS);
+  assert.equal(animator.actorCount, 1);
+  for (let n = 0; n < 30; n++) animator.update(game, 0.05);
+  assert.equal(animator.effects.length, 0);
+});
+
+test('conjuração chega ao cliente uma vez por ataque, sem eventos repetidos entre snapshots', () => {
+  const game = fixture(); const animator = createAnimator();
+  const player = game.players.p;
+  game.enemies = [{ id: 'e', type: 'mushroom', x: 250, y: 100, hp: 1000, maxHp: 1000, age: 0 }];
+  animator.update(publicState(game), 0.016);
+  updateGame(game, 0.016);
+  const snapshot = JSON.parse(JSON.stringify(publicState(game)));
+  assert.equal(snapshot.players.p.castCount, 1);
+  assert.ok(snapshot.players.p.castAngle > 0);
+  animator.update(snapshot, 0.016);
+  const count = animator.effects.length;
+  animator.update(snapshot, 0.016);
+  assert.equal(animator.effects.length, count);
+  assert.equal(player.castCount, 1);
+});
