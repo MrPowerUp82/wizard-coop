@@ -21,6 +21,17 @@ function broadcast(room, message) {
   for (const client of room.clients) if (client.readyState === 1 && client.bufferedAmount < 256_000) client.send(raw);
 }
 
+function openRoomList() {
+  return [...rooms.values()]
+    .filter(room => room.visibility === 'open' && !room.running && !room.state.over && room.clients.size < 4)
+    .map(room => ({
+      code: room.code,
+      count: room.clients.size,
+      host: room.state.players[room.host?.id]?.name || 'Arcanista'
+    }))
+    .slice(0, 30);
+}
+
 function join(ws, room, name) {
   if (room.state.over) return send(ws, { type: 'error', message: 'Este ritual já terminou. Crie uma nova sala.' });
   if (room.clients.size >= 4) return send(ws, { type: 'error', message: 'A sala está cheia.' });
@@ -30,8 +41,8 @@ function join(ws, room, name) {
   ws.rateWindow = Date.now();
   room.clients.add(ws);
   room.state.players[ws.id] = createPlayer(ws.id, (typeof name === 'string' && name.trim() || 'Arcanista').slice(0, 16), (room.clients.size - 1) % 4);
-  send(ws, { type: 'joined', room: room.code, playerId: ws.id, count: room.clients.size });
-  broadcast(room, { type: 'lobby', count: room.clients.size });
+  send(ws, { type: 'joined', room: room.code, playerId: ws.id, count: room.clients.size, visibility: room.visibility });
+  broadcast(room, { type: 'lobby', count: room.clients.size, visibility: room.visibility });
 }
 
 wss.on('connection', ws => {
@@ -45,13 +56,17 @@ wss.on('connection', ws => {
     let message;
     try { message = JSON.parse(raw); } catch { return; }
     if (!message || typeof message !== 'object' || Array.isArray(message)) return;
+    if (message.type === 'listRooms') {
+      return send(ws, { type: 'rooms', rooms: openRoomList() });
+    }
     if (ws.room && (message.type === 'create' || message.type === 'join')) {
       return send(ws, { type: 'error', message: 'Você já está em uma sala.' });
     }
 
     if (message.type === 'create') {
       const roomCode = createCode();
-      const room = { code: roomCode, host: ws, clients: new Set(), state: createGameState(), running: false };
+      const visibility = message.visibility === 'open' ? 'open' : 'closed';
+      const room = { code: roomCode, host: ws, clients: new Set(), state: createGameState(), running: false, visibility };
       rooms.set(roomCode, room);
       join(ws, room, message.name);
     } else if (message.type === 'join') {
@@ -83,7 +98,7 @@ wss.on('connection', ws => {
       rooms.delete(room.code);
     } else {
       if (room.host === ws) room.host = [...room.clients][0];
-      broadcast(room, { type: 'lobby', count: room.clients.size });
+      broadcast(room, { type: 'lobby', count: room.clients.size, visibility: room.visibility });
     }
   });
 });

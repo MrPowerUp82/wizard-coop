@@ -29,9 +29,21 @@
             <button id="createBtn"><span class="button-icon">✦</span><b>Criar sala co-op</b><small>Abra um ritual para amigos</small></button>
             <button id="joinToggle"><span class="button-icon">⌁</span><b>Entrar em uma sala</b><small>Use o código do anfitrião</small></button>
           </div>
+          <div id="createBox" class="room-setup hidden">
+            <span class="setup-label">TIPO DA SALA</span>
+            <div class="visibility-choice" role="radiogroup" aria-label="Tipo da sala">
+              <button type="button" data-visibility="open" class="selected" role="radio" aria-checked="true"><b>◉ Aberta</b><small>Aparece na lista pública</small></button>
+              <button type="button" data-visibility="closed" role="radio" aria-checked="false"><b>◆ Fechada</b><small>Entrada somente por código</small></button>
+            </div>
+            <button id="confirmCreateBtn" class="compact create-confirm">Criar sala aberta</button>
+          </div>
           <div id="joinBox" class="join-box hidden">
-            <input id="roomInput" maxlength="6" autocomplete="off" placeholder="CÓDIGO" aria-label="Código da sala" />
-            <button id="joinBtn" class="compact">Entrar</button>
+            <div class="join-code">
+              <input id="roomInput" maxlength="6" autocomplete="off" placeholder="CÓDIGO" aria-label="Código da sala" />
+              <button id="joinBtn" class="compact">Entrar</button>
+            </div>
+            <div class="open-rooms-header"><span>SALAS ABERTAS</span><button id="refreshRoomsBtn" type="button" aria-label="Atualizar salas">↻ Atualizar</button></div>
+            <div id="openRoomsList" class="open-rooms-list"><small>Buscando rituais disponíveis…</small></div>
           </div>
           <button id="settingsBtn" class="text-btn">⚙ Configurar servidor</button>
           <div id="settings" class="settings hidden">
@@ -48,7 +60,7 @@
 
       <section id="lobby" class="modal hidden">
         <div class="modal-card">
-          <span class="rune">✦</span><h2>Ritual aberto</h2><p>Compartilhe o código com seus aliados</p>
+          <span class="rune">✦</span><h2>Ritual criado</h2><p id="lobbyVisibility">Compartilhe o código com seus aliados</p>
           <button id="roomCode" class="room-code" title="Copiar código">------</button>
           <small id="lobbyStatus">Conectando ao servidor…</small>
           <button id="startBtn" class="primary compact">Começar batalha</button>

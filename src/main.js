@@ -52,6 +52,7 @@ let gameOverShown = false;
 let paused = false;
 let animationFrame = 0;
 let shownPhase = '';
+let selectedVisibility = 'open';
 const keys = new Set();
 
 function resize() {
@@ -415,7 +416,58 @@ function localizeState(state) {
   return state;
 }
 
-function connect(action, code = '') {
+function renderOpenRooms(rooms) {
+  const list = $('#openRoomsList');
+  list.innerHTML = '';
+  if (!rooms.length) {
+    const empty = document.createElement('small');
+    empty.textContent = 'Nenhuma sala aberta agora. Você pode criar a primeira.';
+    list.append(empty);
+    return;
+  }
+  for (const room of rooms) {
+    const button = document.createElement('button');
+    button.className = 'open-room';
+    const description = document.createElement('span');
+    const host = document.createElement('b');
+    host.textContent = room.host;
+    const code = document.createElement('small');
+    code.textContent = `Sala ${room.code}`;
+    description.append(host, code);
+    const occupancy = document.createElement('em');
+    occupancy.textContent = `${room.count}/4  ›`;
+    button.append(description, occupancy);
+    button.onclick = () => connect('join', room.code);
+    list.append(button);
+  }
+}
+
+function fetchOpenRooms() {
+  const list = $('#openRoomsList');
+  list.innerHTML = '<small>Buscando rituais disponíveis…</small>';
+  let listSocket;
+  try { listSocket = new WebSocket(serverUrl()); }
+  catch { list.innerHTML = '<small>Endereço do servidor inválido.</small>'; return; }
+  const timeout = setTimeout(() => {
+    list.innerHTML = '<small>O servidor demorou para responder.</small>';
+    listSocket.close();
+  }, 5000);
+  listSocket.onopen = () => listSocket.send(JSON.stringify({ type: 'listRooms' }));
+  listSocket.onmessage = ({ data }) => {
+    let message;
+    try { message = JSON.parse(data); } catch { return; }
+    if (message.type !== 'rooms' || !Array.isArray(message.rooms)) return;
+    clearTimeout(timeout);
+    renderOpenRooms(message.rooms);
+    listSocket.close();
+  };
+  listSocket.onerror = () => {
+    clearTimeout(timeout);
+    list.innerHTML = '<small>Não foi possível consultar as salas.</small>';
+  };
+}
+
+function connect(action, code = '', visibility = 'closed') {
   if (socket) return;
   try { socket = new WebSocket(serverUrl()); } catch { toast('Endereço do servidor inválido'); return; }
   const connection = socket;
@@ -423,7 +475,7 @@ function connect(action, code = '') {
   $('#startBtn').disabled = true;
   $('#lobby').classList.remove('hidden');
   $('#lobbyStatus').textContent = 'Conectando ao servidor…';
-  socket.onopen = () => { if (socket === connection) connection.send(JSON.stringify({ type: action, room: code, name: playerName() })); };
+  socket.onopen = () => { if (socket === connection) connection.send(JSON.stringify({ type: action, room: code, name: playerName(), visibility })); };
   socket.onerror = () => { if (socket === connection) $('#lobbyStatus').textContent = 'Não foi possível alcançar o servidor.'; };
   socket.onmessage = ({ data }) => {
     if (socket !== connection) return;
@@ -435,6 +487,9 @@ function connect(action, code = '') {
       socket.playerId = message.playerId; socket.room = message.room;
       $('#roomCode').textContent = message.room;
       $('#lobbyStatus').textContent = `${message.count} jogador(es) no ritual`;
+      $('#lobbyVisibility').textContent = message.visibility === 'open'
+        ? 'Sala aberta — aparece na lista pública'
+        : 'Sala fechada — entrada somente pelo código';
       if (action === 'join') socket.send(JSON.stringify({ type: 'ready' }));
     }
     if (message.type === 'lobby') $('#lobbyStatus').textContent = `${message.count} jogador(es) no ritual`;
@@ -479,8 +534,28 @@ function renderPlayers() {
 }
 
 $('#offlineBtn').onclick = startOffline;
-$('#createBtn').onclick = () => connect('create');
-$('#joinToggle').onclick = () => $('#joinBox').classList.toggle('hidden');
+$('#createBtn').onclick = () => {
+  $('#joinBox').classList.add('hidden');
+  $('#createBox').classList.toggle('hidden');
+};
+$('#joinToggle').onclick = () => {
+  $('#createBox').classList.add('hidden');
+  $('#joinBox').classList.toggle('hidden');
+  if (!$('#joinBox').classList.contains('hidden')) fetchOpenRooms();
+};
+document.querySelectorAll('[data-visibility]').forEach(button => {
+  button.onclick = () => {
+    selectedVisibility = button.dataset.visibility;
+    document.querySelectorAll('[data-visibility]').forEach(option => {
+      const selected = option === button;
+      option.classList.toggle('selected', selected);
+      option.setAttribute('aria-checked', String(selected));
+    });
+    $('#confirmCreateBtn').textContent = selectedVisibility === 'open' ? 'Criar sala aberta' : 'Criar sala fechada';
+  };
+});
+$('#confirmCreateBtn').onclick = () => connect('create', '', selectedVisibility);
+$('#refreshRoomsBtn').onclick = fetchOpenRooms;
 $('#joinBtn').onclick = () => {
   const code = $('#roomInput').value.trim().toUpperCase();
   code.length < 4 ? toast('Digite o código da sala') : connect('join', code);

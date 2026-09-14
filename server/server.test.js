@@ -34,3 +34,46 @@ test('servidor tolera mensagens inválidas e preserva a sala após entrada dupli
   assert.equal(started.state.players[joined.playerId].name, 'Arcanista');
   assert.equal(child.exitCode, null);
 });
+
+test('lista apenas salas abertas e disponíveis', { timeout: 10000 }, async t => {
+  const child = spawn(process.execPath, ['server/server.js'], {
+    env: { ...process.env, PORT: '0' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true
+  });
+  t.after(() => child.kill());
+  const [output] = await once(child.stdout, 'data');
+  const port = String(output).match(/:(\d+)/)?.[1];
+  assert.ok(port);
+
+  async function connect() {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+    t.after(() => ws.terminate());
+    await once(ws, 'open');
+    return ws;
+  }
+
+  async function next(ws, type) {
+    while (true) {
+      const [raw] = await once(ws, 'message');
+      const message = JSON.parse(raw);
+      if (message.type === type) return message;
+    }
+  }
+
+  const closedHost = await connect();
+  closedHost.send(JSON.stringify({ type: 'create', name: 'Oculto', visibility: 'closed' }));
+  await next(closedHost, 'joined');
+
+  const openHost = await connect();
+  openHost.send(JSON.stringify({ type: 'create', name: 'Merlin', visibility: 'open' }));
+  const openRoom = await next(openHost, 'joined');
+
+  const browser = await connect();
+  browser.send(JSON.stringify({ type: 'listRooms' }));
+  const listing = await next(browser, 'rooms');
+  assert.deepEqual(listing.rooms, [{ code: openRoom.room, count: 1, host: 'Merlin' }]);
+
+  openHost.send(JSON.stringify({ type: 'start' }));
+  await next(openHost, 'start');
+  browser.send(JSON.stringify({ type: 'listRooms' }));
+  assert.deepEqual((await next(browser, 'rooms')).rooms, []);
+});
