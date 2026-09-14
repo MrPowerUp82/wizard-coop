@@ -164,6 +164,9 @@ wss.on('connection', ws => {
     let message;
     try { message = JSON.parse(raw); } catch { return; }
     if (!message || typeof message !== 'object' || Array.isArray(message)) return;
+    if (message.type === 'ping') {
+      return Number.isFinite(message.t) && send(ws, { type: 'pong', t: message.t });
+    }
     if (message.type === 'listRooms') {
       return send(ws, { type: 'rooms', rooms: openRoomList(), capacity: { used: rooms.size, max: MAX_ROOMS } });
     }
