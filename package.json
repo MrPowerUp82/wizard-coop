@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/server.js",
-    "test": "node --test server/*.test.js"
+    "test": "node --test server/*.test.js",
+    "sim": "node scripts/balance-sim.mjs"
   },
   "dependencies": {
     "ws": "^8.18.3"
