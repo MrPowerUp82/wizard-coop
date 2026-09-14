@@ -1,6 +1,6 @@
 # Arcana Survivors
 
-MVP web de um survival roguelite cooperativo para 1–4 jogadores. O cliente estático funciona no GitHub Pages; o servidor WebSocket roda separadamente em Node.js na VPS.
+Survival roguelite cooperativo para a web, de 1 a 4 jogadores. O cliente estático funciona no GitHub Pages, e o servidor WebSocket roda separadamente em Node.js na VPS. A mesma simulação (`server/game.js`) roda no navegador no modo offline e no servidor autoritativo no co-op.
 
 ## Desenvolvimento
 
@@ -15,25 +15,83 @@ Em outro terminal:
 npm run server
 ```
 
-Para conectar ao backend local, abra `http://localhost:5173/?server=ws://localhost:8080`. Sem configuração, o menu usa o endereço remoto definido em `src/main.js`. Em produção, abra **Configurar servidor** ou use `?server=wss://jogo.seudominio.com/ws`.
+Para conectar ao backend local, abra `http://localhost:5173/?server=ws://localhost:8081` (ou a porta definida em `PORT`). Sem configuração, o menu usa o endereço remoto definido em `src/menu.js`. Em produção, abra **Configurar servidor** ou use `?server=wss://jogo.seudominio.com/ws`.
 
-## Controles e validação
+| Comando | O que faz |
+| --- | --- |
+| `npm run check` | ESLint, checagem de tipos via JSDoc (`tsc`) e todos os testes |
+| `npm test` | Simulação, protocolo, rede e animações (`node --test`) |
+| `npm run sim -- 12 1` | Bots jogam campanhas completas e mostram vitórias, duração dos chefes e pico de inimigos (12 partidas, 1 jogador) |
+| `npm run build` | Gera o frontend de produção em `dist` |
 
-- **WASD / setas**: movimento; ataques são automáticos.
-- **Esc / botão Ⅱ**: pausa e retoma a partida offline. Trocar de janela pausa automaticamente.
-- **Novo poder**: no modo offline, a simulação espera sua escolha.
-- **Observar aliados**: após cair no co-op, acompanhe um sobrevivente enquanto aguarda ressurreição.
-- **Espaço / botão Especial**: com 100% de carga, lança 12 projéteis em todas as direções, com três vezes o dano do ataque normal e o efeito da sua cor. Quatro cristais verdes carregam um especial.
-- **Ressuscitar**: um aliado deve permanecer no círculo, a até 44 unidades do corpo, durante quatro segundos contínuos. É permitido se mover dentro dele. Sair do alcance, escolher um poder ou trocar de socorrista reinicia o progresso. O jogador volta com 40% da vida máxima e três segundos de proteção; níveis, poderes, moedas e carga são preservados. Se todos caírem, a partida termina.
-- **Celular**: use o controle virtual; cancelar o toque interrompe o movimento.
+O workflow do GitHub Pages executa lint, checagem de tipos e testes antes de publicar.
 
-Execute `npm test` para validar a simulação e o protocolo WebSocket, e `npm run build` para gerar o frontend de produção.
+## Controles
+
+- **WASD / setas**: movimento; ataques são automáticos. No celular, use o controle virtual.
+- **Espaço / botão Especial**: com 100% de carga, lança 12 projéteis em todas as direções com o triplo do dano e o efeito da sua cor. Cristais verdes carregam o especial.
+- **1, 2, 3**: escolhem um poder. **R** troca as opções quando há cargas do Destino.
+- **Esc / botão Ⅱ**: pausa a partida offline. Trocar de janela também pausa.
+- **♪**: liga ou desliga os efeitos sonoros (preferência salva no navegador).
+- **Ressuscitar**: fique no círculo de um aliado caído, a até 44 unidades, por quatro segundos contínuos. Ele volta com 40% da vida e três segundos de proteção. Se todos caírem, a partida termina.
+
+## Como a partida funciona
+
+### Campanha
+
+| Fase | Inimigos | Chefe |
+| --- | --- | --- |
+| Bosque Desperto | Cogumelos, besouros que investem e lodos que se dividem | Raiz Ancestral |
+| Cripta Glacial | Esqueletos, espectros e olhos gélidos que atiram à distância | Rei do Inverno |
+| Abismo de Brasas | Diabretes, escorpiões que investem, morcegos que explodem e golems de magma | Coração da Caldeira |
+
+Cada horda dura 300 segundos. A dificuldade sobe dentro da fase, e cada fase começa num patamar próprio, em vez de herdar o relógio global. Cada inimigo morde no próprio ritmo: um inimigo sozinho fere pouco, mas ser cercado é perigoso. O XP de cada inimigo acompanha a vida dele.
+
+Eventos marcados movimentam a horda: uma onda de abertura, **elites** douradas aos 90, 180 e 270 segundos (deixam **baú** com escolha de poder e **ímã** que puxa todo o XP) e **enxames** que cercam o grupo.
+
+### Chefes
+
+A vida do chefe é calculada a partir do dano estimado do grupo no momento da invocação, para que a luta dure por volta de um minuto em qualquer build. Com 66% e 33% da vida, o chefe entra em fúria: onda de choque, lacaios e padrões novos (linhas de raízes, anéis de projéteis, meteoros e investidas telegrafadas). Ataques em área mostram o círculo antes de causar dano. Derrotar o guardião cura 35% da vida e dá uma escolha de poder gratuita no início da fase seguinte. A queda do terceiro chefe concede a vitória.
+
+### Poderes
+
+- **Passivos**: poder arcano, cadência, vitalidade, passos do vento, disparo múltiplo, magnetismo e armadura.
+- **Armas secundárias**: orbes arcanos, aura sagrada, corrente de raios e runas explosivas.
+- **Assinaturas** (a partir do nível 4, uma por personagem): estilhaço glacial (azul), chão em chamas (vermelho), ricochete (verde) e lua crescente (roxo).
+- **Elo arcano** (só no co-op): você e aliados próximos atacam mais rápido.
+- **Evoluções**: arma no grau máximo mais um passivo específico liberam Constelação, Santuário, Tempestade ou Campo Minado. Elas sempre aparecem entre as opções quando liberadas.
+
+No co-op, a escolha de poder tem 15 segundos; depois disso, a primeira opção é aplicada automaticamente.
+
+| Mago | Ataque automático |
+| --- | --- |
+| Azul | Raio glacial: desacelera por 1,2 s (40% nos inimigos comuns, 15% nos chefes) |
+| Vermelho | Bola de fogo: dano direto e 60% do dano nos inimigos a até 75 unidades |
+| Verde | Espinho: atravessa até três inimigos sem atingir o mesmo duas vezes |
+| Roxo | Lâmina lunar: colisão mais larga e atravessa até dois inimigos |
+
+### Drops e Grimório
+
+Inimigos derrotados deixam XP e podem deixar coração (5%), cristal verde (20%) ou moeda (20%). Quando o chão fica cheio, novos cristais de XP se fundem aos próximos, que mudam de cor conforme o valor. Assim nenhum XP é perdido no limite de 220 drops.
+
+As moedas da partida vão para o **Grimório** (menu inicial), que vende melhorias permanentes salvas no navegador: Vigor, Potência, Sabedoria, Ganância, Destino (trocas de opções) e Fênix (renasce uma vez por partida). O servidor valida os graus recebidos antes de aplicá-los.
+
+A tela final mostra nível, abates, dano e resgates de cada arcanista.
+
+## Co-op e rede
+
+- Salas por código, abertas (listadas) ou fechadas. Cada personagem só pode ser usado por um jogador na mesma sala.
+- Quem entra numa partida em andamento nasce ao lado de um aliado e recebe XP de recuperação.
+- O servidor simula a 30 Hz e envia 15 snapshots por segundo. Cada cliente recebe apenas o que está a até 1.250 unidades do seu personagem, em arrays compactos (`server/protocol.js`) com compressão permessage-deflate. Cada snapshot tem cerca de 3 KB comprimido.
+- O cliente desenha os outros jogadores e inimigos interpolados 100 ms no passado e prevê o próprio movimento, corrigindo a posição com base no tempo de ida e volta medido por ping.
+- **Reconexão**: se a conexão cair, o personagem continua na partida por 30 segundos e o cliente tenta voltar automaticamente, inclusive após recarregar a página. Sem ninguém conectado, a partida congela até alguém voltar.
+- Um heartbeat derruba conexões mortas; salas que nunca começaram expiram em 20 minutos e partidas encerradas liberam a vaga 90 segundos após o fim.
 
 ## Publicar o frontend no GitHub Pages
 
 1. Suba o repositório no GitHub.
 2. Em **Settings → Pages**, selecione **GitHub Actions**.
-3. O workflow incluso compila e publica o diretório `dist`.
+3. O workflow incluso valida, compila e publica o diretório `dist`.
 4. Defina a URL WebSocket no menu. Ela fica salva no navegador.
 
 ## Backend na VPS com aaPanel
@@ -43,7 +101,7 @@ Execute `npm test` para validar a simulação e o protocolo WebSocket, e `npm ru
 3. Crie um projeto Node com arquivo inicial `server/server.js` e porta `8080`.
 4. Crie um domínio/subdomínio com SSL, por exemplo `jogo.seudominio.com`.
 5. No proxy reverso, encaminhe `/ws` para `http://127.0.0.1:8080` com upgrade WebSocket habilitado.
-6. No frontend use `wss://jogo.seudominio.com/ws`. GitHub Pages exige `wss://`, pois a página usa HTTPS.
+6. No frontend use `wss://jogo.seudominio.com/ws`. O GitHub Pages exige `wss://`, pois a página usa HTTPS.
 
 Exemplo Nginx para o bloco `/ws`:
 
@@ -58,69 +116,33 @@ location /ws {
 }
 ```
 
-## Salas e capacidade da VPS
+Atualize sempre a pasta `server` inteira junto com o frontend e reinicie o processo Node: o protocolo de snapshots mudou, e um backend antigo não conversa com o cliente novo.
 
-A tela inicial consulta as salas abertas ao carregar e a cada 10 segundos enquanto o menu está ativo e a aba visível. Partidas em andamento com vagas também aparecem; salas fechadas, cheias ou encerradas ficam fora da lista pública.
+### Variáveis de ambiente
 
-O backend usa **`MAX_ROOMS=3` por padrão**, com até quatro jogadores por sala (12 jogadores no total). O limite inclui salas abertas e fechadas, em espera, em andamento ou encerradas ainda ocupadas. Ao atingir o limite, novas criações são recusadas com uma mensagem; entrar em uma sala existente continua permitido. A vaga é liberada quando o último jogador desconecta.
-
-Esse valor é um ponto de partida conservador para a VPS informada (1 vCPU, 460 MiB de RAM e cerca de 249 MiB disponíveis), e não uma capacidade garantida por teste de carga. A swap não deve ser tratada como RAM adicional para dimensionar partidas. Meça CPU, memória e latência na própria VPS antes de aumentar o limite.
-
-No aaPanel, configure as variáveis de ambiente `MAX_ROOMS=3` e `PORT=8080` no processo Node e reinicie. O código usa a porta 8081 quando `PORT` não está definido. Use apenas uma instância do backend: as salas e o limite são mantidos em memória por processo. `MAX_ROOMS` deve ser um inteiro positivo.
-
-Para aplicar esta correção em produção, publique o frontend atualizado e atualize/reinicie o backend na VPS.
-
-## Escopo atual
-
-- Movimento por teclado e controle virtual no celular
-- Ataque automático, hordas, experiência, níveis e vida
-- Ressurreição por proximidade e espectador no co-op; derrota quando todos caem
-- Escolha entre três poderes a cada nível
-- Dificuldade progressiva com limites de entidades e drops temporários
-- Offline sem servidor
-- Salas co-op por código com servidor autoritativo
-- Atlas de sprites WebP e PNG com transparência
-- Campanha de três fases, seis inimigos temáticos e três chefes
-
-## Campanha
-
-| Fase | Chão e inimigos | Chefe |
+| Variável | Padrão | Uso |
 | --- | --- | --- |
-| Bosque Desperto | Terra e musgo, cogumelos e besouros de espinhos | Raiz Ancestral: impacto em área e rajada de três espinhos |
-| Cripta Glacial | Lajes congeladas, esqueletos e espectros | Rei do Inverno: explosão marcada e rajada de três raios |
-| Abismo de Brasas | Basalto e fissuras, diabretes e escorpiões | Coração da Caldeira: três áreas simultâneas e leque de cinco bolas de fogo |
+| `PORT` | `8081` | Porta do WebSocket |
+| `MAX_ROOMS` | `3` | Salas simultâneas (até 4 jogadores cada) |
+| `HEARTBEAT_MS` | `15000` | Intervalo do ping que detecta conexões mortas |
+| `RECONNECT_GRACE_MS` | `30000` | Tempo que um jogador desconectado mantém o personagem |
+| `LOBBY_IDLE_MS` | `1200000` | Expiração de salas que nunca começaram |
+| `ENDED_ROOM_MS` | `90000` | Tempo até fechar uma sala encerrada |
 
-Cada horda dura **300 segundos de simulação**. Ao completar esse tempo, os inimigos comuns dão lugar ao chefe. A próxima fase começa somente após derrotá-lo, com uma passagem de quatro segundos e cura de 35% da vida máxima para sobreviventes. Níveis e poderes são preservados. O tempo dos chefes e das passagens é adicional aos 15 minutos de hordas; pausa e escolha de poder offline congelam a simulação. A derrota do terceiro chefe concede vitória ao grupo.
+`MAX_ROOMS=3` é um ponto de partida conservador para a VPS informada (1 vCPU, 460 MiB de RAM), e não uma capacidade garantida por teste de carga. Nas medições com bots, um tick da simulação custa menos de 0,1 ms e o gargalo é a banda, reduzida pelo protocolo compacto. Meça CPU, memória e latência na própria VPS antes de aumentar o limite. Use apenas uma instância do backend: salas e limites ficam em memória por processo.
 
-Ataques de área dos chefes têm aviso de 1,3 segundo: saia do círculo antes de ele se preencher. Os projéteis viajam em linha reta e têm contorno vermelho para distinguir ataques inimigos. Chefes não expiram pela limpeza de entidades e sua vida escala com o número de sobreviventes no momento da invocação. Jogadores derrotados podem ser ressuscitados enquanto houver um aliado vivo.
+## Arquitetura
 
-O servidor mantém os limites de entidades, com no máximo 12 áreas de ataque, e interrompe o timer após vitória ou derrota. Os pisos são pequenos tiles gerados uma vez no navegador; o atlas novo também é carregado apenas no cliente. Isso não substitui um teste de carga na VPS de 1 CPU/500 MB.
-
-Arte: `public/assets/phases.png`, gerada com a ferramenta integrada de imagens. Prompt e mapeamento em `public/assets/phases-art.md`. Regras e balanceamento em `server/phases.js`; texturas de chão em `src/terrain.js`.
-
-Para atualizar o co-op, publique o frontend e atualize também os arquivos da pasta `server`, incluindo `phases.js`, reiniciando o processo Node. Um backend antigo não executa a campanha nova.
-
-## Magias e itens do atlas
-
-O arquivo-fonte é `public/assets/sprites.webp`; o build copia o atlas para `dist/assets`. A primeira linha contém os magos, a segunda os inimigos antigos, a terceira os projéteis e a quarta os drops.
-
-| Mago | Ataque automático |
+| Arquivo | Responsabilidade |
 | --- | --- |
-| Azul | Raio glacial: desacelera por 1,2s (40% nos inimigos comuns, 15% nos chefes) |
-| Vermelho | Bola de fogo: dano direto e 60% do dano nos inimigos a até 75 unidades do impacto |
-| Verde | Espinho: atravessa até três inimigos, sem atingir o mesmo duas vezes |
-| Roxo | Lâmina lunar: colisão mais larga e atravessa até dois inimigos |
+| `server/balance.js` | Todos os números de balanceamento |
+| `server/game.js` | Estado, progressão, drops e o `updateGame` que orquestra os módulos |
+| `server/enemies.js` · `bosses.js` · `weapons.js` · `combat.js` | Spawn e comportamentos, chefes, armas e dano |
+| `server/powers.js` · `meta.js` | Poderes, evoluções, trocas e melhorias permanentes |
+| `server/spatial.js` | Grid espacial usado nas colisões |
+| `server/protocol.js` · `server.js` | Snapshots compactos, salas, heartbeat e reconexão |
+| `src/net.js` | Sessão co-op, interpolação, previsão e reconexão no cliente |
+| `src/render.js` · `sprites.js` · `terrain.js` · `animation.js` | Desenho, sprites pré-recortados, pisos e efeitos visuais |
+| `src/hud.js` · `menu.js` · `audio.js` · `input.js` · `wallet.js` | Interface, menu e loja, sons sintetizados, controles e moedas |
 
-Escolha o personagem no menu para jogar offline, criar uma sala ou entrar pelo código/lista pública. A última escolha fica salva no navegador e o avatar do HUD acompanha o personagem. No co-op, cada personagem só pode estar ocupado por um jogador na mesma sala, inclusive se ele estiver caído. Se a escolha estiver ocupada, selecione outro personagem na janela de entrada. Na sala de espera, é possível trocar para um personagem livre; a escolha fica fixa quando a batalha começa. Ao desconectar, o personagem fica disponível novamente. Salas diferentes podem usar os mesmos personagens.
-
-Cada inimigo derrotado gera XP azul e pode gerar um item adicional: coração (5%), cristal verde (20%) ou moeda (20%). Corações curam 25 sem ultrapassar a vida máxima. Cristais verdes carregam 25% do especial. Quem está com vida/carga cheia deixa esses itens para os aliados. Moedas contam pontos da partida, exibidos no HUD e no resultado; ainda não há loja ou persistência. Drops expiram após 24 segundos e respeitam o limite total de 220.
-
-Há no máximo 320 projéteis aliados, 96 projéteis inimigos e 12 áreas de ataque. Projéteis inimigos expiram após quatro segundos e são removidos ao derrotar o chefe. O especial só consome carga quando há espaço para os 12 projéteis. Ressurreição, dano e carga são controlados pelo servidor no co-op.
-
-## Animações
-
-Os atlas originais continuam intactos. As animações são procedurais no Canvas: respiração e balanço ao andar, flutuação de criaturas, gesto de conjuração, breve destaque ao sofrer dano, desaparecimento de inimigos e efeitos de ressurreição, nível e especial. Magias ganham rastros; lâminas giram; drops flutuam e moedas giram.
-
-As transformações são apenas visuais e não alteram posições, alcance de ressurreição, colisões ou dano. O co-op transmite um contador e a direção da conjuração junto ao estado habitual; não aumenta a frequência das mensagens. O navegador limita partículas e efeitos a 128, descarta estados de entidades removidas e congela as animações na pausa offline e na escolha de poderes offline. A preferência do sistema por movimento reduzido desativa balanços, partículas, rastros e giros; os avisos de perigo e o progresso da ressurreição continuam visíveis.
-
-Próximas evoluções naturais: novas armas, loja de moedas, persistência e reconexão.
+Arte: `public/assets/sprites.webp` (magos, inimigos antigos, projéteis e drops) e `public/assets/phases.png` (campanha). Prompt e recortes em `public/assets/phases-art.md`. Variações de cor, como a lâmina roxa, o morcego de brasa e o golem de magma, são geradas uma única vez no navegador. A preferência do sistema por movimento reduzido desativa balanços, partículas, rastros, tremor de tela e giros; avisos de perigo e o progresso da ressurreição continuam visíveis.

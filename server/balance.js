@@ -53,7 +53,7 @@ export const PHASE_SCHEDULE = Object.freeze([
 
 export const BOSS = Object.freeze({
   // Boss HP targets this many seconds of the group's estimated sustained damage.
-  timeToKill: [45, 60, 75],
+  timeToKill: [45, 60, 70],
   dpsEfficiency: 0.7,
   extraPlayerHp: 0.65,
   stageThresholds: [0.66, 0.33],
