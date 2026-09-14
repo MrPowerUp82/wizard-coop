@@ -16,7 +16,7 @@ function tick(s, seconds) {
   for (let n = 0; n < Math.round(seconds * 30); n++) updateGame(s, 1 / 30, () => 0.9);
 }
 
-test('ressurreição exige quatro segundos parado e volta com vida e proteção', () => {
+test('ressurreição permite movimento dentro do círculo e reinicia ao sair', () => {
   const { s, p } = fixture();
   const fallen = createPlayer('fallen', 'Aliado', 1);
   fallen.alive = false; fallen.hp = 0; fallen.x = 0;
@@ -28,7 +28,8 @@ test('ressurreição exige quatro segundos parado e volta com vida e proteção'
   assert.equal(p.reviving, fallen.id);
   p.input.x = 1;
   tick(s, 0.1);
-  assert.equal(fallen.reviveProgress, 0);
+  assert.ok(p.x > 0 && p.x < REVIVE.radius);
+  assert.ok(fallen.reviveProgress > 2);
   p.input.x = 0; p.x = 200;
   tick(s, 1);
   assert.equal(fallen.reviveProgress, 0);

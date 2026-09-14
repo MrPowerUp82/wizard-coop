@@ -129,7 +129,7 @@ function reviveAllies(players, fallen, dt) {
   for (const p of players) p.reviving = null;
   for (const p of fallen) {
     const canHelp = helper => helper.alive && !helper.pendingPowers && !helper.reviving
-      && !helper.input.x && !helper.input.y && distanceSq(helper, p) <= REVIVE.radius ** 2;
+      && distanceSq(helper, p) <= REVIVE.radius ** 2;
     const helper = players.find(other => other.id === p.reviveBy && canHelp(other)) || players.find(canHelp);
     if (!helper) { p.reviveProgress = 0; p.reviveBy = null; continue; }
     if (p.reviveBy !== helper.id) p.reviveProgress = 0;

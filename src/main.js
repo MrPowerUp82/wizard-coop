@@ -198,7 +198,7 @@ function showDefeat(allDead) {
   gameOverShown = allDead;
   const me = game.players.me;
   $('#defeatTitle').textContent = game.victory ? 'Ritual concluído!' : allDead ? 'Ritual encerrado' : 'Você caiu';
-  $('#defeatText').textContent = game.victory ? 'Os três guardiões caíram. A aurora pertence aos arcanistas.' : allDead ? 'Nenhum arcanista permaneceu de pé.' : 'Um aliado pode ressuscitar você ficando parado junto ao seu corpo por 4 segundos.';
+  $('#defeatText').textContent = game.victory ? 'Os três guardiões caíram. A aurora pertence aos arcanistas.' : allDead ? 'Nenhum arcanista permaneceu de pé.' : 'Um aliado pode ressuscitar você permanecendo dentro do círculo por 4 segundos.';
   $('#finalStats').textContent = `TEMPO ${format(game.time)}  •  NÍVEL ${me.level}  •  FASE ${(game.phase || 0) + 1}/3  •  MOEDAS ${me.coins || 0}`;
   $('#defeatModal').classList.toggle('victory', Boolean(game.victory));
   $('#defeatModal').classList.remove('hidden');
@@ -286,7 +286,7 @@ function render(time) {
   $('#specialBtn').textContent = charge >= SPECIAL.max ? '✦ Especial · ESPAÇO' : `✦ Especial ${charge}%`;
   $('#coinCount').textContent = `Moedas: ${me.coins || 0}`;
   $('#reviveHint').textContent = game.over ? '' : me.alive
-    ? me.reviving ? 'Ressuscitando aliado… fique parado.' : game.offline ? '' : 'Para reviver um aliado, pare junto ao corpo por 4s.'
+    ? me.reviving ? 'Ressuscitando aliado… permaneça no círculo.' : game.offline ? '' : 'Para reviver um aliado, fique no círculo por 4s.'
     : me.reviveBy ? `Aliado ressuscitando você… ${Math.ceil(REVIVE.seconds - me.reviveProgress)}s` : 'Aguarde um aliado chegar até seu corpo.';
   renderPhase();
   renderPlayers();

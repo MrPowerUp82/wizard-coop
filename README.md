@@ -24,7 +24,7 @@ Para conectar ao backend local, abra `http://localhost:5173/?server=ws://localho
 - **Novo poder**: no modo offline, a simulação espera sua escolha.
 - **Observar aliados**: após cair no co-op, acompanhe um sobrevivente enquanto aguarda ressurreição.
 - **Espaço / botão Especial**: com 100% de carga, lança 12 projéteis em todas as direções, com três vezes o dano do ataque normal e o efeito da sua cor. Quatro cristais verdes carregam um especial.
-- **Ressuscitar**: um aliado deve ficar parado a até 44 unidades do corpo durante quatro segundos contínuos. Sair do alcance, se mover, escolher um poder ou trocar de socorrista reinicia o progresso. O jogador volta com 40% da vida máxima e três segundos de proteção; níveis, poderes, moedas e carga são preservados. Se todos caírem, a partida termina.
+- **Ressuscitar**: um aliado deve permanecer no círculo, a até 44 unidades do corpo, durante quatro segundos contínuos. É permitido se mover dentro dele. Sair do alcance, escolher um poder ou trocar de socorrista reinicia o progresso. O jogador volta com 40% da vida máxima e três segundos de proteção; níveis, poderes, moedas e carga são preservados. Se todos caírem, a partida termina.
 - **Celular**: use o controle virtual; cancelar o toque interrompe o movimento.
 
 Execute `npm test` para validar a simulação e o protocolo WebSocket, e `npm run build` para gerar o frontend de produção.
