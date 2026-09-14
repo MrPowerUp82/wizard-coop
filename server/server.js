@@ -22,6 +22,11 @@ const MAX_PLAYERS = 4;
 const TICK = 30;
 const SNAPSHOT_EVERY = 2; // 15 snapshots per second; clients interpolate between them.
 
+/**
+ * A connected socket plus the bookkeeping this server attaches to it.
+ * @typedef {import('ws').WebSocket & { id?: string, token?: string, room?: any, messages: number, rateWindow: number, isAlive: boolean }} Client
+ */
+
 const rooms = new Map();
 const wss = new WebSocketServer({
   port: PORT, maxPayload: 4096,
@@ -151,7 +156,7 @@ function leave(ws, intentional) {
   removePlayer(room, ws.id);
 }
 
-wss.on('connection', ws => {
+wss.on('connection', (/** @type {Client} */ ws) => {
   ws.messages = 0;
   ws.rateWindow = Date.now();
   ws.isAlive = true;
@@ -162,7 +167,7 @@ wss.on('connection', ws => {
     if (now - (ws.rateWindow || 0) > 1000) { ws.rateWindow = now; ws.messages = 0; }
     if (++ws.messages > 50) return;
     let message;
-    try { message = JSON.parse(raw); } catch { return; }
+    try { message = JSON.parse(String(raw)); } catch { return; }
     if (!message || typeof message !== 'object' || Array.isArray(message)) return;
     if (message.type === 'ping') {
       return Number.isFinite(message.t) && send(ws, { type: 'pong', t: message.t });
@@ -228,7 +233,7 @@ wss.on('connection', ws => {
 });
 
 const heartbeat = setInterval(() => {
-  for (const ws of wss.clients) {
+  for (const ws of /** @type {Set<Client>} */ (wss.clients)) {
     if (!ws.isAlive) { ws.terminate(); continue; }
     ws.isAlive = false;
     ws.ping();
@@ -259,4 +264,4 @@ function start(room) {
   }, 1000 / TICK);
 }
 
-wss.on('listening', () => console.log(`Arcana Survivors server listening on :${wss.address().port}`));
+wss.on('listening', () => console.log(`Arcana Survivors server listening on :${/** @type {import('node:net').AddressInfo} */ (wss.address()).port}`));

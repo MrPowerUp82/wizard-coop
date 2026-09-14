@@ -1,5 +1,5 @@
 {
-  "name": "arcana-coop",
+  "name": "arcana-survivors",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -9,12 +9,21 @@
     "preview": "vite preview",
     "server": "node server/server.js",
     "test": "node --test server/*.test.js",
-    "sim": "node scripts/balance-sim.mjs"
+    "sim": "node scripts/balance-sim.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc -p jsconfig.json",
+    "check": "npm run lint && npm run typecheck && npm test"
   },
   "dependencies": {
     "ws": "^8.18.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.20.2",
+    "@types/ws": "^8.18.1",
+    "eslint": "^9.39.5",
+    "globals": "^17.12.0",
+    "typescript": "^5.9.3",
     "vite": "^7.1.5"
   }
 }

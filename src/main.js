@@ -386,7 +386,7 @@ $('#roomCode').onclick = async () => {
   try { await navigator.clipboard.writeText(session.room); hud.toast('Código copiado'); }
   catch { hud.toast(`Compartilhe o código: ${session.room}`); }
 };
-document.querySelectorAll('.backBtn').forEach(button => { button.onclick = endGame; });
+for (const button of /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('.backBtn'))) button.onclick = endGame;
 $('#exitBtn').onclick = endGame;
 $('#defeatExit').onclick = endGame;
 $('#spectateBtn').onclick = () => $('#defeatModal').classList.add('hidden');
@@ -400,7 +400,7 @@ if (pendingResume) connect('join', pendingResume.room, 'closed', pendingResume);
 
 if (import.meta.env?.DEV) {
   // Debug hook: the in-app browser pane does not run requestAnimationFrame, so frames can be pumped by hand.
-  window.__ARCANA__ = {
+  /** @type {any} */ (window).__ARCANA__ = {
     step(frames = 1, ms = 16) { for (let n = 0; n < frames; n++) { last = performance.now(); step(last, ms / 1000); } },
     startOffline, endGame,
     get game() { return game; },

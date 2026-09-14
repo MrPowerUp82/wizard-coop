@@ -76,7 +76,9 @@ function addBurnZone(s, owner, x, y) {
 }
 
 function redirect(shot, grid, from) {
-  let target = null, best = Infinity;
+  /** @type {any} */
+  let target = null;
+  let best = Infinity;
   grid.query(from.x, from.y, WEAPONS.ricochet.range, (enemy, d2) => {
     if (enemy.hp > 0 && d2 < best && !shot.hitIds.includes(enemy.id)) { best = d2; target = enemy; }
   });

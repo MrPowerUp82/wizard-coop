@@ -70,7 +70,8 @@ function bake(name) {
   const resolution = phase ? 256 : 128;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = resolution;
-  canvas.getContext('2d').drawImage(source, ...bounds, 0, 0, resolution, resolution);
+  const [sx, sy, sw, sh] = bounds;
+  canvas.getContext('2d').drawImage(source, sx, sy, sw, sh, 0, 0, resolution, resolution);
   if (variant) recolor(canvas, variant);
   const flash = document.createElement('canvas');
   flash.width = flash.height = resolution;
@@ -110,5 +111,3 @@ export function drawSprite(ctx, name, x, y, size, rotation = 0, alpha = 1, sx = 
   }
   worldTransform(ctx);
 }
-
-export const spritesReady = () => Promise.all([atlas, phaseAtlas].map(image => image.decode().catch(() => {})));

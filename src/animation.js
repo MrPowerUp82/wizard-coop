@@ -5,6 +5,7 @@ const TAU = Math.PI * 2;
 const colors = ['#76dfff', '#ff9955', '#92ed68', '#c4a0ff'];
 const EVENT_COLORS = { boom: '#ffb36b', elite: '#ffd36b', chest: '#ffe08a', magnet: '#8fd8ff', revive: '#9dffca', phoenix: '#ffb35c' };
 
+/** @param {{ onHit?: (entity: any, amount: number) => void, onKill?: (actor: any) => void }} [hooks] */
 export function createAnimator({ onHit, onKill } = {}) {
   const actors = new Map();
   const effects = [];

@@ -19,11 +19,12 @@ export function playerName() {
 }
 
 export function renderCharacterPicker(element, selected, players, ownId, onChoose, disabled = false) {
-  const focused = element.contains(document.activeElement) ? document.activeElement?.dataset.color : undefined;
+  const active = /** @type {HTMLElement | null} */ (document.activeElement);
+  const focused = element.contains(active) ? active?.dataset.color : undefined;
   element.replaceChildren(...SPELLS.map((spell, color) => {
     const occupant = players.find(p => p.color === color && p.id !== ownId);
     const button = document.createElement('button');
-    button.type = 'button'; button.className = 'character-option'; button.dataset.color = color;
+    button.type = 'button'; button.className = 'character-option'; button.dataset.color = String(color);
     button.setAttribute('aria-pressed', String(color === selected));
     button.style.setProperty('--character-color', spell.tint);
     button.disabled = disabled || Boolean(occupant);
@@ -156,7 +157,7 @@ export function createMenu({ wallet, toast, onOffline, onCreate, onJoin, isIdle,
       requestAnimationFrame(() => box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
     }
   };
-  document.querySelectorAll('[data-visibility]').forEach(button => {
+  /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('[data-visibility]')).forEach(button => {
     button.onclick = () => {
       visibility = button.dataset.visibility;
       document.querySelectorAll('[data-visibility]').forEach(option => {
