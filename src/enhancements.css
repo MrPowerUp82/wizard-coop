@@ -126,6 +126,19 @@ html, body, #app { width: 100%; height: 100%; min-height: 100%; overscroll-behav
 body, .menu-shell { min-height: 100dvh; }
 #game { touch-action: none; }
 
+/* The app is fixed for the game canvas, so the menu owns its scrolling. */
+.menu-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hero-panel { padding-block: 18px; }
+
 .room-setup, .join-box {
   margin-top: 10px;
   padding: 12px;
@@ -189,9 +202,7 @@ body, .menu-shell { min-height: 100dvh; }
   .menu-shell {
     display: flex;
     align-items: flex-start;
-    height: 100dvh;
     padding: max(24px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
-    overflow-y: auto;
   }
   .hero-panel { width: min(100%, 540px); margin: auto; }
   .preview-card { right: -180px; top: -110px; width: 430px; pointer-events: none; }
@@ -201,6 +212,26 @@ body, .menu-shell { min-height: 100dvh; }
   .power-card { width: min(100%, 680px); }
   .status-card { max-width: calc(100vw - 105px); }
   .room-pill { top: 76px; }
+}
+
+/* A desktop viewport may be wide but short because of browser bars or split view. */
+@media (min-width: 801px) and (max-height: 900px) {
+  .menu-shell {
+    align-items: start;
+    padding-block: 20px;
+  }
+  .hero-panel {
+    align-self: start;
+    margin-block: auto;
+    padding-block: 10px 26px;
+  }
+  h1 { margin-block: 14px 11px; font-size: clamp(46px, 5vw, 68px); }
+  .tagline { margin-bottom: 18px; }
+  .profile-box { margin-bottom: 10px; }
+  .menu-actions { gap: 7px; }
+  .menu-actions button { min-height: 58px; padding-block: 10px; }
+  .button-icon { top: 17px; }
+  .text-btn { margin-top: 11px; }
 }
 
 @media (max-width: 520px) {

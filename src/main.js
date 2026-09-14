@@ -536,12 +536,20 @@ function renderPlayers() {
 $('#offlineBtn').onclick = startOffline;
 $('#createBtn').onclick = () => {
   $('#joinBox').classList.add('hidden');
-  $('#createBox').classList.toggle('hidden');
+  const createBox = $('#createBox');
+  createBox.classList.toggle('hidden');
+  if (!createBox.classList.contains('hidden')) {
+    requestAnimationFrame(() => createBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  }
 };
 $('#joinToggle').onclick = () => {
   $('#createBox').classList.add('hidden');
-  $('#joinBox').classList.toggle('hidden');
-  if (!$('#joinBox').classList.contains('hidden')) fetchOpenRooms();
+  const joinBox = $('#joinBox');
+  joinBox.classList.toggle('hidden');
+  if (!joinBox.classList.contains('hidden')) {
+    fetchOpenRooms();
+    requestAnimationFrame(() => joinBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  }
 };
 document.querySelectorAll('[data-visibility]').forEach(button => {
   button.onclick = () => {
