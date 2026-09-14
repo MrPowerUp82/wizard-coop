@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import WebSocket from 'ws';
+import { decodeState } from './protocol.js';
 
 test('servidor tolera mensagens inválidas e preserva a sala após entrada duplicada', { timeout: 10000 }, async t => {
   const child = spawn(process.execPath, ['server/server.js'], {
@@ -29,11 +30,11 @@ test('servidor tolera mensagens inválidas e preserva a sala após entrada dupli
   ws.send(JSON.stringify({ type: 'create' }));
   assert.match((await receive('error')).message, /já está/);
   ws.send(JSON.stringify({ type: 'start' }));
-  const started = await receive('start');
-  assert.equal(Object.keys(started.state.players).length, 1);
-  assert.equal(started.state.players[joined.playerId].name, 'Arcanista');
+  const started = decodeState((await receive('start')).state);
+  assert.equal(Object.keys(started.players).length, 1);
+  assert.equal(started.players[joined.playerId].name, 'Arcanista');
   ws.send(JSON.stringify({ type: 'special', playerId: joined.playerId, specialCharge: 100 }));
-  const state = (await receive('state')).state;
+  const state = decodeState((await receive('state')).state);
   assert.equal(state.players[joined.playerId].specialCharge, 0);
   assert.ok(state.shots.every(shot => !shot.special));
   assert.equal(child.exitCode, null);
@@ -83,7 +84,7 @@ test('lista apenas salas abertas e disponíveis', { timeout: 10000 }, async t =>
   browser.send(JSON.stringify({ type: 'join', room: openRoom.room, name: 'Aliado' }));
   await next(browser, 'joined');
   browser.send(JSON.stringify({ type: 'ready' }));
-  assert.equal(Object.keys((await next(browser, 'start')).state.players).length, 2);
+  assert.equal(Object.keys(decodeState((await next(browser, 'start')).state).players).length, 2);
 });
 
 test('limita salas abertas e fechadas, permite entrar no limite e libera vagas ao sair', { timeout: 10000 }, async t => {

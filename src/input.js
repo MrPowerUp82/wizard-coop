@@ -1,0 +1,41 @@
+// Keyboard and virtual joystick merged into one normalized movement vector.
+export function createInput({ joystick, onPause, onSpecial, isPlaying }) {
+  const knob = joystick.querySelector('i');
+  const keys = new Set();
+  let touch = null;
+
+  addEventListener('keydown', event => {
+    if (event.target instanceof HTMLInputElement) return;
+    const key = event.key.toLowerCase();
+    if (isPlaying() && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) event.preventDefault();
+    if (key === 'escape' && !event.repeat) onPause();
+    if (key === ' ' && !event.repeat) onSpecial();
+    keys.add(key);
+  });
+  addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
+
+  function touchMove(event) {
+    if (!touch) return;
+    const rect = joystick.getBoundingClientRect();
+    const dx = event.clientX - (rect.left + rect.width / 2), dy = event.clientY - (rect.top + rect.height / 2);
+    const length = Math.hypot(dx, dy), movement = Math.min(35, length);
+    const x = length ? dx / length : 0, y = length ? dy / length : 0;
+    knob.style.transform = `translate(${x * movement}px,${y * movement}px)`;
+    // A small dead zone keeps a resting thumb from drifting the character.
+    touch = length < 8 ? { x: 0, y: 0 } : { x, y };
+  }
+  joystick.addEventListener('pointerdown', event => { touch = { x: 0, y: 0 }; joystick.setPointerCapture(event.pointerId); touchMove(event); });
+  joystick.addEventListener('pointermove', touchMove);
+  const release = () => { touch = null; knob.style.transform = ''; };
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) joystick.addEventListener(type, release);
+
+  return {
+    read() {
+      const x = (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
+      const y = (keys.has('s') || keys.has('arrowdown') ? 1 : 0) - (keys.has('w') || keys.has('arrowup') ? 1 : 0);
+      if (x || y) { const length = Math.hypot(x, y); return { x: x / length, y: y / length }; }
+      return touch ? { ...touch } : { x: 0, y: 0 };
+    },
+    reset() { keys.clear(); release(); }
+  };
+}

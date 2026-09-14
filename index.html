@@ -8,12 +8,13 @@
     <title>Arcana Survivors</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="app">
       <canvas id="game"></canvas>
       <div class="vignette"></div>
+      <div id="damageVignette" class="damage-vignette"></div>
 
       <main id="menu" class="menu-shell">
         <section class="hero-panel">
@@ -33,6 +34,7 @@
             <button id="offlineBtn" class="primary"><span class="button-icon">◆</span><b>Jogar offline</b><small>Sobreviva no seu ritmo</small></button>
             <button id="createBtn"><span class="button-icon">✦</span><b>Criar sala co-op</b><small>Abra um ritual para amigos</small></button>
             <button id="joinToggle"><span class="button-icon">⌁</span><b>Entrar em uma sala</b><small>Use o código do anfitrião</small></button>
+            <button id="shopBtn"><span class="button-icon">❖</span><b>Grimório</b><small id="shopBtnCoins">Melhorias permanentes com moedas</small></button>
           </div>
           <div id="createBox" class="room-setup hidden">
             <span class="setup-label">TIPO DA SALA</span>
@@ -66,6 +68,16 @@
         </aside>
       </main>
 
+      <section id="shopModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="shopTitle">
+        <div class="modal-card shop-card">
+          <span class="rune">❖</span><h2 id="shopTitle">Grimório</h2>
+          <p>Moedas recolhidas nas partidas compram melhorias permanentes neste navegador.</p>
+          <div class="shop-coins" id="shopCoins">0 moedas</div>
+          <div id="shopList" class="shop-list"></div>
+          <button id="shopClose" class="primary compact">Voltar</button>
+        </div>
+      </section>
+
       <section id="lobby" class="modal hidden">
         <div class="modal-card">
           <span class="rune">✦</span><h2>Ritual criado</h2><p id="lobbyVisibility">Compartilhe o código com seus aliados</p>
@@ -81,15 +93,20 @@
       <section id="powerModal" class="modal hidden">
         <div class="modal-card power-card">
           <span class="rune">✦</span><h2>Novo poder</h2><p>Escolha como o ritual deve evoluir</p>
+          <div id="powerTimer" class="bar power-timer hidden"><i></i></div>
           <div id="powerChoices" class="power-choices"></div>
+          <button id="rerollBtn" class="text-btn reroll-btn hidden">↻ Trocar opções</button>
+          <small class="power-keys">Teclas 1, 2 e 3 escolhem • R troca as opções</small>
         </div>
       </section>
 
       <section id="defeatModal" class="modal hidden">
-        <div class="modal-card">
+        <div class="modal-card results-card">
           <span class="rune defeat-rune">◆</span><h2 id="defeatTitle">Você caiu</h2>
           <p id="defeatText">A noite reclamou mais uma alma.</p>
           <div id="finalStats" class="final-stats"></div>
+          <div class="results-wrap"><table id="resultsTable" class="results-table hidden"></table></div>
+          <p id="coinsEarned" class="coins-earned hidden"></p>
           <button id="spectateBtn" class="primary compact hidden">Observar aliados</button>
           <button id="defeatExit" class="primary compact">Voltar ao menu</button>
         </div>
@@ -105,12 +122,12 @@
       </section>
 
       <section id="hud" class="hidden">
-        <div class="status-card"><div class="avatar"></div><div><div class="hud-row"><b id="playerName">ARCANISTA</b><span id="level">NÍVEL 1</span></div><div class="bar hp"><i id="hpBar"></i></div><div class="bar xp"><i id="xpBar"></i></div></div></div>
+        <div class="status-card"><div class="avatar"></div><div><div class="hud-row"><b id="playerName">ARCANISTA</b><span id="level">NÍVEL 1</span></div><div class="bar hp"><i id="hpBar"></i></div><div class="bar xp"><i id="xpBar"></i></div><div id="powerRow" class="power-row" aria-label="Poderes adquiridos"></div></div></div>
         <div class="timer"><b id="timer">00:00</b><span id="modeLabel">SOZINHO</span></div>
         <div class="room-pill hidden" id="roomPill">SALA <b>------</b></div>
         <div class="players" id="players"></div>
         <div id="phasePanel" class="phase-panel"><b id="phaseName"></b><span id="phaseTime"></span><div class="bar"><i id="phaseProgress"></i></div></div>
-        <div id="bossPanel" class="boss-panel hidden"><div><b id="bossName"></b><span id="bossHealth"></span></div><div class="bar"><i id="bossHp"></i></div><small>Desvie dos projéteis vermelhos e saia dos círculos</small></div>
+        <div id="bossPanel" class="boss-panel hidden"><div><b id="bossName"></b><span id="bossHealth"></span></div><div class="bar boss-bar"><i id="bossHp"></i><em style="left:66%"></em><em style="left:33%"></em></div><small id="bossHint">Desvie dos projéteis vermelhos e saia dos círculos</small></div>
         <div class="special-panel">
           <b id="spellName">Raio glacial</b><span id="coinCount">Moedas: 0</span>
           <div class="bar special-bar"><i id="specialFill"></i></div>
@@ -118,8 +135,11 @@
           <small>Cristais verdes carregam o especial</small>
         </div>
         <p id="reviveHint" class="revive-hint" role="status"></p>
-        <div id="phaseTransition" class="phase-transition hidden"><small>PASSAGEM ABERTA</small><strong id="transitionText"></strong><span>Os sobreviventes recuperam 35% da vida máxima</span></div>
-        <div class="controls-hint">WASD / SETAS PARA MOVER <span>•</span> ATAQUE AUTOMÁTICO</div>
+        <div id="announce" class="announce" role="status" aria-live="polite"></div>
+        <div id="reconnectBanner" class="reconnect-banner hidden" role="status">Conexão perdida — reconectando…</div>
+        <div id="phaseTransition" class="phase-transition hidden"><small>PASSAGEM ABERTA</small><strong id="transitionText"></strong><span>Os sobreviventes recuperam 35% da vida e ganham um poder</span></div>
+        <div class="controls-hint">WASD / SETAS PARA MOVER <span>•</span> ATAQUE AUTOMÁTICO <span>•</span> ESPAÇO: ESPECIAL</div>
+        <button id="muteBtn" class="exit mute" aria-label="Ativar ou silenciar sons" title="Som">♪</button>
         <button id="pauseBtn" class="exit pause" aria-label="Pausar partida" title="Pausar (Esc)">Ⅱ</button>
         <button id="exitBtn" class="exit" aria-label="Voltar ao menu">×</button>
         <div id="joystick"><i></i></div>
