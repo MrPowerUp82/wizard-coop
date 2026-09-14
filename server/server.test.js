@@ -70,10 +70,77 @@ test('lista apenas salas abertas e disponíveis', { timeout: 10000 }, async t =>
   const browser = await connect();
   browser.send(JSON.stringify({ type: 'listRooms' }));
   const listing = await next(browser, 'rooms');
-  assert.deepEqual(listing.rooms, [{ code: openRoom.room, count: 1, host: 'Merlin' }]);
+  assert.deepEqual(listing.rooms, [{ code: openRoom.room, count: 1, running: false, host: 'Merlin' }]);
 
   openHost.send(JSON.stringify({ type: 'start' }));
   await next(openHost, 'start');
   browser.send(JSON.stringify({ type: 'listRooms' }));
-  assert.deepEqual((await next(browser, 'rooms')).rooms, []);
+  assert.deepEqual((await next(browser, 'rooms')).rooms, [{ code: openRoom.room, count: 1, running: true, host: 'Merlin' }]);
+  browser.send(JSON.stringify({ type: 'join', room: openRoom.room, name: 'Aliado' }));
+  await next(browser, 'joined');
+  browser.send(JSON.stringify({ type: 'ready' }));
+  assert.equal(Object.keys((await next(browser, 'start')).state.players).length, 2);
+});
+
+test('limita salas abertas e fechadas, permite entrar no limite e libera vagas ao sair', { timeout: 10000 }, async t => {
+  const child = spawn(process.execPath, ['server/server.js'], {
+    env: { ...process.env, PORT: '0', MAX_ROOMS: '2' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true
+  });
+  t.after(() => child.kill());
+  const [output] = await once(child.stdout, 'data');
+  const port = String(output).match(/:(\d+)/)?.[1];
+  assert.ok(port);
+  async function connect() {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+    t.after(() => ws.terminate());
+    const queue = [];
+    ws.on('message', raw => queue.push(JSON.parse(raw)));
+    await once(ws, 'open');
+    return {
+      ws,
+      send: message => ws.send(JSON.stringify(message)),
+      async receive(type) {
+        while (!queue.some(message => message.type === type)) await once(ws, 'message');
+        return queue.splice(queue.findIndex(message => message.type === type), 1)[0];
+      }
+    };
+  }
+  const host = await connect();
+  host.send({ type: 'create', visibility: 'open' });
+  const room = (await host.receive('joined')).room;
+  const privateHost = await connect();
+  privateHost.send({ type: 'create', visibility: 'closed' });
+  await privateHost.receive('joined');
+  const guest = await connect();
+  guest.send({ type: 'create', visibility: 'open' });
+  assert.match((await guest.receive('error')).message, /limite de 2 salas/);
+  guest.send({ type: 'listRooms' });
+  const listing = await guest.receive('rooms');
+  assert.deepEqual(listing.capacity, { used: 2, max: 2 });
+  assert.equal(listing.rooms.length, 1);
+  guest.send({ type: 'join', room });
+  assert.equal((await guest.receive('joined')).count, 2);
+  const third = await connect();
+  third.send({ type: 'join', room });
+  await third.receive('joined');
+  const fourth = await connect();
+  fourth.send({ type: 'join', room });
+  await fourth.receive('joined');
+  const observer = await connect();
+  observer.send({ type: 'listRooms' });
+  assert.deepEqual((await observer.receive('rooms')).rooms, []);
+  observer.send({ type: 'join', room });
+  assert.match((await observer.receive('error')).message, /cheia/);
+  fourth.ws.close();
+  await once(fourth.ws, 'close');
+  privateHost.ws.close();
+  await once(privateHost.ws, 'close');
+  observer.send({ type: 'listRooms' });
+  const available = await observer.receive('rooms');
+  assert.deepEqual(available.capacity, { used: 1, max: 2 });
+  assert.equal(available.rooms[0].count, 3);
+  observer.send({ type: 'create', visibility: 'closed' });
+  await observer.receive('joined');
+  observer.send({ type: 'listRooms' });
+  assert.deepEqual((await observer.receive('rooms')).capacity, { used: 2, max: 2 });
 });

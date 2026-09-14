@@ -42,9 +42,12 @@
               <input id="roomInput" maxlength="6" autocomplete="off" placeholder="CÓDIGO" aria-label="Código da sala" />
               <button id="joinBtn" class="compact">Entrar</button>
             </div>
-            <div class="open-rooms-header"><span>SALAS ABERTAS</span><button id="refreshRoomsBtn" type="button" aria-label="Atualizar salas">↻ Atualizar</button></div>
-            <div id="openRoomsList" class="open-rooms-list"><small>Buscando rituais disponíveis…</small></div>
           </div>
+          <section class="room-setup" aria-label="Salas abertas">
+            <div class="open-rooms-header"><span>SALAS ABERTAS</span><button id="refreshRoomsBtn" type="button" aria-label="Atualizar salas">↻ Atualizar</button></div>
+            <p id="roomCapacity" role="status"></p>
+            <div id="openRoomsList" class="open-rooms-list" aria-live="polite"><small>Buscando rituais disponíveis…</small></div>
+          </section>
           <button id="settingsBtn" class="text-btn">⚙ Configurar servidor</button>
           <div id="settings" class="settings hidden">
             <label>Servidor WebSocket <input id="serverUrl" placeholder="wss://jogo.seudominio.com/ws" /></label>

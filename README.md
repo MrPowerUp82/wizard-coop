@@ -56,6 +56,18 @@ location /ws {
 }
 ```
 
+## Salas e capacidade da VPS
+
+A tela inicial consulta as salas abertas ao carregar e a cada 10 segundos enquanto o menu está ativo e a aba visível. Partidas em andamento com vagas também aparecem; salas fechadas, cheias ou encerradas ficam fora da lista pública.
+
+O backend usa **`MAX_ROOMS=3` por padrão**, com até quatro jogadores por sala (12 jogadores no total). O limite inclui salas abertas e fechadas, em espera, em andamento ou encerradas ainda ocupadas. Ao atingir o limite, novas criações são recusadas com uma mensagem; entrar em uma sala existente continua permitido. A vaga é liberada quando o último jogador desconecta.
+
+Esse valor é um ponto de partida conservador para a VPS informada (1 vCPU, 460 MiB de RAM e cerca de 249 MiB disponíveis), e não uma capacidade garantida por teste de carga. A swap não deve ser tratada como RAM adicional para dimensionar partidas. Meça CPU, memória e latência na própria VPS antes de aumentar o limite.
+
+No aaPanel, configure as variáveis de ambiente `MAX_ROOMS=3` e `PORT=8080` no processo Node e reinicie. O código usa a porta 8081 quando `PORT` não está definido. Use apenas uma instância do backend: as salas e o limite são mantidos em memória por processo. `MAX_ROOMS` deve ser um inteiro positivo.
+
+Para aplicar esta correção em produção, publique o frontend atualizado e atualize/reinicie o backend na VPS.
+
 ## Escopo atual
 
 - Movimento por teclado e controle virtual no celular

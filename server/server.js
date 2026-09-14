@@ -3,6 +3,10 @@ import crypto from 'node:crypto';
 import { applyPower, createGameState, createPlayer, publicState, updateGame } from './game.js';
 
 const PORT = Number(process.env.PORT || 8081);
+const MAX_ROOMS = Number(process.env.MAX_ROOMS ?? 3);
+if (!Number.isSafeInteger(MAX_ROOMS) || MAX_ROOMS < 1) {
+  throw new Error('MAX_ROOMS deve ser um número inteiro positivo.');
+}
 const TICK = 30;
 const rooms = new Map();
 const wss = new WebSocketServer({ port: PORT, maxPayload: 4096 });
@@ -23,13 +27,13 @@ function broadcast(room, message) {
 
 function openRoomList() {
   return [...rooms.values()]
-    .filter(room => room.visibility === 'open' && !room.running && !room.state.over && room.clients.size < 4)
+    .filter(room => room.visibility === 'open' && !room.state.over && room.clients.size < 4)
     .map(room => ({
       code: room.code,
       count: room.clients.size,
+      running: room.running,
       host: room.state.players[room.host?.id]?.name || 'Arcanista'
-    }))
-    .slice(0, 30);
+    }));
 }
 
 function join(ws, room, name) {
@@ -57,13 +61,16 @@ wss.on('connection', ws => {
     try { message = JSON.parse(raw); } catch { return; }
     if (!message || typeof message !== 'object' || Array.isArray(message)) return;
     if (message.type === 'listRooms') {
-      return send(ws, { type: 'rooms', rooms: openRoomList() });
+      return send(ws, { type: 'rooms', rooms: openRoomList(), capacity: { used: rooms.size, max: MAX_ROOMS } });
     }
     if (ws.room && (message.type === 'create' || message.type === 'join')) {
       return send(ws, { type: 'error', message: 'Você já está em uma sala.' });
     }
 
     if (message.type === 'create') {
+      if (rooms.size >= MAX_ROOMS) {
+        return send(ws, { type: 'error', message: `O servidor atingiu o limite de ${MAX_ROOMS} salas. Entre em uma sala disponível ou tente novamente mais tarde.` });
+      }
       const roomCode = createCode();
       const visibility = message.visibility === 'open' ? 'open' : 'closed';
       const room = { code: roomCode, host: ws, clients: new Set(), state: createGameState(), running: false, visibility };

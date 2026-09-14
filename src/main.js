@@ -391,6 +391,7 @@ function endGame() {
   $('#defeatModal').classList.add('hidden');
   $('#pauseModal').classList.add('hidden');
   $('#menu').classList.remove('hidden');
+  fetchOpenRooms();
   animationFrame = requestAnimationFrame(menuLoop);
 }
 
@@ -432,7 +433,7 @@ function renderOpenRooms(rooms) {
     const host = document.createElement('b');
     host.textContent = room.host;
     const code = document.createElement('small');
-    code.textContent = `Sala ${room.code}`;
+    code.textContent = `Sala ${room.code} • ${room.running ? 'Em andamento' : 'Aguardando jogadores'}`;
     description.append(host, code);
     const occupancy = document.createElement('em');
     occupancy.textContent = `${room.count}/4  ›`;
@@ -442,28 +443,40 @@ function renderOpenRooms(rooms) {
   }
 }
 
+let cancelRoomRequest = () => {};
 function fetchOpenRooms() {
+  cancelRoomRequest();
   const list = $('#openRoomsList');
-  list.innerHTML = '<small>Buscando rituais disponíveis…</small>';
+  $('#roomCapacity').textContent = '';
   let listSocket;
   try { listSocket = new WebSocket(serverUrl()); }
   catch { list.innerHTML = '<small>Endereço do servidor inválido.</small>'; return; }
   const timeout = setTimeout(() => {
     list.innerHTML = '<small>O servidor demorou para responder.</small>';
-    listSocket.close();
+    cancelRoomRequest();
   }, 5000);
+  cancelRoomRequest = () => {
+    clearTimeout(timeout);
+    listSocket.onopen = listSocket.onmessage = listSocket.onclose = null;
+    listSocket.onerror = () => {};
+    listSocket.close();
+    cancelRoomRequest = () => {};
+  };
   listSocket.onopen = () => listSocket.send(JSON.stringify({ type: 'listRooms' }));
   listSocket.onmessage = ({ data }) => {
     let message;
     try { message = JSON.parse(data); } catch { return; }
-    if (message.type !== 'rooms' || !Array.isArray(message.rooms)) return;
-    clearTimeout(timeout);
+    if (!message || message.type !== 'rooms' || !Array.isArray(message.rooms)) return;
     renderOpenRooms(message.rooms);
-    listSocket.close();
+    if (message.capacity) {
+      const { used, max } = message.capacity;
+      $('#roomCapacity').textContent = `${used}/${max} salas em uso${used >= max ? ' • Limite atingido. Entre em uma sala com vagas.' : ''}`;
+    }
+    cancelRoomRequest();
   };
-  listSocket.onerror = () => {
-    clearTimeout(timeout);
+  listSocket.onerror = listSocket.onclose = () => {
     list.innerHTML = '<small>Não foi possível consultar as salas.</small>';
+    cancelRoomRequest();
   };
 }
 
@@ -582,6 +595,13 @@ $('#pauseBtn').onclick = () => togglePause();
 $('#resumeBtn').onclick = () => togglePause(false);
 $('#settingsBtn').onclick = () => $('#settings').classList.toggle('hidden');
 $('#serverUrl').value = serverUrl();
-$('#saveServer').onclick = () => { localStorage.setItem('arcana-server', $('#serverUrl').value.trim()); toast('Servidor salvo'); };
+$('#saveServer').onclick = () => { localStorage.setItem('arcana-server', $('#serverUrl').value.trim()); toast('Servidor salvo'); fetchOpenRooms(); };
+
+function refreshMenuRooms() {
+  if (!document.hidden && !game && !socket && $('#lobby').classList.contains('hidden')) fetchOpenRooms();
+}
+refreshMenuRooms();
+setInterval(refreshMenuRooms, 10000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshMenuRooms(); });
 $('#playerNameInput').value = localStorage.getItem('arcana-player-name') || '';
 $('#playerNameInput').addEventListener('change', () => localStorage.setItem('arcana-player-name', playerName()));

@@ -176,6 +176,8 @@ body, .menu-shell { min-height: 100dvh; }
 .open-rooms-header button { padding: 3px 0; border: 0; background: none; color: #79cdb5; font-size: 9px; }
 .open-rooms-list { display: grid; gap: 6px; max-height: 180px; overflow-y: auto; scrollbar-width: thin; }
 .open-rooms-list > small { padding: 12px 4px; color: #758b89; text-align: center; }
+#roomCapacity { margin: 0; color: #9bb0ad; font-size: 11px; }
+#roomCapacity:empty { display: none; }
 .open-room {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
