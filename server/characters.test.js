@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import WebSocket from 'ws';
+import { decodeState } from './protocol.js';
 
 test('personagens escolhidos são únicos por sala, trocáveis no lobby e liberados ao sair', { timeout: 10000 }, async t => {
   const child = spawn(process.execPath, ['server/server.js'], {
@@ -73,12 +74,12 @@ test('personagens escolhidos são únicos por sala, trocáveis no lobby e libera
   otherHost.send({ type: 'create', color: 2 });
   assert.equal((await otherHost.receive('joined')).color, 2);
   host.send({ type: 'start' });
-  const started = await host.receive('start');
-  assert.equal(started.state.players[created.playerId].color, 2);
-  assert.equal(started.state.players[joined.playerId].color, 3);
+  const started = decodeState((await host.receive('start')).state);
+  assert.equal(started.players[created.playerId].color, 2);
+  assert.equal(started.players[joined.playerId].color, 3);
   guest.send({ type: 'selectCharacter', color: 1 });
   assert.match((await guest.receive('error')).message, /antes da batalha/);
-  const state = (await guest.receive('state')).state;
+  const state = decodeState((await guest.receive('state')).state);
   assert.equal(state.players[joined.playerId].color, 3);
   const late = await connect();
   late.send({ type: 'join', room: created.room, color: 3 });
@@ -86,5 +87,5 @@ test('personagens escolhidos são únicos por sala, trocáveis no lobby e libera
   late.send({ type: 'join', room: created.room, color: 1 });
   const lateJoined = await late.receive('joined');
   late.send({ type: 'ready' });
-  assert.equal((await late.receive('start')).state.players[lateJoined.playerId].color, 1);
+  assert.equal(decodeState((await late.receive('start')).state).players[lateJoined.playerId].color, 1);
 });

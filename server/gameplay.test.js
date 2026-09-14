@@ -4,7 +4,7 @@ import {
   LIMITS, POWERS, addLatePlayer, applyPower, availablePowers, createGameState, createPlayer, difficultyAt,
   rerollPowers, updateGame, xpNeeded
 } from './game.js';
-import { CONTACT, DROPS, ELITE, POWER_CHOICE_TIMEOUT } from './balance.js';
+import { CONTACT, DIFFICULTY, DROPS, ELITE, POWER_CHOICE_TIMEOUT } from './balance.js';
 import { ENEMIES, PHASE_DURATION, enemyXp } from './phases.js';
 import { META_UPGRADES, applyMeta, sanitizeMeta } from './meta.js';
 
@@ -27,9 +27,9 @@ const enemy = (s, type, x, y = 0, extra = {}) => {
 const tick = (s, seconds, random = still) => { for (let n = 0; n < Math.round(seconds * 30); n++) updateGame(s, 1 / 30, random); };
 
 test('dificuldade de cada fase parte de um patamar próprio, e não do relógio global', () => {
-  assert.deepEqual(difficultyAt(0, 1, 2), difficultyAt(300, 1, 0));
+  assert.deepEqual(difficultyAt(0, 1, 2), difficultyAt(DIFFICULTY.phaseOffsetMinutes * 120, 1, 0));
   assert.ok(difficultyAt(0, 1, 1).hpScale < difficultyAt(300, 1, 1).hpScale);
-  assert.ok(difficultyAt(PHASE_DURATION, 1, 2).speedScale <= 1.26);
+  assert.ok(difficultyAt(PHASE_DURATION, 1, 2).speedScale <= DIFFICULTY.speed.max);
 });
 
 test('cada inimigo morde no próprio ritmo: multidões ferem mais que um inimigo sozinho', () => {
