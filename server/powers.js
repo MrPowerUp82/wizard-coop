@@ -79,11 +79,11 @@ export function applyPower(player, powerId) {
 
 export function rerollPowers(player, random = Math.random, context = {}) {
   if (!player.pendingPowers || !(player.rerolls > 0)) return false;
-  const previous = player.pendingPowers;
+  const previous = player.pendingPowers.filter(id => isEligible(player, id, context));
   // Prefer options the player has not just seen; top up with the old ones when the pool is small.
   const choices = [...availablePowers(player, random, context, previous), ...previous].slice(0, 3);
   player.rerolls--;
-  player.pendingPowers = choices;
+  player.pendingPowers = choices.length ? choices : null;
   player.powerTimer = 0;
   return true;
 }
