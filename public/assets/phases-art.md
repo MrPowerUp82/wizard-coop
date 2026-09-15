@@ -1,6 +1,6 @@
 # Atlas da campanha
 
-Ferramenta: geração de imagens integrada (ImageGen); sem CLI. Arquivo final: `phases.png`, PNG com alpha, 1254 × 1254. Os recortes ajustados à arte estão em `src/main.js` no mapa `phaseSprites`. O atlas original foi preservado.
+Ferramenta: geração de imagens integrada (ImageGen); sem CLI. Arquivo final: `phases.webp`, WebP com alpha, 1254 × 1254. Os recortes ajustados à arte estão em `src/sprites.js` no mapa `PHASE_BOUNDS`. O atlas original foi preservado.
 
 Colunas: inimigo terrestre, inimigo rápido, chefe. Linhas: bosque, gelo, brasas. Os pisos são gerados separadamente em Canvas no navegador.
 

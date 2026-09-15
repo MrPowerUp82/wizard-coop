@@ -13,6 +13,11 @@ const PHASE_BOUNDS = {
   skeleton: [0, 442, 418, 410], wraith: [418, 442, 408, 410], lich: [826, 440, 428, 408],
   imp: [0, 852, 418, 402], scorpion: [418, 852, 408, 402], demon: [826, 848, 428, 406]
 };
+const PHASE2_BOUNDS = {
+  spore: [0, 0, 418, 418], revenant: [418, 0, 418, 418], bogwarden: [836, 0, 418, 418],
+  sentinel: [0, 418, 418, 418], seer: [418, 418, 418, 418], archon: [836, 418, 418, 418],
+  voidling: [0, 836, 418, 418], voidscarab: [418, 836, 418, 418], umbra: [836, 836, 418, 418]
+};
 const VARIANTS = {
   bladePurple: { base: 'blade', hue: 55 },
   batEmber: { base: 'bat', hue: 105, saturation: 1.2 },
@@ -36,7 +41,9 @@ export const SHOT_SPRITES = ['bolt', 'fire', 'thorn', 'bladePurple'];
 const atlas = new Image();
 atlas.src = './assets/sprites.webp';
 const phaseAtlas = new Image();
-phaseAtlas.src = './assets/phases.png';
+phaseAtlas.src = './assets/phases.webp';
+const phase2Atlas = new Image();
+phase2Atlas.src = './assets/phases2.webp';
 const cache = new Map();
 
 function rgbToHsl(r, g, b) {
@@ -72,11 +79,12 @@ function recolor(canvas, { hue = 0, saturation = 1, lightness = 1 }) {
 function bake(name) {
   const variant = VARIANTS[name];
   const base = variant?.base || name;
+  const phase2 = PHASE2_BOUNDS[base];
   const phase = PHASE_BOUNDS[base];
-  const source = phase ? phaseAtlas : atlas;
+  const source = phase2 ? phase2Atlas : phase ? phaseAtlas : atlas;
   if (!source.complete || !source.naturalWidth) return null;
-  const bounds = phase || [ATLAS_CELLS[base][0] * CELL, ATLAS_CELLS[base][1] * CELL, CELL, CELL];
-  const resolution = phase ? 256 : 128;
+  const bounds = phase2 || phase || [ATLAS_CELLS[base][0] * CELL, ATLAS_CELLS[base][1] * CELL, CELL, CELL];
+  const resolution = (phase || phase2) ? 256 : 128;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = resolution;
   const [sx, sy, sw, sh] = bounds;

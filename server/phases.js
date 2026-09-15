@@ -32,15 +32,15 @@ export const ENEMIES = Object.freeze({
   treant: { hp: 1200, speed: 52, damage: 22, size: 170, radius: 58 },
   lich: { hp: 2200, speed: 64, damage: 24, size: 160, radius: 52 },
   demon: { hp: 3400, speed: 76, damage: 28, size: 185, radius: 64 },
-  spore: { name: 'Esporo espectral', hp: 35, speed: 66, damage: 12, behavior: 'shooter', shotSprite: 'thorn', sprite: 'mushroomBog', xp: 3 },
-  revenant: { name: 'Alma do brejo', hp: 28, speed: 108, damage: 11, behavior: 'flier', sprite: 'wraithBog', xp: 2 },
-  sentinel: { name: 'Sentinela solar', hp: 48, speed: 84, damage: 14, behavior: 'charger', sprite: 'skeletonGold', xp: 3 },
-  seer: { name: 'Oráculo astral', hp: 40, speed: 72, damage: 14, behavior: 'shooter', shotSprite: 'bolt', sprite: 'eyeGold', xp: 3 },
-  voidling: { name: 'Asa do vazio', hp: 28, speed: 124, damage: 10, behavior: 'bomber', sprite: 'batVoid', xp: 2 },
-  voidscarab: { name: 'Escaravelho do eclipse', hp: 48, speed: 96, damage: 14, behavior: 'charger', sprite: 'beetleVoid', xp: 3 },
-  bogwarden: { hp: 4600, speed: 58, damage: 30, size: 180, radius: 60, sprite: 'treantBog' },
-  archon: { hp: 6000, speed: 66, damage: 32, size: 175, radius: 56, sprite: 'lichGold' },
-  umbra: { hp: 7800, speed: 72, damage: 34, size: 195, radius: 66, sprite: 'demonVoid' }
+  spore: { name: 'Esporo espectral', hp: 35, speed: 66, damage: 12, behavior: 'shooter', shotSprite: 'thorn', xp: 3 },
+  revenant: { name: 'Alma do brejo', hp: 28, speed: 108, damage: 11, behavior: 'flier', xp: 2 },
+  sentinel: { name: 'Sentinela solar', hp: 48, speed: 84, damage: 14, behavior: 'charger', xp: 3 },
+  seer: { name: 'Oráculo astral', hp: 40, speed: 72, damage: 14, behavior: 'shooter', shotSprite: 'bolt', xp: 3 },
+  voidling: { name: 'Asa do vazio', hp: 28, speed: 124, damage: 10, behavior: 'bomber', xp: 2 },
+  voidscarab: { name: 'Escaravelho do eclipse', hp: 48, speed: 96, damage: 14, behavior: 'charger', xp: 3 },
+  bogwarden: { hp: 4600, speed: 58, damage: 30, size: 180, radius: 60 },
+  archon: { hp: 6000, speed: 66, damage: 32, size: 175, radius: 56 },
+  umbra: { hp: 7800, speed: 72, damage: 34, size: 195, radius: 66 }
 });
 
 export const BEHAVIORS = Object.freeze({
