@@ -108,7 +108,7 @@ function behave(ctx, enemy, target, angle, speed) {
     if (enemy.shootTimer <= 0 && d2 < 520 ** 2 && s.enemyShots.length < LIMITS.enemyShots) {
       enemy.shootTimer = cfg.every;
       s.enemyShots.push({ x: enemy.x, y: enemy.y, vx: Math.cos(angle) * cfg.shotSpeed, vy: Math.sin(angle) * cfg.shotSpeed,
-        sprite: cfg.sprite, ttl: 4, damage: type.damage * ctx.difficulty.damageScale * CONTACT.damageScale, radius: 12 });
+        sprite: type.shotSprite || cfg.sprite, ttl: 4, damage: type.damage * ctx.difficulty.damageScale * CONTACT.damageScale, radius: 12 });
     }
     // Hover at range instead of walking into the player.
     if (d2 < cfg.keepAway ** 2) return { angle: angle + Math.PI, speed: speed * 0.6 };

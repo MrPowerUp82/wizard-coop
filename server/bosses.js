@@ -61,6 +61,32 @@ function areaAttack(ctx, enemy, target) {
     const targets = stage >= 3 ? alive : [target];
     for (const p of targets) addHazard(s, { x: p.x, y: p.y, radius: 100, damage });
     if (stage >= 2 && targets.length === 1 && alive.length === 1) addHazard(s, { x: target.x + (random() - 0.5) * 300, y: target.y + (random() - 0.5) * 300, radius: 100, damage });
+  } else if (enemy.type === 'bogwarden') {
+    // A ring of pools leaves the center safe until the later fury stages.
+    const count = stage === 3 ? 8 : 6;
+    for (let n = 0; n < count; n++) {
+      const angle = n * Math.PI * 2 / count;
+      const warning = 1.4 + n * 0.08;
+      addHazard(s, { x: target.x + Math.cos(angle) * 170, y: target.y + Math.sin(angle) * 170,
+        radius: 62, damage, warning, ttl: warning + 0.35 });
+    }
+    if (stage >= 2) addHazard(s, { x: target.x, y: target.y, radius: 75, damage, warning: 1.8, ttl: 2.15 });
+  } else if (enemy.type === 'archon') {
+    const centers = [[0, 0], [-150, 0], [150, 0], [0, -150], [0, 150]];
+    if (stage === 3) centers.push([-150, -150], [150, -150], [-150, 150], [150, 150]);
+    for (const [x, y] of centers) addHazard(s, { x: target.x + x, y: target.y + y, radius: 65, damage, warning: 1.4, ttl: 1.75 });
+  } else if (enemy.type === 'umbra') {
+    // Fissures sweep through the target's recorded position, leaving time to move out.
+    const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+    for (let line = 0; line < (stage >= 2 ? 2 : 1); line++) {
+      const direction = angle + line * Math.PI / 2;
+      for (let n = -2; n <= 2; n++) {
+        if (line && n === 0) continue;
+        const warning = 1.1 + (n + 2) * 0.18;
+        addHazard(s, { x: target.x + Math.cos(direction) * n * 120, y: target.y + Math.sin(direction) * n * 120,
+          radius: 58, damage, warning, ttl: warning + 0.35 });
+      }
+    }
   } else {
     for (const n of [-1, 0, 1]) addHazard(s, { x: target.x + n * 140, y: target.y, radius: 100, damage });
     if (stage >= 3) for (let n = 0; n < 3; n++) {
@@ -73,11 +99,14 @@ function rangedAttack(ctx, enemy, target) {
   const { s } = ctx;
   const stage = enemy.stage;
   const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
-  const sprite = enemy.type === 'treant' ? 'thorn' : enemy.type === 'lich' ? 'bolt' : 'fire';
-  const speed = enemy.type === 'lich' ? 230 : 200;
+  const sprite = ['treant', 'bogwarden'].includes(enemy.type) ? 'thorn' : ['lich', 'archon'].includes(enemy.type) ? 'bolt' : enemy.type === 'umbra' ? 'blade' : 'fire';
+  const speed = ['lich', 'archon'].includes(enemy.type) ? 230 : 200;
   const radial = (count, offset = 0) => { for (let n = 0; n < count; n++) fire(s, enemy, offset + n * Math.PI * 2 / count, sprite, speed * 0.85); };
   const fan = count => { for (let n = 0; n < count; n++) fire(s, enemy, angle + (n - (count - 1) / 2) * 0.23, sprite, speed); };
-  if (stage === 1) fan(enemy.type === 'demon' ? 5 : 3);
+  if (enemy.type === 'bogwarden') { fan(3 + stage * 2); if (stage === 3) radial(8, s.time); }
+  else if (enemy.type === 'archon') { radial(4 + stage * 4, s.time * 0.45); if (stage === 3) fan(3); }
+  else if (enemy.type === 'umbra') { radial(6 + stage * 4, s.time * 0.6); if (stage >= 2) fan(5); }
+  else if (stage === 1) fan(enemy.type === 'demon' ? 5 : 3);
   else if (enemy.type === 'lich') radial(stage === 2 ? 12 : 16, s.time);
   else if (enemy.type === 'treant') { fan(5); if (stage === 3) radial(10, s.time); }
   else fan(7);
@@ -115,5 +144,5 @@ export function bossBrain(ctx, enemy, target) {
     enemy.rangedCooldown = BOSS.rangedCooldown[enemy.type] * pace;
     rangedAttack(ctx, enemy, target);
   }
-  if (enemy.type === 'demon' && enemy.stage >= 2) dashAttack(ctx, enemy, target);
+  if ((enemy.type === 'demon' && enemy.stage >= 2) || (enemy.type === 'umbra' && enemy.stage === 3)) dashAttack(ctx, enemy, target);
 }

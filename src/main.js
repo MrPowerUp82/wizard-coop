@@ -136,9 +136,9 @@ function showDefeat(allDead) {
   round.gameOverShown = allDead;
   const me = view.players[meId];
   $('#defeatTitle').textContent = view.victory ? 'Ritual concluído!' : allDead ? 'Ritual encerrado' : 'Você caiu';
-  $('#defeatText').textContent = view.victory ? 'Os três guardiões caíram. A aurora pertence aos arcanistas.'
+  $('#defeatText').textContent = view.victory ? 'Todos os guardiões caíram. A aurora pertence aos arcanistas.'
     : allDead ? 'Nenhum arcanista permaneceu de pé.' : 'Um aliado pode ressuscitar você permanecendo dentro do círculo por 4 segundos.';
-  $('#finalStats').textContent = `TEMPO ${format(view.time)}  •  NÍVEL ${me.level}  •  FASE ${(view.phase || 0) + 1}/3  •  MOEDAS ${me.coins || 0}`;
+  $('#finalStats').textContent = `TEMPO ${format(view.time)}  •  NÍVEL ${me.level}  •  FASE ${(view.phase || 0) + 1}/${PHASES.length}  •  MOEDAS ${me.coins || 0}`;
   $('#defeatModal').classList.toggle('victory', Boolean(view.victory));
   $('#spectateBtn').classList.toggle('hidden', allDead);
   const table = $('#resultsTable');

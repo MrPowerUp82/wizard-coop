@@ -53,7 +53,7 @@ export const PHASE_SCHEDULE = Object.freeze([
 
 export const BOSS = Object.freeze({
   // Boss HP targets this many seconds of the group's estimated sustained damage.
-  timeToKill: [45, 60, 70],
+  timeToKill: [45, 60, 70, 75, 80, 90],
   dpsEfficiency: 0.7,
   extraPlayerHp: 0.65,
   stageThresholds: [0.66, 0.33],
@@ -62,8 +62,8 @@ export const BOSS = Object.freeze({
   shockwave: { radius: 210, warning: 1, damage: 12 },
   shotDamage: 0.45,
   shotRadius: 10,
-  rangedCooldown: { treant: 3.6, lich: 3.2, demon: 2.6 },
-  areaCooldown: { treant: 4.5, lich: 4.5, demon: 3.6 }
+  rangedCooldown: { treant: 3.6, lich: 3.2, demon: 2.6, bogwarden: 3.4, archon: 3.6, umbra: 3.2 },
+  areaCooldown: { treant: 4.5, lich: 4.5, demon: 3.6, bogwarden: 4.8, archon: 4.5, umbra: 4.6 }
 });
 
 export const WEAPONS = Object.freeze({

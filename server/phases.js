@@ -7,7 +7,13 @@ export const PHASES = Object.freeze([
   { name: 'Cripta Glacial', floor: 'ice', color: '#8cdfff', enemies: ['skeleton', 'wraith'], boss: 'lich', bossName: 'Rei do Inverno',
     specials: [{ type: 'eye', after: 45, weight: 0.16 }] },
   { name: 'Abismo de Brasas', floor: 'lava', color: '#ffac70', enemies: ['imp', 'scorpion'], boss: 'demon', bossName: 'Coração da Caldeira',
-    specials: [{ type: 'bat', after: 45, weight: 0.16 }, { type: 'brute', after: 150, weight: 0.08 }] }
+    specials: [{ type: 'bat', after: 45, weight: 0.16 }, { type: 'brute', after: 150, weight: 0.08 }] },
+  { name: 'Pântano Espectral', floor: 'swamp', color: '#b8df7c', enemies: ['spore', 'revenant'], boss: 'bogwarden', bossName: 'Matriarca do Brejo',
+    specials: [{ type: 'slime', after: 45, weight: 0.18 }, { type: 'scorpion', after: 150, weight: 0.08 }] },
+  { name: 'Cidadela Astral', floor: 'astral', color: '#ffe09b', enemies: ['sentinel', 'seer'], boss: 'archon', bossName: 'Arconte Solar',
+    specials: [{ type: 'revenant', after: 60, weight: 0.16 }, { type: 'brute', after: 150, weight: 0.08 }] },
+  { name: 'Eclipse do Vazio', floor: 'void', color: '#d3a4ff', enemies: ['voidling', 'voidscarab'], boss: 'umbra', bossName: 'Soberano do Eclipse',
+    specials: [{ type: 'seer', after: 45, weight: 0.18 }, { type: 'revenant', after: 150, weight: 0.1 }] }
 ]);
 
 // behavior: walker (default) | charger | splitter | shooter | bomber | flier
@@ -25,7 +31,16 @@ export const ENEMIES = Object.freeze({
   scorpion: { name: 'Escorpião', hp: 55, speed: 63, damage: 16, behavior: 'charger' },
   treant: { hp: 1200, speed: 52, damage: 22, size: 170, radius: 58 },
   lich: { hp: 2200, speed: 64, damage: 24, size: 160, radius: 52 },
-  demon: { hp: 3400, speed: 76, damage: 28, size: 185, radius: 64 }
+  demon: { hp: 3400, speed: 76, damage: 28, size: 185, radius: 64 },
+  spore: { name: 'Esporo espectral', hp: 35, speed: 66, damage: 12, behavior: 'shooter', shotSprite: 'thorn', sprite: 'mushroomBog', xp: 3 },
+  revenant: { name: 'Alma do brejo', hp: 28, speed: 108, damage: 11, behavior: 'flier', sprite: 'wraithBog', xp: 2 },
+  sentinel: { name: 'Sentinela solar', hp: 48, speed: 84, damage: 14, behavior: 'charger', sprite: 'skeletonGold', xp: 3 },
+  seer: { name: 'Oráculo astral', hp: 40, speed: 72, damage: 14, behavior: 'shooter', shotSprite: 'bolt', sprite: 'eyeGold', xp: 3 },
+  voidling: { name: 'Asa do vazio', hp: 28, speed: 124, damage: 10, behavior: 'bomber', sprite: 'batVoid', xp: 2 },
+  voidscarab: { name: 'Escaravelho do eclipse', hp: 48, speed: 96, damage: 14, behavior: 'charger', sprite: 'beetleVoid', xp: 3 },
+  bogwarden: { hp: 4600, speed: 58, damage: 30, size: 180, radius: 60, sprite: 'treantBog' },
+  archon: { hp: 6000, speed: 66, damage: 32, size: 175, radius: 56, sprite: 'lichGold' },
+  umbra: { hp: 7800, speed: 72, damage: 34, size: 195, radius: 66, sprite: 'demonVoid' }
 });
 
 export const BEHAVIORS = Object.freeze({

@@ -1,6 +1,7 @@
 // Headless balance probe: bots play full campaigns against the real simulation.
 // Usage: npm run sim -- [runs=8] [players=1]
 import { activateSpecial, applyPower, createGameState, createPlayer, updateGame } from '../server/game.js';
+import { PHASES, PHASE_DURATION } from '../server/phases.js';
 
 const runs = Number(process.argv[2] || 8);
 const playerCount = Number(process.argv[3] || 1);
@@ -49,7 +50,7 @@ function play(seed) {
   const players = Object.values(s.players);
   const bosses = [];
   let bossStart = null, peakEnemies = 0, firstHit = null, lowest = 1;
-  while (!s.over && s.time < 2400) {
+  while (!s.over && s.time < PHASES.length * (PHASE_DURATION + 180)) {
     for (const p of players) {
       if (!p.alive) continue;
       p.input = steer(s, p);

@@ -159,7 +159,7 @@ export function createAnimator({ onHit, onKill } = {}) {
       if (reduced) return { x: 0, y: 0, rotation: 0, sx: a.facing, sy: 1, alpha: down ? 0.28 : 1, flash: 0 };
       const step = Math.sin(a.stride + a.seed) * a.walking * (1 - down);
       const breath = Math.sin(time * 2.8 + a.seed) * (1 - down);
-      const floating = ['wraith', 'eye', 'bat', 'lich'].includes(a.type);
+      const floating = ['wraith', 'eye', 'bat', 'lich', 'revenant', 'seer', 'voidling', 'archon'].includes(a.type);
       const bounce = floating ? Math.sin(time * 3.5 + a.seed) * 4 : -Math.abs(step) * (a.boss ? 2 : 3.5);
       return {
         x: -Math.cos(a.castAngle || 0) * a.cast * 3,

@@ -44,14 +44,23 @@ O workflow do GitHub Pages executa lint, checagem de tipos e testes antes de pub
 | Bosque Desperto | Cogumelos, besouros que investem e lodos que se dividem | Raiz Ancestral |
 | Cripta Glacial | Esqueletos, espectros e olhos gélidos que atiram à distância | Rei do Inverno |
 | Abismo de Brasas | Diabretes, escorpiões que investem, morcegos que explodem e golems de magma | Coração da Caldeira |
+| Pântano Espectral | Esporos que disparam espinhos, almas velozes, lodos e escorpiões | Matriarca do Brejo |
+| Cidadela Astral | Sentinelas que investem, oráculos que atiram, almas e golems | Arconte Solar |
+| Eclipse do Vazio | Asas explosivas, escaravelhos que investem, oráculos e almas | Soberano do Eclipse |
 
-Cada horda dura 300 segundos. A dificuldade sobe dentro da fase, e cada fase começa num patamar próprio, em vez de herdar o relógio global. Cada inimigo morde no próprio ritmo: um inimigo sozinho fere pouco, mas ser cercado é perigoso. O XP de cada inimigo acompanha a vida dele.
+Cada horda dura 300 segundos: são seis fases e 30 minutos de hordas, além das lutas contra chefes e transições, tanto offline quanto online. A dificuldade sobe dentro da fase, e cada fase começa num patamar próprio, em vez de herdar o relógio global. Cada inimigo morde no próprio ritmo: um inimigo sozinho fere pouco, mas ser cercado é perigoso. O XP de cada inimigo acompanha a vida dele.
+
+As fases novas usam pisos próprios e variações de cor dos sprites existentes, preservando a identidade visual. Os pisos e as cores são preparados uma vez no cliente; os limites de inimigos, projéteis e áreas simultâneas continuam iguais.
 
 Eventos marcados movimentam a horda: uma onda de abertura, **elites** douradas aos 90, 180 e 270 segundos (deixam **baú** com escolha de poder e **ímã** que puxa todo o XP) e **enxames** que cercam o grupo.
 
 ### Chefes
 
-A vida do chefe é calculada a partir do dano estimado do grupo no momento da invocação, para que a luta dure por volta de um minuto em qualquer build. Com 66% e 33% da vida, o chefe entra em fúria: onda de choque, lacaios e padrões novos (linhas de raízes, anéis de projéteis, meteoros e investidas telegrafadas). Ataques em área mostram o círculo antes de causar dano. Derrotar o guardião cura 35% da vida e dá uma escolha de poder gratuita no início da fase seguinte. A queda do terceiro chefe concede a vitória.
+A vida do chefe é calculada a partir do dano estimado do grupo no momento da invocação, com duração-alvo crescente de 45 a 90 segundos (a duração real depende da build e das esquivas). Com 66% e 33% da vida, o chefe entra em fúria: onda de choque, lacaios e padrões novos (linhas de raízes, anéis de projéteis, meteoros e investidas telegrafadas). Ataques em área mostram o círculo antes de causar dano. Derrotar o guardião cura 35% da vida e dá uma escolha de poder gratuita no início da fase seguinte. A queda do sexto chefe concede a vitória.
+
+- **Matriarca do Brejo**: poças em anel e leques de espinhos; em fúria, também ameaça o centro do anel.
+- **Arconte Solar**: explosões em cruz e anéis de raios; na última fúria, cobre também as diagonais.
+- **Soberano do Eclipse**: fissuras sequenciais e rajadas de lâminas; ganha fissuras cruzadas e, na última fúria, investidas com aviso.
 
 ### Poderes
 

@@ -17,6 +17,15 @@ const VARIANTS = {
   bladePurple: { base: 'blade', hue: 55 },
   batEmber: { base: 'bat', hue: 105, saturation: 1.2 },
   bruteMagma: { base: 'brute', hue: -18, saturation: 1.6, lightness: 1.08 },
+  mushroomBog: { base: 'mushroom', hue: 65, saturation: 0.9 },
+  wraithBog: { base: 'wraith', hue: -90, saturation: 1.2 },
+  treantBog: { base: 'treant', hue: 35, saturation: 0.85 },
+  skeletonGold: { base: 'skeleton', hue: 190, saturation: 1.2 },
+  eyeGold: { base: 'eye', hue: 190, saturation: 1.2 },
+  lichGold: { base: 'lich', hue: 190, saturation: 1.2 },
+  batVoid: { base: 'bat', hue: -30, saturation: 1.3 },
+  beetleVoid: { base: 'beetle', hue: 150, saturation: 1.1 },
+  demonVoid: { base: 'demon', hue: -90, saturation: 1.1 },
   gemRare: { base: 'gem', hue: 70 },
   gemEpic: { base: 'gem', hue: 170, saturation: 1.2 }
 };

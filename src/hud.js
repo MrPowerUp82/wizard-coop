@@ -147,7 +147,7 @@ export function createHud() {
         : me.reviveBy ? `Aliado ressuscitando você… ${Math.ceil(REVIVE.seconds - me.reviveProgress)}s` : 'Aguarde um aliado chegar até seu corpo.');
       const phase = PHASES[view.phase || 0];
       const status = view.phaseStatus || 'horde';
-      set(el.phaseName, 'text', `${(view.phase || 0) + 1} / 3 · ${phase.name}`);
+      set(el.phaseName, 'text', `${(view.phase || 0) + 1} / ${PHASES.length} · ${phase.name}`);
       set(el.phasePanel, '--phase-color', phase.color);
       set(el.phaseTime, 'text', status === 'horde' ? `${format(Math.ceil(PHASE_DURATION - (view.phaseTime || 0)))} ATÉ O CHEFE`
         : status === 'boss' ? 'DERROTE O GUARDIÃO' : status === 'transition' ? 'GUARDIÃO DERROTADO' : 'CAMPANHA CONCLUÍDA');

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGameState, createPlayer, updateGame, publicState, POWERS, LIMITS } from './game.js';
 import { PHASES, PHASE_DURATION, TRANSITION_DURATION } from './phases.js';
+import { encodeState, decodeState } from './protocol.js';
 
 function fixture(phase = 0, count = 1) {
   const state = createGameState();
@@ -21,7 +22,7 @@ function bossFixture(phase = 0, count = 1) {
 }
 
 test('cada fase dura 300 segundos e gera apenas seus próprios inimigos', () => {
-  for (let phase = 0; phase < 3; phase++) {
+  for (let phase = 0; phase < PHASES.length; phase++) {
     const s = fixture(phase);
     updateGame(s, 0.1, () => 0.25);
     s.spawn = 0;
@@ -70,8 +71,8 @@ test('morte do chefe abre transição, limpa ataques e inicia novos cinco minuto
   assert.equal(s.players.p0.hp, 45);
 });
 
-test('terceiro chefe concede vitória e congela a simulação', () => {
-  const s = bossFixture(2);
+test('último chefe concede vitória e congela a simulação', () => {
+  const s = bossFixture(PHASES.length - 1);
   s.enemies[0].hp = 0;
   updateGame(s, 0.01);
   assert.equal(s.victory, true);
@@ -83,7 +84,7 @@ test('terceiro chefe concede vitória e congela a simulação', () => {
 });
 
 test('morte do grupo prevalece sobre vitória no mesmo frame', () => {
-  const s = bossFixture(2);
+  const s = bossFixture(PHASES.length - 1);
   const p = s.players.p0;
   p.invulnerableFor = 0; p.hp = 1;
   s.enemies[0].hp = 0;
@@ -125,13 +126,13 @@ test('co-op escala a vida do chefe e transmite fase, ataques e vitória', () => 
   assert.deepEqual(state.hazards, []);
 });
 
-test('campanha completa atravessa três hordas e chefes sem exceder limites', () => {
+test('campanha completa atravessa seis hordas e chefes sem exceder limites', () => {
   const s = fixture();
   const p = s.players.p0;
   p.damage = 150; p.projectiles = 4; p.attackDelay = 0.2;
   p.powers = Object.fromEntries(Object.entries(POWERS).map(([id, power]) => [id, power.max]));
   const bosses = new Set();
-  for (let n = 0; n < 60000 && !s.over; n++) {
+  for (let n = 0; n < PHASES.length * (PHASE_DURATION + 240) * 30 && !s.over; n++) {
     p.invulnerableFor = 10; // Isolate campaign progression from survival skill.
     updateGame(s, 1 / 30, () => 0.25);
     if (s.phaseStatus === 'boss') bosses.add(s.phase);
@@ -141,7 +142,58 @@ test('campanha completa atravessa três hordas e chefes sem exceder limites', ()
     assert.ok(s.gems.length <= LIMITS.drops);
     assert.ok(s.hazards.length <= LIMITS.hazards);
   }
-  assert.deepEqual([...bosses], [0, 1, 2]);
-  assert.ok(s.time >= 900);
+  assert.deepEqual([...bosses], [...PHASES.keys()]);
+  assert.ok(s.time >= PHASE_DURATION * PHASES.length);
   assert.equal(s.victory, true);
+});
+
+test('terceiro, quarto e quinto chefes abrem a próxima fase preservando a build', () => {
+  for (const phase of [2, 3, 4]) {
+    const s = bossFixture(phase, 4);
+    const p = s.players.p0;
+    p.level = 15;
+    p.powers.arcane = 3;
+    s.enemies[0].hp = 0;
+    updateGame(s, 0.01);
+    assert.equal(s.victory, false);
+    assert.equal(s.over, false);
+    assert.equal(s.phaseStatus, 'transition');
+    updateGame(s, TRANSITION_DURATION + 0.01);
+    assert.equal(s.phase, phase + 1);
+    assert.equal(s.phaseStatus, 'horde');
+    assert.equal(p.level, 15);
+    assert.equal(p.powers.arcane, 3);
+  }
+});
+
+test('novos chefes escalam em co-op, avisam áreas e transmitem ataques em todas as fúrias', () => {
+  for (const phase of [3, 4, 5]) {
+    const solo = bossFixture(phase);
+    const s = bossFixture(phase, 4);
+    const boss = s.enemies[0];
+    assert.ok(Number.isFinite(boss.maxHp));
+    assert.ok(boss.maxHp > solo.enemies[0].maxHp);
+    for (const [index, ratio] of [1, 0.6, 0.3].entries()) {
+      boss.hp = boss.maxHp * ratio;
+      boss.attackCooldown = 0;
+      boss.rangedCooldown = 0;
+      s.hazards = []; s.enemyShots = [];
+      updateGame(s, 0.01, () => 0.25);
+      assert.equal(boss.stage, index + 1);
+      assert.ok(s.hazards.length >= 5 && s.hazards.length <= LIMITS.hazards);
+      assert.ok(s.enemyShots.length >= 5 && s.enemyShots.length <= LIMITS.enemyShots);
+      assert.ok(s.enemies.length <= LIMITS.enemies);
+      for (const h of s.hazards) {
+        assert.ok(h.warning > 0 && h.ttl > h.warning && !h.fired);
+        assert.ok([h.x, h.y, h.radius, h.damage].every(Number.isFinite));
+      }
+      const wire = decodeState(JSON.parse(JSON.stringify(encodeState(s, 'p0'))));
+      assert.equal(wire.phase, phase);
+      assert.equal(wire.enemies.find(e => e.boss).type, PHASES[phase].boss);
+      assert.equal(wire.enemies.find(e => e.boss).stage, index + 1);
+      assert.equal(wire.enemyShots.length, s.enemyShots.length);
+      assert.ok(wire.enemyShots.every(shot => ['thorn', 'bolt', 'blade'].includes(shot.sprite)));
+      if (index > 0) assert.ok(wire.enemies.some(e => e.type === PHASES[phase].enemies[0]));
+    }
+  }
 });
