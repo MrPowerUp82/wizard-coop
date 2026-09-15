@@ -10,6 +10,38 @@ function fixture() {
   return game;
 }
 
+test('player vira com o movimento horizontal e mantém o lado parado ou andando na vertical', () => {
+  for (const reduced of [false, true]) {
+    const game = fixture();
+    const animator = createAnimator();
+    const sample = () => animator.update(JSON.parse(JSON.stringify(publicState(game))), 0.033, { reduced });
+    sample();
+    assert.ok(animator.pose('p:p').sx > 0);
+    game.players.p.x -= 8;
+    sample();
+    assert.ok(animator.pose('p:p').sx < 0);
+    sample(); // Unchanged snapshot between network updates.
+    game.players.p.y += 8;
+    sample();
+    assert.ok(animator.pose('p:p').sx < 0);
+    game.players.p.castCount++;
+    game.players.p.castAngle = 0; // Auto-aim must not override movement facing.
+    sample();
+    assert.ok(animator.pose('p:p').sx < 0);
+    game.players.p.x += 16;
+    sample();
+    assert.ok(animator.pose('p:p').sx > 0);
+    game.players.p.alive = false;
+    game.players.p.x -= 8;
+    sample();
+    assert.ok(animator.pose('p:p').sx > 0);
+    animator.reset();
+    game.players.p.alive = true;
+    sample();
+    assert.ok(animator.pose('p:p').sx > 0);
+  }
+});
+
 test('animação observa snapshots sem alterar simulação, colisões ou protocolo', () => {
   const game = fixture();
   const animator = createAnimator();

@@ -99,7 +99,7 @@ export function createAnimator({ onHit, onKill } = {}) {
         if (!old) {
           actors.set(key, { x: entity.x, y: entity.y, hp: entity.hp, alive, type: entity.type,
             boss: entity.boss, elite: entity.elite, color, seed: actors.size * 2.39, movedAt: -10, dx: 0,
-            stride: 0, walking: 0, hit: 0, cast: 0, down: alive ? 0 : 1,
+            stride: 0, walking: 0, hit: 0, cast: 0, down: alive ? 0 : 1, facing: 1,
             castCount: entity.castCount || 0, charge: entity.specialCharge || 0, level: entity.level,
             bossCooldown: entity.attackCooldown, rangedCooldown: entity.rangedCooldown });
           return;
@@ -107,6 +107,9 @@ export function createAnimator({ onHit, onKill } = {}) {
         const distance = Math.hypot(entity.x - old.x, entity.y - old.y);
         if (distance > 0.1 && alive && !game.over) {
           old.movedAt = time; old.dx = Math.sign(entity.x - old.x);
+          // Keep the last horizontal direction when stationary or moving vertically.
+          // Position deltas work for both local simulation and remote snapshots.
+          if (player && Math.abs(entity.x - old.x) > 0.1) old.facing = Math.sign(entity.x - old.x);
         }
         old.walking += ((time - old.movedAt < 0.14 && alive && !game.over ? 1 : 0) - old.walking) * Math.min(1, dt * 14);
         old.stride += dt * (player ? 13 : entity.boss ? 6 : 11) * old.walking;
@@ -128,7 +131,7 @@ export function createAnimator({ onHit, onKill } = {}) {
         if (cast && alive) {
           old.cast = 1;
           old.castAngle = entity.castAngle || 0;
-          burst(entity.x + (player ? 17 : 0), entity.y - (player ? 12 : 0), color, 3, entity.boss ? 75 : 20);
+          burst(entity.x + (player ? 17 * old.facing : 0), entity.y - (player ? 12 : 0), color, 3, entity.boss ? 75 : 20);
         }
         if (player && (entity.specialCharge < old.charge || entity.level > old.level)) burst(entity.x, entity.y, color, 12, 95);
         Object.assign(old, { x: entity.x, y: entity.y, hp: entity.hp, alive,
@@ -153,7 +156,7 @@ export function createAnimator({ onHit, onKill } = {}) {
       const a = actors.get(key);
       if (!a) return { x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 1, flash: 0 };
       const down = reduced ? Number(!a.alive) : a.down;
-      if (reduced) return { x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: down ? 0.28 : 1, flash: 0 };
+      if (reduced) return { x: 0, y: 0, rotation: 0, sx: a.facing, sy: 1, alpha: down ? 0.28 : 1, flash: 0 };
       const step = Math.sin(a.stride + a.seed) * a.walking * (1 - down);
       const breath = Math.sin(time * 2.8 + a.seed) * (1 - down);
       const floating = ['wraith', 'eye', 'bat', 'lich'].includes(a.type);
@@ -162,7 +165,7 @@ export function createAnimator({ onHit, onKill } = {}) {
         x: -Math.cos(a.castAngle || 0) * a.cast * 3,
         y: bounce + breath * 0.7 + down * 12,
         rotation: step * (a.boss ? 0.015 : 0.045) + a.dx * a.walking * 0.025 + down * 0.65 - a.cast * 0.07,
-        sx: 1 + breath * 0.015 + Math.abs(step) * 0.025 + a.cast * 0.06,
+        sx: a.facing * (1 + breath * 0.015 + Math.abs(step) * 0.025 + a.cast * 0.06),
         sy: 1 - breath * 0.015 - Math.abs(step) * 0.035 - down * 0.18,
         alpha: 1 - down * 0.72, flash: a.hit
       };
