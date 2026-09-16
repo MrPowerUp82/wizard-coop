@@ -13,6 +13,7 @@ export const POWERS = Object.freeze({
   aura: { title: 'Aura sagrada', max: 5, kind: 'weapon' },
   chain: { title: 'Corrente de raios', max: 5, kind: 'weapon' },
   runes: { title: 'Runas explosivas', max: 5, kind: 'weapon' },
+  familiar: { title: 'Familiar arcano', max: 5, kind: 'weapon' },
   shatter: { title: 'Estilhaço glacial', max: 1, kind: 'signature', color: 0, minLevel: 4 },
   burn: { title: 'Chão em chamas', max: 1, kind: 'signature', color: 1, minLevel: 4 },
   ricochet: { title: 'Ricochete', max: 1, kind: 'signature', color: 2, minLevel: 4 },
@@ -21,7 +22,8 @@ export const POWERS = Object.freeze({
   constellation: { title: 'Constelação', max: 1, kind: 'evolution', requires: { orbit: 5, arcane: 3 } },
   sanctuary: { title: 'Santuário', max: 1, kind: 'evolution', requires: { aura: 5, vitality: 3 } },
   tempest: { title: 'Tempestade', max: 1, kind: 'evolution', requires: { chain: 5, haste: 3 } },
-  minefield: { title: 'Campo minado', max: 1, kind: 'evolution', requires: { runes: 5, magnet: 2 } }
+  minefield: { title: 'Campo minado', max: 1, kind: 'evolution', requires: { runes: 5, magnet: 2 } },
+  covenant: { title: 'Pacto ancestral', max: 1, kind: 'evolution', requires: { familiar: 5, swiftness: 2 } }
 });
 
 const WEIGHTS = { passive: 1, weapon: 1.25, signature: 1.6, coop: 0.8, evolution: 1000 };

@@ -258,7 +258,7 @@ export function updateGame(s, dt, random = Math.random) {
 const PLAYER_FIELDS = ['id', 'name', 'color', 'x', 'y', 'hp', 'maxHp', 'xp', 'level', 'alive', 'speed', 'powers', 'pendingPowers',
   'specialCharge', 'coins', 'reviveProgress', 'reviveBy', 'reviving', 'castCount', 'castAngle', 'invulnerableFor', 'orbitAngle',
   'rerolls', 'phoenix', 'stats', 'inputSeq', 'powerTimer', 'connected',
-  'specialCooldown', 'dashFor', 'dashCooldown', 'dashX', 'dashY', 'moveX', 'moveY', 'motionId'];
+  'specialCooldown', 'dashFor', 'dashCooldown', 'dashX', 'dashY', 'moveX', 'moveY', 'motionId', 'familiar'];
 
 /** The client-facing view of the state: what rendering and the HUD need, nothing private to the simulation. */
 export function publicState(s) {

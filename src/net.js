@@ -161,7 +161,8 @@ export function createSession(url, entry, handlers) {
     const players = {};
     for (const [id, p] of Object.entries(latest.players)) {
       const pa = previousPlayers[id], pb = to.players[id] || p;
-      players[id] = pa ? { ...p, x: lerp(pa.x, pb.x, alpha), y: lerp(pa.y, pb.y, alpha), orbitAngle: lerpAngle(pa.orbitAngle, pb.orbitAngle, alpha) } : { ...p };
+      players[id] = pa ? { ...p, x: lerp(pa.x, pb.x, alpha), y: lerp(pa.y, pb.y, alpha), orbitAngle: lerpAngle(pa.orbitAngle, pb.orbitAngle, alpha),
+        familiar: pa.familiar && pb.familiar ? { x: lerp(pa.familiar.x, pb.familiar.x, alpha), y: lerp(pa.familiar.y, pb.familiar.y, alpha) } : p.familiar } : { ...p };
     }
     const move = list => list.map(item => ({ ...item, x: item.x + item.vx * ahead, y: item.y + item.vy * ahead }));
     return {

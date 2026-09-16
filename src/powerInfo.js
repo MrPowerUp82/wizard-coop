@@ -11,6 +11,7 @@ export const POWER_INFO = {
   aura: ['❂', 'Aura sagrada', 'Queima inimigos próximos a cada meio segundo'],
   chain: ['⚡', 'Corrente de raios', 'Um raio salta entre inimigos próximos'],
   runes: ['᛭', 'Runas explosivas', 'Deixa runas que explodem ao serem pisadas'],
+  familiar: ['❖', 'Familiar arcano', 'Invoca um espírito que caça inimigos com o seu elemento'],
   shatter: ['❄', 'Estilhaço glacial', 'Inimigos lentos explodem em 4 estilhaços ao morrer'],
   burn: ['♨', 'Chão em chamas', 'Bolas de fogo deixam o chão queimando'],
   ricochet: ['↯', 'Ricochete', 'Espinhos saltam para o próximo inimigo'],
@@ -19,7 +20,8 @@ export const POWER_INFO = {
   constellation: ['✺', 'Constelação', 'Evolução: +2 orbes maiores com o dobro de dano'],
   sanctuary: ['✚', 'Santuário', 'Evolução: aura maior que desacelera e cura aliados'],
   tempest: ['☈', 'Tempestade', 'Evolução: raios a cada segundo saltando 8 vezes'],
-  minefield: ['✹', 'Campo minado', 'Evolução: três runas maiores por vez']
+  minefield: ['✹', 'Campo minado', 'Evolução: três runas maiores por vez'],
+  covenant: ['☬', 'Pacto ancestral', 'Evolução: familiar ataca mais rápido, mais forte e em mais alvos']
 };
 
 export const KIND_LABELS = { weapon: 'Arma', signature: 'Assinatura', coop: 'Co-op', evolution: 'Evolução', passive: '' };

@@ -265,7 +265,7 @@ test('derrotar o guardião dá uma escolha de poder gratuita no início da fase 
 
 test('melhorias permanentes são validadas e aplicadas; Fênix salva uma vez', () => {
   assert.deepEqual(sanitizeMeta({ vigor: 99, might: -3, wisdom: 1.5, greed: '2', reroll: 2, phoenix: 1, hack: 5 }),
-    { vigor: META_UPGRADES.vigor.costs.length, might: 0, wisdom: 0, greed: 0, reroll: 2, phoenix: 1 });
+    { ...Object.fromEntries(Object.keys(META_UPGRADES).map(id => [id, 0])), vigor: META_UPGRADES.vigor.costs.length, reroll: 2, phoenix: 1 });
   const p = applyMeta(createPlayer('p', 'Mago'), { vigor: 2, might: 1, wisdom: 1, greed: 1, reroll: 2, phoenix: 1 });
   assert.equal(p.maxHp, 112); assert.equal(p.hp, 112);
   assert.equal(p.rerolls, 3);
@@ -284,6 +284,40 @@ test('melhorias permanentes são validadas e aplicadas; Fênix salva uma vez', (
   hero.invulnerableFor = 0; hero.hp = 1;
   tick(s, 1);
   assert.equal(hero.alive, false);
+});
+
+test('novas melhorias permanentes: celeridade, agilidade, égide, alcance, canalização e pacto', () => {
+  const base = createPlayer('p', 'Mago');
+  const p = createPlayer('p', 'Mago', 0, { celerity: 4, stride: 3, ward: 4, reach: 3, channel: 3, pact: 1 });
+  assert.ok(Math.abs(p.attackDelay - base.attackDelay * 0.88) < 1e-9);
+  assert.ok(Math.abs(p.speed - base.speed * 1.12) < 1e-9);
+  assert.equal(p.armor, 2);
+  assert.equal(p.pickupRadius, base.pickupRadius + 45);
+  assert.equal(p.specialCharge, 60);
+  assert.equal(p.powers.familiar, 1);
+});
+
+test('familiar arcano acompanha o dono e ataca inimigos próximos com o elemento dele', () => {
+  const { s, p } = fixture({ color: 0 });
+  p.powers.familiar = 1;
+  const target = enemy(s, 'brute', 150, 0);
+  tick(s, 2);
+  assert.ok(target.hp < target.maxHp, 'o familiar causou dano');
+  assert.ok(target.slowFor > 0, 'familiar do mago glacial desacelera');
+  assert.ok(s.events.some(event => event.kind === 'familiar' && event.points.length === 2));
+  assert.ok(Math.hypot(p.familiar.x - p.x, p.familiar.y - p.y) < 200);
+  p.x += 2000;
+  tick(s, 0.1);
+  assert.ok(Math.hypot(p.familiar.x - p.x, p.familiar.y - p.y) < 200, 'teleporta de volta ao dono distante');
+});
+
+test('pacto ancestral faz o familiar atingir mais alvos', () => {
+  const { s, p } = fixture({ color: 1 });
+  p.powers.familiar = 5; p.powers.covenant = 1;
+  for (let n = 0; n < 6; n++) enemy(s, 'brute', 100 + n * 20, 30);
+  tick(s, 1);
+  const hits = s.events.filter(event => event.kind === 'familiar').map(event => event.points.length / 2);
+  assert.ok(hits.length && Math.max(...hits) === 5);
 });
 
 test('assinaturas: estilhaço, chão em chamas, ricochete e lua crescente', () => {

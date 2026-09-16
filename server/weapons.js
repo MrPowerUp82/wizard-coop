@@ -39,6 +39,7 @@ export function activateSpecial(s, playerId, random = Math.random) {
   p.specialCharge = 0;
   p.specialCooldown = SPECIAL_COOLDOWN;
   p.castCount++;
+  const event = { x: Math.round(p.x), y: Math.round(p.y), color: p.color };
   if (p.color === 0) {
     for (const enemy of [...s.enemies]) if (distanceSq(p, enemy) < 280 ** 2 && enemy.hp > 0) {
       enemy.freezeFor = enemy.boss ? 0 : 2;
@@ -49,14 +50,17 @@ export function activateSpecial(s, playerId, random = Math.random) {
     const target = s.enemies.filter(e => e.hp > 0 && distanceSq(p, e) < 500 ** 2)
       .sort((a, b) => distanceSq(p, a) - distanceSq(p, b))[0];
     const direction = dashDirection(p);
-    s.zones.push({ id: nextId(s), x: target?.x ?? p.x + direction.x * 180, y: target?.y ?? p.y + direction.y * 180,
-      radius: 165, ttl: 3.6, warning: 0.6, kind: 'meteor', damage: p.damage * 9, dps: p.damage * 0.5, owner: p.id, color: 1 });
+    const zone = { id: nextId(s), x: target?.x ?? p.x + direction.x * 180, y: target?.y ?? p.y + direction.y * 180,
+      radius: 165, ttl: 3.6, warning: 0.6, kind: 'meteor', damage: p.damage * 9, dps: p.damage * 0.5, owner: p.id, color: 1 };
+    s.zones.push(zone);
+    Object.assign(event, { tx: Math.round(zone.x), ty: Math.round(zone.y), delay: zone.warning });
   } else if (p.color === 2) {
     s.zones.push({ id: nextId(s), x: p.x, y: p.y, radius: 190, ttl: 4, kind: 'roots', dps: p.damage * 2, owner: p.id, color: 2 });
   } else {
     const direction = dashDirection(p);
     const from = { x: p.x, y: p.y };
     p.x += direction.x * 170; p.y += direction.y * 170;
+    Object.assign(event, { x: Math.round(p.x), y: Math.round(p.y), fx: Math.round(from.x), fy: Math.round(from.y) });
     p.motionId = (p.motionId || 0) + 1;
     p.invulnerableFor = Math.max(p.invulnerableFor, 0.3);
     for (let n = 0; n < 8; n++) {
@@ -65,7 +69,7 @@ export function activateSpecial(s, playerId, random = Math.random) {
       s.shots.push(shot);
     }
   }
-  pushEvent(s, 'special', { x: Math.round(p.x), y: Math.round(p.y), color: p.color });
+  pushEvent(s, 'special', event);
   return true;
 }
 
@@ -262,15 +266,58 @@ function updateRunes(ctx, p, rank) {
   }
 }
 
+const FAMILIAR_ELEMENTS = ['', 'fire', '', 'moon'];
+
+/** Where the familiar hovers beside its owner when it is not lunging at a target. */
+export function placeFamiliar(p, time) {
+  const cfg = WEAPONS.familiar;
+  const angle = time * 1.4 + p.color;
+  return { x: p.x + Math.cos(angle) * cfg.hover, y: p.y + Math.sin(angle) * cfg.hover * 0.55 - 26 };
+}
+
+function updateFamiliar(ctx, p, rank) {
+  const { s, dt, random, grid } = ctx;
+  const cfg = WEAPONS.familiar;
+  const evolved = rankOf(p, 'covenant');
+  const home = placeFamiliar(p, s.time);
+  p.familiar ??= { ...home, timer: 0.4 };
+  const pet = p.familiar;
+  // Teleport back if the owner dashed or revived far away; otherwise glide smoothly.
+  if ((pet.x - p.x) ** 2 + (pet.y - p.y) ** 2 > 400 ** 2) Object.assign(pet, home);
+  const follow = 1 - Math.exp(-cfg.follow * dt);
+  pet.x += (home.x - pet.x) * follow; pet.y += (home.y - pet.y) * follow;
+  pet.timer -= dt;
+  if (pet.timer > 0) return;
+  const found = [];
+  grid.query(pet.x, pet.y, cfg.range, (enemy, d2) => { if (enemy.hp > 0) found.push([d2, enemy]); });
+  if (!found.length) { pet.timer = 0.2; return; }
+  found.sort((a, b) => a[0] - b[0]);
+  const cooldown = Math.max(0.35, cfg.cooldown - cfg.cooldownPerRank * rank) * (evolved ? WEAPONS.evolutions.covenant.cooldown : 1);
+  pet.timer = cooldown;
+  const count = cfg.targets[rank - 1] + (evolved ? WEAPONS.evolutions.covenant.targets : 0);
+  const damage = p.damage * (cfg.damage + cfg.damagePerRank * rank) * (evolved ? WEAPONS.evolutions.covenant.damage : 1);
+  const points = [];
+  for (const [, enemy] of found.slice(0, count)) {
+    points.push(Math.round(enemy.x), Math.round(enemy.y));
+    damageEnemy(s, enemy, damage, random, { source: p, slow: p.color === 0, element: FAMILIAR_ELEMENTS[p.color] });
+    if (p.color === 2 && !enemy.boss) enemy.rootFor = Math.max(enemy.rootFor || 0, 0.35);
+  }
+  pushEvent(s, 'familiar', { x: Math.round(pet.x), y: Math.round(pet.y), points, color: p.color, evolved: evolved ? 1 : 0 });
+  // A little lunge toward the first victim sells the attack; the follow spring pulls it back.
+  pet.x += (points[0] - pet.x) * cfg.lunge; pet.y += (points[1] - pet.y) * cfg.lunge;
+}
+
 export function updateWeapons(ctx) {
   const { s, dt, random, grid } = ctx;
   for (const p of ctx.alive) {
     if (p.pendingPowers) continue;
     const orbit = rankOf(p, 'orbit'), aura = rankOf(p, 'aura'), chain = rankOf(p, 'chain'), runes = rankOf(p, 'runes');
+    const familiar = rankOf(p, 'familiar');
     if (orbit) updateOrbit(ctx, p, orbit);
     if (aura) updateAura(ctx, p, aura);
     if (chain) updateChain(ctx, p, chain);
     if (runes) updateRunes(ctx, p, runes);
+    if (familiar) updateFamiliar(ctx, p, familiar);
   }
   for (const rune of s.runes) {
     rune.ttl -= dt; rune.arm -= dt;
@@ -303,12 +350,17 @@ export function updateWeapons(ctx) {
 
 /** Rough sustained single-target DPS, used to size boss health to the group's real strength. */
 export function estimateDps(p) {
-  const { orbit, aura, chain, runes } = WEAPONS;
+  const { orbit, aura, chain, runes, familiar } = WEAPONS;
   let dps = p.damage * p.projectiles / p.attackDelay;
   const r = id => rankOf(p, id);
   if (r('orbit')) dps += p.damage * (orbit.damage + orbit.damagePerRank * r('orbit')) / orbit.hitEvery * 0.35 * (r('constellation') ? 2 : 1);
   if (r('aura')) dps += p.damage * (aura.damage + aura.damagePerRank * r('aura')) / aura.every * 0.6;
   if (r('chain')) dps += p.damage * (chain.damage + chain.damagePerRank * r('chain')) / Math.max(0.9, chain.cooldown - chain.cooldownPerRank * r('chain'));
   if (r('runes')) dps += p.damage * (runes.damage + runes.damagePerRank * r('runes')) / (runes.cooldown - runes.cooldownPerRank * r('runes')) * 0.3;
+  if (r('familiar')) {
+    const cov = r('covenant') ? WEAPONS.evolutions.covenant : null;
+    const cooldown = Math.max(0.35, familiar.cooldown - familiar.cooldownPerRank * r('familiar')) * (cov ? cov.cooldown : 1);
+    dps += p.damage * (familiar.damage + familiar.damagePerRank * r('familiar')) * (cov ? cov.damage : 1) / cooldown;
+  }
   return dps;
 }

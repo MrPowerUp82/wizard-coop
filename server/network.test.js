@@ -136,3 +136,16 @@ test('trocar poderes e entrar atrasado funcionam pelo servidor', { timeout: 1500
   const after = decodeState((await host.receive('state')).state);
   assert.equal(after.players[created.playerId].rerolls, 2, 'sem escolha pendente a troca não é gasta');
 });
+
+test('snapshot compacto transmite a posição do familiar', () => {
+  const s = createGameState();
+  const p = createPlayer('p', 'Mago', 2, { pact: 1 });
+  s.players.p = p;
+  s.spawn = 999;
+  updateGame(s, 0.05, () => 0.9);
+  s.enemies.push({ id: 9, type: 'imp', x: 120, y: 0, hp: 26, maxHp: 26, age: 0 });
+  updateGame(s, 0.05, () => 0.9);
+  const decoded = decodeState(JSON.parse(JSON.stringify(encodeState(s, 'p'))));
+  assert.deepEqual(decoded.players.p.familiar, { x: Math.round(p.familiar.x), y: Math.round(p.familiar.y) });
+  assert.equal(decodeState(JSON.parse(JSON.stringify(encodeState({ ...s, players: { q: createPlayer('q', 'Sem', 0) } }, 'q')))).players.q.familiar, null);
+});

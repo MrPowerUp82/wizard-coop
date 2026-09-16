@@ -128,3 +128,30 @@ test('conjuração chega ao cliente uma vez por ataque, sem eventos repetidos en
   assert.equal(animator.effects.length, count);
   assert.equal(player.castCount, 1);
 });
+
+test('especiais de cada personagem geram efeitos próprios que somem sozinhos', () => {
+  for (let color = 0; color < 4; color++) {
+    const game = fixture();
+    const animator = createAnimator();
+    animator.update(game, 0.016);
+    game.events = [{ id: 1, kind: 'special', t: 0, x: 0, y: 0, color, tx: 100, ty: 50, delay: 0.6, fx: -170, fy: 0 }];
+    animator.update(game, 0.016);
+    const kinds = new Set(animator.effects.map(fx => fx.kind));
+    assert.ok(kinds.has(['nova', 'meteor', 'thorns', 'lunar'][color]), `cor ${color}`);
+    assert.ok(animator.effects.some(fx => fx.kind === 'mote'));
+    const meteor = animator.effects.find(fx => fx.kind === 'meteor');
+    if (meteor) assert.deepEqual([meteor.x, meteor.y], [100, 50], 'meteoro cai sobre o alvo, não sobre o mago');
+    for (let n = 0; n < 40; n++) animator.update(game, 0.05);
+    assert.equal(animator.effects.length, 0);
+    assert.equal(animator.flash, null);
+  }
+});
+
+test('movimento reduzido não gera efeitos de especial nem clarão', () => {
+  const game = fixture(); const animator = createAnimator();
+  animator.update(game, 0.016, { reduced: true });
+  game.events = [{ id: 1, kind: 'special', t: 0, x: 0, y: 0, color: 0 }, { id: 2, kind: 'familiar', t: 0, x: 0, y: 0, points: [10, 10], color: 0 }];
+  animator.update(game, 0.016, { reduced: true });
+  assert.equal(animator.effects.length, 0);
+  assert.equal(animator.flash, null);
+});

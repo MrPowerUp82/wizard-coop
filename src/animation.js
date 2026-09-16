@@ -17,8 +17,51 @@ export function createAnimator({ onHit, onKill } = {}) {
   let freezeFor = 0;
   let lastEventId = null;
 
+  let flash = null;
+
   function trim() {
-    if (effects.length > MAX_EFFECTS) effects.splice(0, effects.length - MAX_EFFECTS);
+    // Signature spell visuals are few and long-lived; drop the oldest sparks before them.
+    while (effects.length > MAX_EFFECTS) {
+      const index = effects.findIndex(fx => !fx.major);
+      effects.splice(index < 0 ? 0 : index, 1);
+    }
+  }
+
+  function motes(x, y, shape, color, count, { speed = 120, spread = 0, life = 0.8, gravity = 0, size = 4, drag = 2 } = {}) {
+    for (let i = 0; i < count; i++) {
+      const angle = TAU * (i + Math.random() * 0.6) / count;
+      const velocity = speed * (0.45 + Math.random() * 0.75);
+      const offset = spread * Math.random();
+      effects.push({ kind: 'mote', shape, x: x + Math.cos(angle) * offset, y: y + Math.sin(angle) * offset,
+        vx: Math.cos(angle) * velocity, vy: Math.sin(angle) * velocity, gravity, drag, color, size: size * (0.6 + Math.random() * 0.8),
+        spin: (Math.random() - 0.5) * 8, age: 0, life: life * (0.7 + Math.random() * 0.3) });
+    }
+  }
+
+  /** Each character's special gets its own layered effect: a shape, particles and a brief screen tint. */
+  function special(event) {
+    const seed = event.id * 7.31;
+    if (event.color === 0) {
+      effects.push({ kind: 'nova', x: event.x, y: event.y, age: 0, life: 0.9, radius: 280, seed, major: true });
+      motes(event.x, event.y, 'flake', '#e8fbff', 26, { speed: 330, life: 1, size: 7, drag: 2.6 });
+      flash = { color: '#bdf3ff', alpha: 0.28, life: 0.35, age: 0 };
+      shake = Math.max(shake, 7);
+    } else if (event.color === 1) {
+      effects.push({ kind: 'meteor', x: event.tx ?? event.x, y: event.ty ?? event.y, age: 0, life: event.delay || 0.6, major: true });
+      motes(event.x, event.y, 'ember', '#ffcf6b', 10, { speed: 90, life: 0.6, size: 4, gravity: -60 });
+      shake = Math.max(shake, 3);
+    } else if (event.color === 2) {
+      effects.push({ kind: 'thorns', x: event.x, y: event.y, age: 0, life: 1.1, radius: 190, seed, major: true });
+      motes(event.x, event.y, 'leaf', '#b8f57f', 18, { speed: 210, spread: 40, life: 1.1, size: 7, gravity: 40, drag: 1.8 });
+      flash = { color: '#9cf58a', alpha: 0.16, life: 0.3, age: 0 };
+      shake = Math.max(shake, 5);
+    } else {
+      const fromX = event.fx ?? event.x, fromY = event.fy ?? event.y;
+      effects.push({ kind: 'lunar', x: event.x, y: event.y, fromX, fromY, age: 0, life: 0.75, major: true });
+      motes((fromX + event.x) / 2, (fromY + event.y) / 2, 'star', '#f1e6ff', 16, { speed: 140, spread: 80, life: 0.9, size: 6 });
+      flash = { color: '#cdb4ff', alpha: 0.2, life: 0.3, age: 0 };
+      shake = Math.max(shake, 5);
+    }
   }
 
   function burst(x, y, color, count = 7, radius = 32) {
@@ -53,6 +96,17 @@ export function createAnimator({ onHit, onKill } = {}) {
       burst(event.x, event.y, colors[event.color], 5, 50);
     } else if (event.kind === 'chain' && !reduced) {
       effects.push({ kind: 'chain', points: event.points, color: colors[event.color] || '#bfe8ff', age: 0, life: 0.28, seed: event.id });
+    } else if (event.kind === 'familiar' && !reduced) {
+      effects.push({ kind: 'familiar', x: event.x, y: event.y, points: event.points, color: colors[event.color] || '#ffffff',
+        evolved: event.evolved, age: 0, life: 0.32, seed: event.id });
+      for (let i = 0; i < event.points.length; i += 2) burst(event.points[i], event.points[i + 1], colors[event.color], 4, 26);
+    } else if (event.kind === 'boom' && event.color === 1 && event.r >= 150 && !reduced) {
+      // Meteor impact: a heavier shockwave than an ordinary rune explosion.
+      effects.push({ kind: 'impact', x: event.x, y: event.y, age: 0, life: 0.7, radius: event.r, major: true });
+      motes(event.x, event.y, 'ember', '#ffb347', 28, { speed: 360, spread: 30, life: 1.1, size: 6, gravity: -90, drag: 2.4 });
+      motes(event.x, event.y, 'smoke', 'rgba(70, 45, 40, .5)', 8, { speed: 70, spread: 50, life: 1.2, size: 26, gravity: -30 });
+      flash = { color: '#ffb36b', alpha: 0.32, life: 0.35, age: 0 };
+      shake = Math.max(shake, 14);
     } else if (event.kind === 'boom') {
       burst(event.x, event.y, event.color >= 0 ? colors[event.color] : EVENT_COLORS.boom, 12, event.r || 70);
       shake = Math.max(shake, 3);
@@ -64,7 +118,7 @@ export function createAnimator({ onHit, onKill } = {}) {
       freezeFor = 0.22;
     } else if (event.kind === 'special') {
       burst(event.x, event.y, colors[event.color], 16, 120);
-      shake = Math.max(shake, 5);
+      if (!reduced) special(event);
     } else if (EVENT_COLORS[event.kind] && event.x !== undefined) {
       burst(event.x, event.y, EVENT_COLORS[event.kind], event.kind === 'magnet' ? 20 : 12, event.kind === 'magnet' ? 220 : 80);
     }
@@ -74,19 +128,26 @@ export function createAnimator({ onHit, onKill } = {}) {
   return {
     reset() {
       actors.clear(); effects.length = 0; numbers.length = 0; time = 0; previousPhase = undefined;
-      shake = 0; freezeFor = 0; lastEventId = null;
+      shake = 0; freezeFor = 0; lastEventId = null; flash = null;
     },
     update(game, dt, options = {}) {
       reduced = Boolean(options.reduced);
-      if (reduced) { effects.length = 0; shake = 0; }
+      if (reduced) { effects.length = 0; shake = 0; flash = null; }
       if (options.paused) return;
       dt = Math.max(0, Math.min(dt, 0.05));
       if (freezeFor > 0) { freezeFor -= dt; return; }
       time += dt;
       shake = Math.max(0, shake - dt * 28);
+      if (flash && (flash.age += dt) >= flash.life) flash = null;
       for (let i = effects.length - 1; i >= 0; i--) {
-        effects[i].age += dt;
-        if (effects[i].age >= effects[i].life) effects.splice(i, 1);
+        const fx = effects[i];
+        fx.age += dt;
+        if (fx.age >= fx.life) { effects.splice(i, 1); continue; }
+        if (fx.kind === 'mote') {
+          const damping = Math.exp(-fx.drag * dt);
+          fx.vx *= damping; fx.vy = fx.vy * damping + fx.gravity * dt;
+          fx.x += fx.vx * dt; fx.y += fx.vy * dt;
+        }
       }
       for (let i = numbers.length - 1; i >= 0; i--) {
         numbers[i].age += dt;
@@ -181,6 +242,8 @@ export function createAnimator({ onHit, onKill } = {}) {
       if (!shake) return { x: 0, y: 0 };
       return { x: Math.sin(time * 91) * shake, y: Math.cos(time * 67) * shake };
     },
+    /** Full-screen tint that fades out after big spells, or null. */
+    get flash() { return flash ? { color: flash.color, alpha: flash.alpha * (1 - flash.age / flash.life) } : null; },
     get time() { return time; },
     get effects() { return effects; },
     get numbers() { return numbers; },
@@ -203,9 +266,167 @@ function jagged(ctx, points, seed, progress) {
   ctx.stroke();
 }
 
+const easeOut = t => 1 - (1 - t) ** 3;
+
+function glow(ctx, x, y, radius, color, alpha) {
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+  gradient.addColorStop(0, color); gradient.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalAlpha = alpha; ctx.fillStyle = gradient;
+  ctx.beginPath(); ctx.arc(x, y, radius, 0, TAU); ctx.fill();
+}
+
+function drawMote(ctx, fx, progress) {
+  const fade = 1 - progress, r = fx.size;
+  ctx.translate(fx.x, fx.y); ctx.rotate(fx.spin * fx.age);
+  ctx.globalAlpha = fade; ctx.fillStyle = fx.color; ctx.strokeStyle = fx.color;
+  if (fx.shape === 'flake') {
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let n = 0; n < 3; n++) { const a = n * Math.PI / 3; ctx.moveTo(-Math.cos(a) * r, -Math.sin(a) * r); ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+    ctx.stroke();
+  } else if (fx.shape === 'ember') {
+    ctx.globalCompositeOperation = 'lighter';
+    glow(ctx, 0, 0, r * 2.4, fx.color, fade * 0.7);
+    ctx.globalAlpha = fade; ctx.fillStyle = '#fff1c4'; ctx.beginPath(); ctx.arc(0, 0, r * 0.45 * fade + 0.8, 0, TAU); ctx.fill();
+  } else if (fx.shape === 'leaf') {
+    ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.42, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(40, 90, 40, .6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-r, 0); ctx.lineTo(r, 0); ctx.stroke();
+  } else if (fx.shape === 'star') {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = fade * (0.6 + Math.abs(Math.sin(fx.age * 18 + fx.size)) * 0.4);
+    ctx.beginPath();
+    for (let n = 0; n < 8; n++) { const a = n * Math.PI / 4, d = n % 2 ? r * 0.28 : r; ctx[n ? 'lineTo' : 'moveTo'](Math.cos(a) * d, Math.sin(a) * d); }
+    ctx.closePath(); ctx.fill();
+  } else {
+    ctx.globalAlpha = fade * 0.5; ctx.beginPath(); ctx.arc(0, 0, r * (0.6 + progress * 0.8), 0, TAU); ctx.fill();
+  }
+}
+
+function drawNova(ctx, fx, progress) {
+  const radius = fx.radius * easeOut(Math.min(1, progress * 1.6));
+  const fade = 1 - progress;
+  ctx.globalCompositeOperation = 'lighter';
+  const gradient = ctx.createRadialGradient(fx.x, fx.y, radius * 0.55, fx.x, fx.y, Math.max(1, radius));
+  gradient.addColorStop(0, 'rgba(118,223,255,0)'); gradient.addColorStop(0.85, 'rgba(160,236,255,.35)'); gradient.addColorStop(1, 'rgba(230,250,255,0)');
+  ctx.globalAlpha = fade; ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(fx.x, fx.y, radius, 0, TAU); ctx.fill();
+  ctx.strokeStyle = '#e8fbff'; ctx.lineWidth = 3 * fade + 1; ctx.beginPath(); ctx.arc(fx.x, fx.y, radius, 0, TAU); ctx.stroke();
+  // Ice crystals ride the shockwave along twelve spokes.
+  for (let n = 0; n < 12; n++) {
+    const a = n * TAU / 12 + fx.seed;
+    const reach = radius * (0.72 + (n % 3) * 0.1), length = 26 + (n % 4) * 8;
+    ctx.save(); ctx.translate(fx.x + Math.cos(a) * reach, fx.y + Math.sin(a) * reach); ctx.rotate(a);
+    ctx.globalAlpha = fade * 0.9; ctx.fillStyle = n % 2 ? '#bff4ff' : '#76dfff';
+    ctx.beginPath(); ctx.moveTo(length, 0); ctx.lineTo(0, -6); ctx.lineTo(-length * 0.4, 0); ctx.lineTo(0, 6); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  glow(ctx, fx.x, fx.y, 90 * (1 - progress * 0.5), '#e8fbff', fade * 0.8);
+}
+
+function drawMeteor(ctx, fx, progress) {
+  const t = progress ** 2;
+  const startX = fx.x + 260, startY = fx.y - 520;
+  const x = startX + (fx.x - startX) * t, y = startY + (fx.y - startY) * t;
+  // The target reticle tightens as the rock falls.
+  ctx.strokeStyle = '#ffd36b'; ctx.lineWidth = 2; ctx.globalAlpha = 0.5 + progress * 0.5;
+  ctx.setLineDash([14, 10]); ctx.lineDashOffset = -progress * 60;
+  ctx.beginPath(); ctx.arc(fx.x, fx.y, 165 * (1.25 - progress * 0.25), 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(fx.x, fx.y, 18 + (1 - progress) * 30, 0, TAU); ctx.stroke();
+  ctx.globalCompositeOperation = 'lighter';
+  const dx = fx.x - startX, dy = fx.y - startY, length = Math.hypot(dx, dy);
+  const tailX = x - dx / length * 220, tailY = y - dy / length * 220;
+  const trail = ctx.createLinearGradient(x, y, tailX, tailY);
+  trail.addColorStop(0, 'rgba(255,200,110,.95)'); trail.addColorStop(0.4, 'rgba(255,110,40,.55)'); trail.addColorStop(1, 'rgba(255,60,20,0)');
+  ctx.globalAlpha = 1; ctx.strokeStyle = trail; ctx.lineCap = 'round'; ctx.lineWidth = 26;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(tailX, tailY); ctx.stroke();
+  glow(ctx, x, y, 60, '#ff9955', 0.9);
+  ctx.globalAlpha = 1; ctx.fillStyle = '#fff1c4'; ctx.beginPath(); ctx.arc(x, y, 15, 0, TAU); ctx.fill();
+}
+
+function drawImpact(ctx, fx, progress) {
+  const fade = 1 - progress;
+  ctx.globalCompositeOperation = 'lighter';
+  glow(ctx, fx.x, fx.y, fx.radius * (0.6 + progress * 0.6), '#ffb347', fade * 0.9);
+  ctx.strokeStyle = '#ffe1a0'; ctx.globalAlpha = fade;
+  for (let n = 0; n < 2; n++) {
+    ctx.lineWidth = (8 - n * 4) * fade + 1;
+    ctx.beginPath(); ctx.arc(fx.x, fx.y, fx.radius * easeOut(Math.min(1, progress * (1.8 - n * 0.5))) * (1.1 - n * 0.3), 0, TAU); ctx.stroke();
+  }
+}
+
+function drawThorns(ctx, fx, progress) {
+  const grow = easeOut(Math.min(1, progress * 2.5));
+  const fade = progress > 0.7 ? 1 - (progress - 0.7) / 0.3 : 1;
+  const gradient = ctx.createRadialGradient(fx.x, fx.y, 10, fx.x, fx.y, Math.max(11, fx.radius * grow));
+  gradient.addColorStop(0, 'rgba(209,255,147,.35)'); gradient.addColorStop(1, 'rgba(60,160,70,0)');
+  ctx.globalAlpha = fade; ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(fx.x, fx.y, fx.radius * grow, 0, TAU); ctx.fill();
+  ctx.lineCap = 'round';
+  for (let n = 0; n < 14; n++) {
+    const a = n * TAU / 14 + fx.seed;
+    const bend = (n % 2 ? 1 : -1) * 0.5;
+    const reach = fx.radius * grow * (0.7 + (n * 37 % 10) / 33);
+    const cx = fx.x + Math.cos(a + bend) * reach * 0.5, cy = fx.y + Math.sin(a + bend) * reach * 0.5;
+    const ex = fx.x + Math.cos(a) * reach, ey = fx.y + Math.sin(a) * reach;
+    ctx.strokeStyle = '#2f7a3a'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(fx.x, fx.y); ctx.quadraticCurveTo(cx, cy, ex, ey); ctx.stroke();
+    ctx.strokeStyle = '#92ed68'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = '#d1ff93';
+    for (let k = 1; k <= 3; k++) {
+      const t = k / 4, u = 1 - t;
+      const px = u * u * fx.x + 2 * u * t * cx + t * t * ex, py = u * u * fx.y + 2 * u * t * cy + t * t * ey;
+      const side = a + (k % 2 ? 1 : -1) * Math.PI / 2;
+      ctx.beginPath(); ctx.moveTo(px + Math.cos(a) * 4, py + Math.sin(a) * 4); ctx.lineTo(px + Math.cos(side) * 9, py + Math.sin(side) * 9);
+      ctx.lineTo(px - Math.cos(a) * 4, py - Math.sin(a) * 4); ctx.fill();
+    }
+    ctx.fillStyle = '#f0ffd2';
+    ctx.beginPath(); ctx.moveTo(ex + Math.cos(a) * 16, ey + Math.sin(a) * 16);
+    ctx.lineTo(ex + Math.cos(a + 1.3) * 6, ey + Math.sin(a + 1.3) * 6); ctx.lineTo(ex + Math.cos(a - 1.3) * 6, ey + Math.sin(a - 1.3) * 6); ctx.fill();
+  }
+}
+
+function crescent(ctx, x, y, radius, angle) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
+  ctx.beginPath(); ctx.arc(0, 0, radius, -Math.PI * 0.75, Math.PI * 0.75);
+  ctx.arc(radius * 0.45, 0, radius * 0.8, Math.PI * 0.62, -Math.PI * 0.62, true);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+
+function drawLunar(ctx, fx, progress) {
+  const fade = 1 - progress;
+  const angle = Math.atan2(fx.y - fx.fromY, fx.x - fx.fromX);
+  ctx.globalCompositeOperation = 'lighter';
+  // Afterimages trace the dash from where the mage left to where they landed.
+  for (let n = 0; n < 5; n++) {
+    const t = n / 4;
+    ctx.globalAlpha = fade * (0.2 + t * 0.5); ctx.fillStyle = n === 4 ? '#f1e6ff' : '#c4a0ff';
+    crescent(ctx, fx.fromX + (fx.x - fx.fromX) * t, fx.fromY + (fx.y - fx.fromY) * t, 18 + t * 10, angle);
+  }
+  const sweep = easeOut(Math.min(1, progress * 1.5));
+  ctx.globalAlpha = fade; ctx.strokeStyle = '#e4d4ff'; ctx.lineWidth = 5 * fade + 1;
+  ctx.beginPath(); ctx.arc(fx.x, fx.y, 40 + sweep * 150, angle - Math.PI * sweep, angle + Math.PI * sweep); ctx.stroke();
+  ctx.lineWidth = 2; ctx.strokeStyle = '#c4a0ff';
+  ctx.beginPath(); ctx.arc(fx.x, fx.y, 20 + sweep * 110, angle + Math.PI - Math.PI * sweep, angle + Math.PI + Math.PI * sweep); ctx.stroke();
+  glow(ctx, fx.x, fx.y, 110, '#c4a0ff', fade * 0.6);
+}
+
+function drawFamiliarStrike(ctx, fx, progress) {
+  const fade = 1 - progress, head = Math.min(1, progress * 3.5), u = 1 - head;
+  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (let i = 0; i < fx.points.length; i += 2) {
+    const tx = fx.points[i], ty = fx.points[i + 1];
+    const mx = (fx.x + tx) / 2 + Math.sin(fx.seed + i) * 40, my = (fx.y + ty) / 2 - 50;
+    ctx.globalAlpha = fade * 0.4; ctx.strokeStyle = fx.color; ctx.lineWidth = fx.evolved ? 10 : 7;
+    ctx.beginPath(); ctx.moveTo(fx.x, fx.y); ctx.quadraticCurveTo(mx, my, tx, ty); ctx.stroke();
+    ctx.globalAlpha = fade; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
+    glow(ctx, u * u * fx.x + 2 * u * head * mx + head * head * tx, u * u * fx.y + 2 * u * head * my + head * head * ty, 22, fx.color, fade);
+  }
+}
+
+const DRAWERS = { mote: drawMote, nova: drawNova, meteor: drawMeteor, impact: drawImpact, thorns: drawThorns, lunar: drawLunar, familiar: drawFamiliarStrike };
+const UNCULLED = new Set(['chain', 'familiar', 'lunar']);
+
 export function drawEffects(ctx, animator, drawGhost, visible) {
   for (const fx of animator.effects) {
-    if (fx.kind !== 'chain' && !visible(fx.x, fx.y)) continue;
+    if (!UNCULLED.has(fx.kind) && !visible(fx.x, fx.y)) continue;
     const progress = fx.age / fx.life;
     ctx.save();
     ctx.globalAlpha = 1 - progress;
@@ -217,6 +438,8 @@ export function drawEffects(ctx, animator, drawGhost, visible) {
     } else if (fx.kind === 'chain') {
       ctx.lineWidth = 5; ctx.globalAlpha = (1 - progress) * 0.35; jagged(ctx, fx.points, fx.seed, progress);
       ctx.lineWidth = 2; ctx.globalAlpha = 1 - progress; ctx.strokeStyle = '#f4fbff'; jagged(ctx, fx.points, fx.seed, progress);
+    } else if (DRAWERS[fx.kind]) {
+      DRAWERS[fx.kind](ctx, fx, progress);
     } else if (fx.kind === 'combo') {
       ctx.font = '800 11px Inter'; ctx.textAlign = 'center'; ctx.fillText(fx.text, fx.x, fx.y - 35 - progress * 25);
     } else drawGhost(fx, progress);

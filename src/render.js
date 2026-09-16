@@ -43,6 +43,45 @@ function drawMagnet(ctx, x, y, time) {
   ctx.restore();
 }
 
+/** A small winged spirit tinted with its owner's element; the evolved form grows a halo of runes. */
+function drawFamiliar(ctx, x, y, color, time, evolved, reduced) {
+  const flap = reduced ? 0.6 : Math.sin(time * 16) * 0.5 + 0.5;
+  const bob = reduced ? 0 : Math.sin(time * 3.2) * 4;
+  const scale = evolved ? 1.3 : 1;
+  ctx.save();
+  ctx.translate(x, y + bob); ctx.scale(scale, scale);
+  ctx.globalCompositeOperation = 'lighter';
+  const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, 34);
+  aura.addColorStop(0, color); aura.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalAlpha = 0.45; ctx.fillStyle = aura; circle(ctx, 0, 0, 34); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  // Wispy tail trailing below the body.
+  ctx.globalAlpha = 0.55; ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(-7, 4);
+  ctx.quadraticCurveTo(reduced ? 0 : Math.sin(time * 6) * 8, 18, reduced ? 0 : Math.sin(time * 6 + 1) * 5, 26);
+  ctx.quadraticCurveTo(4, 14, 7, 4); ctx.fill();
+  ctx.globalAlpha = 0.8;
+  for (const side of [-1, 1]) {
+    ctx.save(); ctx.scale(side, 1); ctx.rotate(-0.25 - flap * 0.55);
+    ctx.beginPath(); ctx.moveTo(4, -2); ctx.quadraticCurveTo(22, -20, 26, -4); ctx.quadraticCurveTo(16, 0, 4, 3); ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1; ctx.fillStyle = '#f4fbff';
+  circle(ctx, 0, 0, 8.5); ctx.fill();
+  ctx.fillStyle = color; circle(ctx, 0, 1.5, 6); ctx.fill();
+  ctx.fillStyle = '#0d1420';
+  circle(ctx, -2.6, -0.5, 1.5); ctx.fill(); circle(ctx, 2.6, -0.5, 1.5); ctx.fill();
+  if (evolved) {
+    ctx.strokeStyle = '#ffe49b'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.85;
+    ctx.beginPath(); ctx.ellipse(0, -14, 10, 3.5, 0, 0, TAU); ctx.stroke();
+    for (let n = 0; n < 3; n++) {
+      const a = (reduced ? 0 : time * 2) + n * TAU / 3;
+      ctx.fillStyle = '#ffe49b'; circle(ctx, Math.cos(a) * 20, Math.sin(a) * 20, 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 function gemLook(gem) {
   const type = gem.type || 'gem';
   if (type !== 'gem') return [type, 28];
@@ -248,6 +287,9 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
       }
     }
     ctx.globalAlpha = 1;
+    if (alive && powers.familiar && player.familiar) {
+      drawFamiliar(ctx, player.familiar.x, player.familiar.y, color, time + (player.color ?? 0), powers.covenant, reduced);
+    }
     ctx.font = '600 10px Inter'; ctx.textAlign = 'center';
     ctx.fillStyle = alive ? '#c6eee2' : '#8b5961';
     const label = !alive ? (game.over ? 'DERROTADO' : `REVIVER · ${Math.ceil(REVIVE.seconds - (player.reviveProgress || 0))}s`)
@@ -262,6 +304,10 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
   drawNumbers(ctx, animator, (x, y) => visible(x, y), reduced);
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const flash = animator.flash;
+  if (flash && flash.alpha > 0.01) {
+    ctx.globalAlpha = flash.alpha; ctx.fillStyle = flash.color; ctx.fillRect(0, 0, W, H);
+  }
   ctx.globalAlpha = 1;
   const inView = entity => {
     const sx = entity.x - camX, sy = entity.y - camY;

@@ -19,7 +19,7 @@ const SHOT_FLAGS = { special: 1, shard: 2, returning: 4 };
 const PLAYER_KEYS = ['id', 'name', 'color', 'x', 'y', 'hp', 'maxHp', 'xp', 'level', 'alive', 'speed', 'powers', 'pendingPowers',
   'specialCharge', 'coins', 'reviveProgress', 'reviveBy', 'reviving', 'castCount', 'castAngle', 'invulnerableFor', 'orbitAngle',
   'rerolls', 'phoenix', 'inputSeq', 'powerTimer', 'connected', 'dashFor', 'dashCooldown', 'dashX', 'dashY', 'moveX', 'moveY',
-  'specialCooldown', 'motionId', 'stats'];
+  'specialCooldown', 'motionId', 'stats', 'familiar'];
 
 function encodePlayer(p) {
   return [
@@ -33,11 +33,16 @@ function encodePlayer(p) {
     hundredth(p.dashX || 0), hundredth(p.dashY || 0),
     hundredth(p.moveX || 0), hundredth(p.moveY || 0),
     tenth(p.specialCooldown || 0), p.motionId || 0,
-    { damage: round(p.stats.damage), kills: p.stats.kills, revives: p.stats.revives, taken: round(p.stats.taken) }
+    { damage: round(p.stats.damage), kills: p.stats.kills, revives: p.stats.revives, taken: round(p.stats.taken) },
+    p.familiar ? [round(p.familiar.x), round(p.familiar.y)] : null
   ];
 }
 
-const decodePlayer = row => Object.fromEntries(PLAYER_KEYS.map((key, i) => [key, row[i] ?? null]));
+function decodePlayer(row) {
+  const player = Object.fromEntries(PLAYER_KEYS.map((key, i) => [key, row[i] ?? null]));
+  if (player.familiar) player.familiar = { x: player.familiar[0], y: player.familiar[1] };
+  return player;
+}
 
 export function encodeState(s, viewerId) {
   const players = Object.values(s.players);

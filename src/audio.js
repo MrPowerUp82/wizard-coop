@@ -1,7 +1,7 @@
 // Synthesized sound effects: no audio files to download, and every sound is throttled so hordes
 // never turn into noise.
 const STORAGE_KEY = 'arcana-muted';
-const THROTTLE = { shoot: 0.09, hit: 0.045, kill: 0.05, gem: 0.03, coin: 0.06, hurt: 0.15, boom: 0.08, chain: 0.1, warning: 0.3 };
+const THROTTLE = { shoot: 0.09, hit: 0.045, kill: 0.05, gem: 0.03, coin: 0.06, hurt: 0.15, boom: 0.08, chain: 0.1, warning: 0.3, familiar: 0.18 };
 
 function readMuted() {
   try { return localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; }
@@ -78,6 +78,7 @@ export function createAudio() {
     warning: () => tone({ type: 'square', from: 440, to: 430, duration: 0.09, gain: 0.04 }),
     boom: () => { noise({ duration: 0.35, gain: 0.22, from: 1200, to: 60 }); tone({ type: 'sine', from: 120, to: 40, duration: 0.3, gain: 0.18 }); },
     chain: () => noise({ duration: 0.12, gain: 0.07, from: 6000, to: 2500 }),
+    familiar: () => tone({ type: 'sine', from: 880, to: 1320, duration: 0.07, gain: 0.03 }),
     special: () => { tone({ type: 'sawtooth', from: 200, to: 1400, duration: 0.35, gain: 0.08 }); noise({ duration: 0.3, gain: 0.08, from: 4000, to: 500 }); },
     boss: () => { tone({ type: 'sawtooth', from: 70, to: 45, duration: 1.2, gain: 0.2 }); noise({ duration: 1, gain: 0.12, from: 500, to: 80 }); },
     stage: () => { tone({ type: 'square', from: 110, to: 55, duration: 0.6, gain: 0.14 }); noise({ duration: 0.5, gain: 0.16, from: 1500, to: 100 }); },

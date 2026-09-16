@@ -79,10 +79,12 @@ export const WEAPONS = Object.freeze({
   shatter: { shards: 4, damage: 0.6, ttl: 0.5 },
   ricochet: { range: 220 },
   bond: { range: 240, hastePerRank: 0.08 },
+  familiar: { range: 380, cooldown: 1.3, cooldownPerRank: 0.12, damage: 0.9, damagePerRank: 0.22, hover: 62, follow: 6, lunge: 0.35, targets: [1, 1, 2, 2, 3] },
   evolutions: {
     constellation: { extraOrbs: 2, damage: 2 },
     sanctuary: { radius: 30, heal: 2, slow: true },
     tempest: { cooldown: 1, jumps: 8 },
-    minefield: { runes: 3, radius: 30 }
+    minefield: { runes: 3, radius: 30 },
+    covenant: { targets: 2, cooldown: 0.6, damage: 1.4 }
   }
 });

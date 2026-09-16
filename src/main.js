@@ -110,6 +110,7 @@ function feedback(me) {
     else if (event.kind === 'magnet' && near) audio.play('magnet');
     else if (event.kind === 'boom' && near) audio.play('boom');
     else if (event.kind === 'chain' && near) audio.play('chain');
+    else if (event.kind === 'familiar' && near) audio.play('familiar');
     else if (event.kind === 'revive' && near) audio.play('revive');
     else if (event.kind === 'phoenix') { audio.play('phoenix'); hud.announce('Fênix! Um arcanista renasceu', 'gold'); }
     else if (event.kind === 'special' && near) audio.play('special');
