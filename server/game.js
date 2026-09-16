@@ -1,5 +1,5 @@
 import { PHASES, TRANSITION_DURATION } from './phases.js';
-import { COOP, DROPS, LIMITS, PLAYER_BASE, POWER_CHOICE_TIMEOUT, REVIVE, SIGNAL, SPECIAL } from './balance.js';
+import { COOP, DROPS, LIMITS, PLAYER_BASE, POWER_CHOICE_TIMEOUT, REVIVE, SIGNAL, SPECIAL, XP_CURVE } from './balance.js';
 import { applyPower, offerPowers, rankOf } from './powers.js';
 import { distanceSq, hurt, nearest, pushEvent } from './combat.js';
 import { updatePlayerAttacks, updateShots, updateWeapons } from './weapons.js';
@@ -23,7 +23,8 @@ const EVENT_WINDOW = 1.5;
 const grid = createGrid();
 
 export function xpNeeded(level) {
-  return Math.floor(5 + level * 3 + level * level * 0.65);
+  const { base, perLevel, perLevelSquared, scale } = XP_CURVE;
+  return Math.floor((base + level * perLevel + level * level * perLevelSquared) * scale);
 }
 
 export function createGameState(campaign = 'classic', { curses = [], daily = null } = {}) {

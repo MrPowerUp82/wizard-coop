@@ -22,6 +22,8 @@ export const COOP = Object.freeze({
   lifelink: { range: 240, every: 2, healPerRank: 2 },
   guardian: { reviveSpeedPerRank: 0.5, healthPerRank: 0.15 }
 });
+// XP to reach the next level: (base + perLevel·L + perLevelSquared·L²) × scale.
+export const XP_CURVE = Object.freeze({ base: 5, perLevel: 3, perLevelSquared: 0.65, scale: 1.2 });
 export const POWER_CHOICE_TIMEOUT = 15;
 export const INVULNERABLE_AFTER_CHOICE = 3;
 
@@ -33,10 +35,10 @@ export const DIFFICULTY = Object.freeze({
   // Each phase starts this many "minutes" into the ramp instead of inheriting the global clock.
   phaseOffsetMinutes: 3,
   spawnInterval: { start: 0.5, perMinute: 0.04, min: 0.25 },
-  hpPerMinute: 0.2,
+  hpPerMinute: 0.215,
   hpPerMinuteSquared: 0.018,
   hpPerExtraPlayer: 0.3,
-  damage: { perMinute: 0.085, max: 2.1 },
+  damage: { perMinute: 0.091, max: 2.15 },
   speed: { perMinute: 0.028, max: 1.22 },
   spawnCountEveryMinutes: 1.5,
   adaptiveLimit: { base: 45, perPhaseSecond: 0.3, perPhase: 20, perPlayer: 18 },
@@ -46,7 +48,7 @@ export const DIFFICULTY = Object.freeze({
 
 export const CONTACT = Object.freeze({
   // Each enemy bites on its own cooldown, so crowds are dangerous but a single enemy is not.
-  damageScale: 0.7, enemyCooldown: 0.8, playerCooldown: 0.1, radius: 34
+  damageScale: 0.73, enemyCooldown: 0.8, playerCooldown: 0.1, radius: 34
 });
 
 export const SEPARATION = Object.freeze({ radius: 30, strength: 0.5 });
@@ -70,7 +72,7 @@ export const PHASE_SCHEDULE = Object.freeze([
 ]);
 
 export const BOSS = Object.freeze({
-  health: [4500, 14000, 26000, 40000, 58000, 76000],
+  health: [4950, 15400, 28600, 44000, 63800, 83600],
   // Boss HP targets this many seconds of the group's estimated sustained damage.
   timeToKill: [45, 60, 70, 75, 80, 90],
   dpsEfficiency: 0.7,
@@ -79,7 +81,7 @@ export const BOSS = Object.freeze({
   stageCooldown: [1, 0.8, 0.65],
   stageMinions: 4,
   shockwave: { radius: 210, warning: 1, damage: 12 },
-  shotDamage: 0.45,
+  shotDamage: 0.5,
   shotRadius: 10,
   rangedCooldown: { treant: 3.6, lich: 3.2, demon: 2.6, bogwarden: 3.4, archon: 3.6, umbra: 3.2 },
   areaCooldown: { treant: 4.5, lich: 4.5, demon: 3.6, bogwarden: 4.8, archon: 4.5, umbra: 4.6 }
