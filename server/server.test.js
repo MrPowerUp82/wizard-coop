@@ -80,7 +80,7 @@ test('lista apenas salas abertas e disponíveis', { timeout: 10000 }, async t =>
   openHost.send(JSON.stringify({ type: 'start' }));
   await next(openHost, 'start');
   browser.send(JSON.stringify({ type: 'listRooms' }));
-  assert.deepEqual((await next(browser, 'rooms')).rooms, [{ code: openRoom.room, count: 1, running: true, host: 'Merlin' }]);
+  assert.deepEqual((await next(browser, 'rooms')).rooms, [{ code: openRoom.room, count: 1, running: true, host: 'Merlin', campaign: 'quick' }]);
   browser.send(JSON.stringify({ type: 'join', room: openRoom.room, name: 'Aliado' }));
   await next(browser, 'joined');
   browser.send(JSON.stringify({ type: 'ready' }));

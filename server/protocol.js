@@ -15,21 +15,29 @@ const hundredth = value => Math.round(value * 100) / 100;
 const ENEMY_FLAGS = { boss: 1, elite: 2, slowed: 4, windup: 8, fuse: 16, dashWarn: 32 };
 const SHOT_FLAGS = { special: 1, shard: 2, returning: 4 };
 
+// Players travel as value arrays in PLAYER_KEYS order, so field names are not repeated on every tick.
+const PLAYER_KEYS = ['id', 'name', 'color', 'x', 'y', 'hp', 'maxHp', 'xp', 'level', 'alive', 'speed', 'powers', 'pendingPowers',
+  'specialCharge', 'coins', 'reviveProgress', 'reviveBy', 'reviving', 'castCount', 'castAngle', 'invulnerableFor', 'orbitAngle',
+  'rerolls', 'phoenix', 'inputSeq', 'powerTimer', 'connected', 'dashFor', 'dashCooldown', 'dashX', 'dashY', 'moveX', 'moveY',
+  'specialCooldown', 'motionId', 'stats'];
+
 function encodePlayer(p) {
-  return {
-    id: p.id, name: p.name, color: p.color, x: tenth(p.x), y: tenth(p.y), hp: tenth(p.hp), maxHp: round(p.maxHp),
-    xp: round(p.xp), level: p.level, alive: p.alive, speed: round(p.speed), powers: p.powers, pendingPowers: p.pendingPowers,
-    specialCharge: round(p.specialCharge), coins: p.coins, reviveProgress: hundredth(p.reviveProgress), reviveBy: p.reviveBy,
-    reviving: p.reviving, castCount: p.castCount, castAngle: hundredth(p.castAngle), invulnerableFor: tenth(p.invulnerableFor),
-    orbitAngle: hundredth(p.orbitAngle || 0), rerolls: p.rerolls, phoenix: p.phoenix, inputSeq: p.inputSeq,
-    powerTimer: tenth(p.powerTimer || 0), connected: p.connected !== false,
-    dashFor: hundredth(p.dashFor || 0), dashCooldown: tenth(p.dashCooldown || 0),
-    dashX: hundredth(p.dashX || 0), dashY: hundredth(p.dashY || 0),
-    moveX: hundredth(p.moveX || 0), moveY: hundredth(p.moveY || 0),
-    specialCooldown: tenth(p.specialCooldown || 0), motionId: p.motionId || 0,
-    stats: { damage: round(p.stats.damage), kills: p.stats.kills, revives: p.stats.revives, taken: round(p.stats.taken) }
-  };
+  return [
+    p.id, p.name, p.color, tenth(p.x), tenth(p.y), tenth(p.hp), round(p.maxHp),
+    round(p.xp), p.level, p.alive, round(p.speed), p.powers, p.pendingPowers,
+    round(p.specialCharge), p.coins, hundredth(p.reviveProgress), p.reviveBy,
+    p.reviving, p.castCount, hundredth(p.castAngle), tenth(p.invulnerableFor),
+    hundredth(p.orbitAngle || 0), p.rerolls, p.phoenix, p.inputSeq,
+    tenth(p.powerTimer || 0), p.connected !== false,
+    hundredth(p.dashFor || 0), tenth(p.dashCooldown || 0),
+    hundredth(p.dashX || 0), hundredth(p.dashY || 0),
+    hundredth(p.moveX || 0), hundredth(p.moveY || 0),
+    tenth(p.specialCooldown || 0), p.motionId || 0,
+    { damage: round(p.stats.damage), kills: p.stats.kills, revives: p.stats.revives, taken: round(p.stats.taken) }
+  ];
 }
+
+const decodePlayer = row => Object.fromEntries(PLAYER_KEYS.map((key, i) => [key, row[i] ?? null]));
 
 export function encodeState(s, viewerId) {
   const players = Object.values(s.players);
@@ -71,7 +79,7 @@ export function decodeState(c) {
     campaign: c.ca || 'classic',
     altar: c.a ? { x: c.a[0], y: c.a[1], radius: c.a[2], progress: c.a[3], ttl: c.a[4], status: c.a[5] } : null,
     time: c.t, over: Boolean(c.o), victory: Boolean(c.v), phase: c.ph, phaseTime: c.pt, phaseStatus: STATUSES[c.st], transitionTime: c.tt,
-    players: Object.fromEntries(c.p.map(p => [p.id, p])),
+    players: Object.fromEntries(c.p.map(row => [row[0], decodePlayer(row)])),
     enemies: c.e.map(([id, type, x, y, hp, maxHp, flags, stage, dashAngle]) => ({
       id, type: ENEMY_TYPES[type], x, y, hp, maxHp, boss: has(flags, ENEMY_FLAGS.boss) || undefined, elite: has(flags, ENEMY_FLAGS.elite) || undefined,
       slowFor: has(flags, ENEMY_FLAGS.slowed) ? 1 : 0, windup: has(flags, ENEMY_FLAGS.windup) ? 1 : 0, fuse: has(flags, ENEMY_FLAGS.fuse) ? 1 : 0,
