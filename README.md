@@ -32,7 +32,8 @@ O workflow do GitHub Pages executa lint, checagem de tipos e testes antes de pub
 - **Espaço / botão Especial**: com 100% de carga, lança 12 projéteis em todas as direções com o triplo do dano e o efeito da sua cor. Cristais verdes carregam o especial.
 - **1, 2, 3**: escolhem um poder. **R** troca as opções quando há cargas do Destino.
 - **Esc / botão Ⅱ**: pausa a partida offline. Trocar de janela também pausa.
-- **♪**: liga ou desliga os efeitos sonoros (preferência salva no navegador).
+- **♪**: liga ou desliga os efeitos sonoros e a trilha adaptativa (preferência salva no navegador).
+- **Q / E / X ou clique** (só no co-op): sinaliza "venham aqui", "preciso de ajuda", "cuidado" ou "olhem ali" para os aliados, com seta na borda da tela.
 - **Ressuscitar**: fique no círculo de um aliado caído, a até 44 unidades, por quatro segundos contínuos. Ele volta com 40% da vida e três segundos de proteção. Se todos caírem, a partida termina.
 
 ## Como a partida funciona
@@ -54,6 +55,14 @@ As fases novas usam pisos próprios e variações de cor dos sprites existentes,
 
 Eventos marcados movimentam a horda: uma onda de abertura, **elites** douradas aos 90, 180 e 270 segundos (deixam **baú** com escolha de poder e **ímã** que puxa todo o XP) e **enxames** que cercam o grupo.
 
+Em cada reino surgem dois encontros opcionais: o **altar** (defenda 15 s) e, aos 60% da horda, um sorteado entre **mercador errante** (20 moedas da partida por um poder, uma compra por arcanista), **santuário amaldiçoado** (poder e moedas para todos, mas inimigos ferem 30% mais até o fim do reino) e **ladrão de relíquias** (uma elite que foge com um baú; derrube-a em 20 s).
+
+### Modos, maldições e desafio diário
+
+- **Rápido** e **Clássico** percorrem os seis reinos. O **Infinito** (desbloqueio do Grimório) volta ao primeiro reino depois do sexto guardião, com inimigos e chefes mais fortes a cada volta.
+- **Maldições opcionais** (menu ou sala co-op): Enxame, Frenesi, Fragilidade, Fome, Tirania e Nobreza sombria. Cada uma dificulta a partida e aumenta as moedas ganhas.
+- **Desafio diário**: mesma semente, duas maldições e personagem do dia para todos, sem melhorias permanentes e em passo fixo, para que os resultados sejam comparáveis. O melhor resultado do dia fica salvo no navegador.
+
 ### Chefes
 
 A vida do chefe é calculada a partir do dano estimado do grupo no momento da invocação, com duração-alvo crescente de 45 a 90 segundos (a duração real depende da build e das esquivas). Com 66% e 33% da vida, o chefe entra em fúria: onda de choque, lacaios e padrões novos (linhas de raízes, anéis de projéteis, meteoros e investidas telegrafadas). Ataques em área mostram o círculo antes de causar dano. Derrotar o guardião cura 35% da vida e dá uma escolha de poder gratuita no início da fase seguinte. A queda do sexto chefe concede a vitória.
@@ -65,10 +74,14 @@ A vida do chefe é calculada a partir do dano estimado do grupo no momento da in
 ### Poderes
 
 - **Passivos**: poder arcano, cadência, vitalidade, passos do vento, disparo múltiplo, magnetismo e armadura.
-- **Armas secundárias**: orbes arcanos, aura sagrada, corrente de raios e runas explosivas.
+- **Armas secundárias**: orbes arcanos, aura sagrada, corrente de raios, runas explosivas e familiar arcano.
 - **Assinaturas** (a partir do nível 4, uma por personagem): estilhaço glacial (azul), chão em chamas (vermelho), ricochete (verde) e lua crescente (roxo).
-- **Elo arcano** (só no co-op): você e aliados próximos atacam mais rápido.
-- **Evoluções**: arma no grau máximo mais um passivo específico liberam Constelação, Santuário, Tempestade ou Campo Minado. Elas sempre aparecem entre as opções quando liberadas.
+- **Co-op**: Elo arcano (ataques mais rápidos), Vínculo vital (cura aliados próximos) e Guardião (resgates mais rápidos e com mais vida).
+- **Evoluções**: liberadas por combinações de poderes e sempre oferecidas quando disponíveis. Constelação, Santuário, Tempestade, Campo Minado e Pacto ancestral evoluem armas; Avalanche, Inferno, Espinheiro e Lua cheia evoluem as assinaturas; Runas de tempestade (runas + raios) e Coroa solar (orbes + aura) combinam duas armas. A escolha de poder mostra o requisito de cada evolução.
+
+**Combos elementais**: fogo em inimigo desacelerado (choque térmico), raio em inimigo enraizado (condução) e lâmina lunar em inimigo em chamas (eclipse). No co-op, quando um aliado finaliza o efeito que você aplicou, o **combo em equipe** causa 2× de dano e carrega o especial dos dois; dois especiais próximos com até 1,5 s de diferença disparam uma **Convergência** entre os arcanistas.
+
+**Especiais**: cada personagem tem um especial padrão (Nova glacial, Meteoro, Jardim de espinhos, Passo lunar) e, com o desbloqueio *Segundo feitiço*, um alternativo (Tempestade de granizo, Égide flamejante, Florescer, Eclipse), escolhido no menu.
 
 No co-op, a escolha de poder tem 15 segundos; depois disso, a primeira opção é aplicada automaticamente.
 
@@ -83,9 +96,11 @@ No co-op, a escolha de poder tem 15 segundos; depois disso, a primeira opção �
 
 Inimigos derrotados deixam XP e podem deixar coração (5%), cristal verde (20%) ou moeda (20%). Quando o chão fica cheio, novos cristais de XP se fundem aos próximos, que mudam de cor conforme o valor. Assim nenhum XP é perdido no limite de 220 drops.
 
-As moedas da partida vão para o **Grimório** (menu inicial), que vende melhorias permanentes salvas no navegador: Vigor, Potência, Sabedoria, Ganância, Destino (trocas de opções) e Fênix (renasce uma vez por partida). O servidor valida os graus recebidos antes de aplicá-los.
+As moedas da partida vão para o **Grimório** (menu inicial), que vende melhorias permanentes salvas no navegador (Vigor, Potência, Celeridade, Agilidade, Égide, Alcance, Sabedoria, Ganância, Canalização, Destino, Pacto familiar e Fênix) e desbloqueios: **Arsenal** (escolher a arma inicial), **Segundo feitiço** (especial alternativo) e **Ritual infinito**. O servidor valida graus, desbloqueios e escolhas antes de aplicá-los.
 
-A tela final mostra nível, abates, dano e resgates de cada arcanista.
+O **Códex** (menu inicial) registra no navegador cada poder, combo, criatura, guardião e encontro descoberto, com a explicação de como funciona; entradas ainda não descobertas mostram só uma dica.
+
+A tela final mostra nível, abates, dano e resgates de cada arcanista, além do **seu dano por fonte** (feitiço, especial, cada arma, combos e convergências).
 
 ## Co-op e rede
 
@@ -147,11 +162,13 @@ Atualize sempre a pasta `server` inteira junto com o frontend e reinicie o proce
 | `server/balance.js` | Todos os números de balanceamento |
 | `server/game.js` | Estado, progressão, drops e o `updateGame` que orquestra os módulos |
 | `server/enemies.js` · `bosses.js` · `weapons.js` · `combat.js` | Spawn e comportamentos, chefes, armas e dano |
-| `server/powers.js` · `meta.js` | Poderes, evoluções, trocas e melhorias permanentes |
+| `server/powers.js` · `meta.js` | Poderes, evoluções, trocas, melhorias permanentes e desbloqueios |
+| `server/curses.js` · `encounters.js` · `objectives.js` | Maldições, semente do desafio diário, encontros e altar |
 | `server/spatial.js` | Grid espacial usado nas colisões |
 | `server/protocol.js` · `server.js` | Snapshots compactos, salas, heartbeat e reconexão |
 | `src/net.js` | Sessão co-op, interpolação, previsão e reconexão no cliente |
 | `src/render.js` · `sprites.js` · `terrain.js` · `animation.js` | Desenho, sprites pré-recortados, pisos e efeitos visuais |
 | `src/hud.js` · `menu.js` · `audio.js` · `input.js` · `wallet.js` | Interface, menu e loja, sons sintetizados, controles e moedas |
+| `src/music.js` · `codex.js` | Trilha generativa adaptativa (menu, horda, chefe, fúria, vitória) e Códex |
 
 Arte: `public/assets/sprites.webp` (magos, inimigos antigos, projéteis e drops), `public/assets/phases.webp` (fases 1 a 3) e `public/assets/phases2.webp` (fases 4 a 6). Prompts e recortes em `public/assets/phases-art.md` e `public/assets/phases2-art.md`. Variações de cor, como a lâmina roxa, o morcego de brasa e o golem de magma, são geradas uma única vez no navegador. A preferência do sistema por movimento reduzido desativa balanços, partículas, rastros, tremor de tela e giros; avisos de perigo e o progresso da ressurreição continuam visíveis.

@@ -371,3 +371,59 @@ body, .menu-shell { min-height: 100dvh; }
 .objective-panel { position: fixed; left: 24px; bottom: 90px; display: grid; gap: 5px; max-width: 250px; padding: 12px; border: 1px solid #806a37; border-radius: 9px; background: #101a20ed; color: #ffe3a0; font-size: 12px; pointer-events: none; }
 .objective-panel small { color: #b0bfb5; font-size: 10px; line-height: 1.4; }
 @media (max-width: 800px) { .objective-panel { top: 145px; bottom: auto; left: 12px; max-width: 165px; padding: 8px; font-size: 10px; } .objective-panel small { display: none; } .special-panel { max-width: 175px; } .special-panel small { font-size: 9px; } .controls-hint { display: none; } }
+
+/* --- Curses, loadout, Códex, encounters, signals, results --- */
+.ritual-options { display: grid; gap: 8px; margin: -6px 0 20px; }
+.options-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.options-header b { color: #ffd98a; font-size: 11px; font-weight: 600; }
+.curse-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.curse-chip { display: grid; gap: 2px; padding: 8px; text-align: left; border: 1px solid #3a3a4a; border-radius: 8px; background: #11161f; color: #b9c4c8; }
+.curse-chip b { font-size: 11px; color: #e5c7ff; }
+.curse-chip small { font-size: 9px; color: #7f8b90; line-height: 1.3; }
+.curse-chip[aria-pressed="true"] { border-color: #c77dff; background: #24142f; box-shadow: inset 0 0 14px #b35cff22; }
+.curse-chip[aria-pressed="true"] small { color: #cbb3dd; }
+.loadout { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.loadout label { display: grid; gap: 5px; }
+.loadout select { width: 100%; padding: 9px; color: #d8fff1; background: #112328; border: 1px solid #386458; border-radius: 8px; font: inherit; font-size: 12px; }
+.codex-card { width: min(96vw, 820px); max-height: 92vh; display: flex; flex-direction: column; }
+.codex-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 8px 0 14px; }
+.codex-tab { padding: 7px 12px; border: 1px solid #315d53; border-radius: 20px; background: #0f1d22; color: #9fbdb5; font-size: 11px; }
+.codex-tab.selected { border-color: #7ce0c1; background: #1d3c37; color: #e6fff7; }
+.codex-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; overflow-y: auto; padding: 2px 4px 4px; text-align: left; min-height: 0; }
+.codex-entry { display: grid; grid-template-columns: 34px 1fr; column-gap: 10px; row-gap: 3px; align-content: start; padding: 12px; border: 1px solid #315d53; border-radius: 10px; background: linear-gradient(145deg, #142a2c, #0b171e); }
+.codex-entry i { grid-row: span 2; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: #0b1519; border: 1px solid #2d5750; color: #a9f0d8; font-style: normal; font-size: 17px; }
+.codex-entry b { color: #d9fff2; font: 700 12px Cinzel, serif; }
+.codex-entry em { color: #7fa59b; font-size: 9px; font-style: normal; letter-spacing: .08em; text-transform: uppercase; }
+.codex-entry p { grid-column: 1 / -1; margin: 6px 0 0; color: #a9bdb8 !important; font-size: 11px; line-height: 1.45; }
+.codex-entry small { grid-column: 1 / -1; color: #6f8c86 !important; font-size: 10px; }
+.codex-entry.locked { opacity: .55; border-style: dashed; }
+.codex-entry.locked i { color: #5e7772; }
+.damage-breakdown { display: grid; gap: 6px; margin: 14px 0 4px; text-align: left; }
+.damage-breakdown h3 { margin: 0 0 4px; font: 700 11px Cinzel, serif; color: #a7ead0; letter-spacing: .08em; }
+.damage-row { display: grid; grid-template-columns: 22px 110px 1fr 70px; align-items: center; gap: 8px; font-size: 11px; color: #cfe7e0; }
+.damage-row i { font-style: normal; text-align: center; color: #9fe9cf; }
+.damage-row .bar { margin: 0; height: 8px; }
+.damage-row .bar i { background: linear-gradient(90deg, #4fbf9d, #9ff0cf); }
+.damage-row span:last-child { text-align: right; font-variant-numeric: tabular-nums; color: #8fa9a3; }
+.daily-result { margin: 10px 0 0; color: #ffd98a !important; font-size: 12px; }
+.curses-row { position: fixed; z-index: 3; top: 160px; left: 50%; transform: translateX(-50%); display: flex; gap: 5px; pointer-events: none; }
+.curses-row span { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border: 1px solid #7b4fa0; border-radius: 12px; background: #1b1024e0; color: #e5c7ff; font-size: 11px; }
+.curses-row span.pact { border-color: #b95d62; color: #ffb3a8; background: #2a1014e0; }
+.curses-row span.loop { border-color: #ffd36b; color: #ffe49b; background: #2a2210e0; }
+.encounter-panel { bottom: 200px; border-color: #7b6fb0; color: #e0d6ff; }
+.signal-bar { position: fixed; z-index: 4; right: 20px; bottom: 64px; display: flex; flex-direction: column; gap: 6px; }
+.signal-bar button { position: relative; width: 38px; height: 38px; border-radius: 50%; border: 1px solid #36514e; background: #101c22e6; color: #bff2e2; font-size: 16px; }
+.signal-bar button small { position: absolute; right: -3px; bottom: -3px; font-size: 8px; color: #7fa59b; background: #0a1418; border-radius: 4px; padding: 0 3px; }
+.coop-hint { display: none; }
+.coop .coop-hint { display: inline; }
+@media (max-width: 800px) {
+  .curse-picker { grid-template-columns: repeat(2, 1fr); }
+  .loadout { grid-template-columns: 1fr; }
+  .damage-row { grid-template-columns: 20px 90px 1fr 56px; }
+  .curses-row { top: 175px; }
+  .encounter-panel { top: 250px; bottom: auto; }
+  .signal-bar { right: 12px; bottom: 150px; }
+  .signal-bar button small { display: none; }
+}
+.shop-item.unlock { border-color: #8a6fd0; background: linear-gradient(145deg, #1d1a33, #0f111e); }
+.shop-item.unlock b { color: #d9c7ff; }

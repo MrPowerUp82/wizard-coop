@@ -31,14 +31,24 @@
             <small>Escolha para offline ou co-op. Cada personagem é único por sala.</small>
           </section>
           <label class="campaign-select" for="campaignSelect"><span class="setup-label">RITMO DA CAMPANHA · SEMPRE OS 6 REINOS</span>
-            <select id="campaignSelect"><option value="quick">Rápido · 6 hordas de 2 min + chefes</option><option value="classic">Clássico · 6 hordas de 5 min + chefes</option></select>
+            <select id="campaignSelect"><option value="quick">Rápido · 6 hordas de 2 min + chefes</option><option value="classic">Clássico · 6 hordas de 5 min + chefes</option><option value="endless">Infinito · os reinos se repetem cada vez mais difíceis</option></select>
             <small>O anfitrião escolhe o ritmo do co-op. XP e recompensas são ajustados à duração.</small>
           </label>
+          <section class="ritual-options" aria-label="Maldições e equipamento">
+            <div class="options-header"><span class="setup-label">MALDIÇÕES OPCIONAIS</span><b id="curseReward">Sem maldições</b></div>
+            <div id="cursePicker" class="curse-picker" role="group" aria-label="Maldições"></div>
+            <div id="loadoutBox" class="loadout hidden">
+              <label id="weaponLabel" class="hidden"><span class="setup-label">ARMA INICIAL</span><select id="weaponSelect"></select></label>
+              <label id="variantLabel" class="hidden"><span class="setup-label">ESPECIAL</span><select id="variantSelect"></select></label>
+            </div>
+          </section>
           <div class="menu-actions">
             <button id="offlineBtn" class="primary"><span class="button-icon">◆</span><b>Jogar offline</b><small>Sobreviva no seu ritmo</small></button>
             <button id="createBtn"><span class="button-icon">✦</span><b>Criar sala co-op</b><small>Abra um ritual para amigos</small></button>
             <button id="joinToggle"><span class="button-icon">⌁</span><b>Entrar em uma sala</b><small>Use o código do anfitrião</small></button>
+            <button id="dailyBtn"><span class="button-icon">☼</span><b>Desafio diário</b><small id="dailyInfo">Mesma semente e maldições para todos hoje</small></button>
             <button id="shopBtn"><span class="button-icon">❖</span><b>Grimório</b><small id="shopBtnCoins">Melhorias permanentes com moedas</small></button>
+            <button id="codexBtn"><span class="button-icon">✎</span><b>Códex</b><small id="codexInfo">Poderes, combos e criaturas descobertos</small></button>
           </div>
           <div id="createBox" class="room-setup hidden">
             <span class="setup-label">TIPO DA SALA</span>
@@ -84,6 +94,16 @@
         </div>
       </section>
 
+      <section id="codexModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="codexTitle">
+        <div class="modal-card codex-card">
+          <span class="rune">✎</span><h2 id="codexTitle">Códex</h2>
+          <p id="codexProgress">0 registros descobertos</p>
+          <div id="codexTabs" class="codex-tabs" role="group" aria-label="Seções do Códex"></div>
+          <div id="codexList" class="codex-list"></div>
+          <button id="codexClose" class="primary compact">Voltar</button>
+        </div>
+      </section>
+
       <section id="lobby" class="modal hidden">
         <div class="modal-card">
           <span class="rune">✦</span><h2>Ritual criado</h2><p id="lobbyVisibility">Compartilhe o código com seus aliados</p>
@@ -113,6 +133,8 @@
           <p id="defeatText">A noite reclamou mais uma alma.</p>
           <div id="finalStats" class="final-stats"></div>
           <div class="results-wrap"><table id="resultsTable" class="results-table hidden"></table></div>
+          <div id="damageBreakdown" class="damage-breakdown hidden" aria-label="Dano por fonte"></div>
+          <p id="dailyResult" class="daily-result hidden"></p>
           <p id="coinsEarned" class="coins-earned hidden"></p>
           <button id="spectateBtn" class="primary compact hidden">Observar aliados</button>
           <button id="defeatExit" class="primary compact">Voltar ao menu</button>
@@ -142,12 +164,19 @@
           <small id="specialHint">Cristais verdes carregam o especial</small>
           <button id="dashBtn" class="compact">➤ Esquiva · SHIFT</button>
         </div>
+        <div id="cursesRow" class="curses-row hidden" aria-label="Maldições ativas"></div>
+        <div id="encounterPanel" class="objective-panel encounter-panel hidden" role="status"><b id="encounterTitle"></b><span id="encounterText"></span><small id="encounterHint"></small></div>
+        <div id="signalBar" class="signal-bar hidden" role="group" aria-label="Sinalizar aliados">
+          <button type="button" data-signal="here" title="Venham aqui (Q)">⚑<small>Q</small></button>
+          <button type="button" data-signal="help" title="Preciso de ajuda (E)">✚<small>E</small></button>
+          <button type="button" data-signal="danger" title="Cuidado (X)">⚠<small>X</small></button>
+        </div>
         <div id="objectivePanel" class="objective-panel hidden" role="status"><b>◇ ALTAR OPCIONAL</b><span id="objectiveText"></span><small>Poder + 20 moedas para todos · sair do círculo preserva o progresso</small></div>
         <p id="reviveHint" class="revive-hint" role="status"></p>
         <div id="announce" class="announce" role="status" aria-live="polite"></div>
         <div id="reconnectBanner" class="reconnect-banner hidden" role="status">Conexão perdida — reconectando…</div>
         <div id="phaseTransition" class="phase-transition hidden"><small>PASSAGEM ABERTA</small><strong id="transitionText"></strong><span>Os sobreviventes recuperam 35% da vida e ganham um poder</span></div>
-        <div class="controls-hint">WASD / SETAS: MOVER <span>•</span> SHIFT: ESQUIVA <span>•</span> ESPAÇO: ESPECIAL <span>•</span> GELO + FOGO / RAÍZES + RAIO / BRASAS + LUA: COMBOS</div>
+        <div class="controls-hint">WASD / SETAS: MOVER <span>•</span> SHIFT: ESQUIVA <span>•</span> ESPAÇO: ESPECIAL <span>•</span> GELO + FOGO / RAÍZES + RAIO / BRASAS + LUA: COMBOS<span class="coop-hint"> • Q E X / CLIQUE: SINALIZAR</span></div>
         <button id="muteBtn" class="exit mute" aria-label="Ativar ou silenciar sons" title="Som">♪</button>
         <button id="pauseBtn" class="exit pause" aria-label="Pausar partida" title="Pausar (Esc)">Ⅱ</button>
         <button id="exitBtn" class="exit" aria-label="Voltar ao menu">×</button>

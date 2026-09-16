@@ -1,9 +1,10 @@
 import { WebSocketServer } from 'ws';
 import crypto from 'node:crypto';
-import { activateDash, activateSpecial, addLatePlayer, applyPower, createGameState, createPlayer, rerollPowers, updateGame } from './game.js';
+import { activateDash, activateSpecial, addLatePlayer, applyPower, createGameState, createPlayer, rerollPowers, sendSignal, updateGame } from './game.js';
 import { campaignId } from './campaign.js';
 import { encodeState } from './protocol.js';
 import { sanitizeMeta } from './meta.js';
+import { sanitizeCurses } from './curses.js';
 
 const env = (name, fallback) => {
   const value = Number(process.env[name] ?? fallback);
@@ -67,14 +68,14 @@ function openRoomList() {
       count: playerCount(room),
       running: room.running,
       host: room.state.players[room.host?.id]?.name || 'Arcanista'
-      , campaign: room.state.campaign
+      , campaign: room.state.campaign, curses: room.state.curses
     }));
 }
 
 const roomPlayers = room => Object.values(room.state.players).map(({ id, name, color, connected }) => ({ id, name, color, connected: connected !== false }));
 function lobbyState(room) {
   return { type: 'lobby', count: playerCount(room), visibility: room.visibility,
-    players: roomPlayers(room), hostId: room.host?.id, running: room.running, campaign: room.state.campaign };
+    players: roomPlayers(room), hostId: room.host?.id, running: room.running, campaign: room.state.campaign, curses: room.state.curses };
 }
 function characterTaken(ws, room) {
   return send(ws, { type: 'error', code: 'CHARACTER_TAKEN', message: 'Este personagem já está em uso. Escolha outro para entrar.',
@@ -89,7 +90,7 @@ function attach(ws, room, id, token) {
   if (!room.host || !room.clients.has(room.host)) room.host = ws;
 }
 
-function join(ws, room, name, requestedColor, meta) {
+function join(ws, room, name, requestedColor, meta, loadout) {
   if (room.state.over) return send(ws, { type: 'error', message: 'Este ritual já terminou. Crie uma nova sala.' });
   if (playerCount(room) >= MAX_PLAYERS) return send(ws, { type: 'error', message: 'A sala está cheia.' });
   const usedColors = new Set(Object.values(room.state.players).map(p => p.color));
@@ -99,7 +100,7 @@ function join(ws, room, name, requestedColor, meta) {
   const token = crypto.randomUUID();
   attach(ws, room, id, token);
   room.sessions.set(token, id);
-  const player = createPlayer(id, (typeof name === 'string' && name.trim() || 'Arcanista').slice(0, 16), color, sanitizeMeta(meta));
+  const player = createPlayer(id, (typeof name === 'string' && name.trim() || 'Arcanista').slice(0, 16), color, sanitizeMeta(meta), loadout);
   if (room.running) addLatePlayer(room.state, player);
   else room.state.players[id] = player;
   send(ws, { type: 'joined', room: room.code, playerId: id, token, color, count: playerCount(room), visibility: room.visibility });
@@ -192,15 +193,19 @@ wss.on('connection', (/** @type {Client} */ ws) => {
       if (rooms.size >= MAX_ROOMS) {
         return send(ws, { type: 'error', message: `O servidor atingiu o limite de ${MAX_ROOMS} salas. Entre em uma sala disponível ou tente novamente mais tarde.` });
       }
+      // The endless ritual is an unlock: only a host who bought it can open one.
+      const requested = campaignId(message.campaign);
+      const campaign = requested === 'endless' && !sanitizeMeta(message.meta).endless ? 'quick' : requested;
       const created = { code: createCode(), host: null, clients: new Set(), sessions: new Map(), grace: new Map(),
-        state: createGameState(campaignId(message.campaign)), running: false, visibility: message.visibility === 'open' ? 'open' : 'closed' };
+        state: createGameState(campaign, { curses: sanitizeCurses(message.curses) }), running: false,
+        visibility: message.visibility === 'open' ? 'open' : 'closed' };
       created.expire = setTimeout(() => { if (!created.running) destroyRoom(created, 4001, 'Sala expirou antes da batalha'); }, LOBBY_IDLE_MS);
       rooms.set(created.code, created);
-      join(ws, created, message.name, message.color, message.meta);
+      join(ws, created, message.name, message.color, message.meta, message.loadout);
       if (!ws.room) destroyRoom(created);
     } else if (message.type === 'join') {
       const target = rooms.get(String(message.room || '').toUpperCase());
-      target ? join(ws, target, message.name, message.color, message.meta) : send(ws, { type: 'error', message: 'Sala não encontrada.' });
+      target ? join(ws, target, message.name, message.color, message.meta, message.loadout) : send(ws, { type: 'error', message: 'Sala não encontrada.' });
     } else if (message.type === 'resume') {
       resume(ws, message);
     } else if (message.type === 'selectCharacter' && room) {
@@ -226,6 +231,9 @@ wss.on('connection', (/** @type {Client} */ ws) => {
       rerollPowers(player, Math.random, { coop: playerCount(room) > 1 });
     } else if (message.type === 'special' && room?.running) {
       activateSpecial(room.state, ws.id);
+    } else if (message.type === 'signal' && room?.running && player) {
+      const at = Number.isFinite(message.x) && Number.isFinite(message.y) ? { x: message.x, y: message.y } : null;
+      sendSignal(room.state, ws.id, String(message.signal || ''), at);
     } else if (message.type === 'dash' && room?.running) {
       activateDash(room.state, ws.id, { x: message.x, y: message.y });
     } else if (message.type === 'leave' && room) {

@@ -59,7 +59,7 @@ export function createSession(url, entry, handlers) {
     socket = ws;
     ws.onopen = () => {
       if (resume) ws.send(JSON.stringify({ type: 'resume', room: session.room, token: session.token }));
-      else ws.send(JSON.stringify({ type: entry.action, room: entry.code, name: entry.name, visibility: entry.visibility, color: entry.color, meta: entry.meta, campaign: entry.campaign }));
+      else ws.send(JSON.stringify({ type: entry.action, room: entry.code, name: entry.name, visibility: entry.visibility, color: entry.color, meta: entry.meta, campaign: entry.campaign, curses: entry.curses, loadout: entry.loadout }));
       clearInterval(pingTimer);
       const ping = () => send({ type: 'ping', t: performance.now() });
       ping();

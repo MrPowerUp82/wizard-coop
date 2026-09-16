@@ -1,6 +1,6 @@
 import { PHASES, TRANSITION_DURATION } from './phases.js';
-import { DROPS, LIMITS, PLAYER_BASE, POWER_CHOICE_TIMEOUT, REVIVE, SPECIAL } from './balance.js';
-import { applyPower, offerPowers } from './powers.js';
+import { COOP, DROPS, LIMITS, PLAYER_BASE, POWER_CHOICE_TIMEOUT, REVIVE, SIGNAL, SPECIAL } from './balance.js';
+import { applyPower, offerPowers, rankOf } from './powers.js';
 import { distanceSq, hurt, nearest, pushEvent } from './combat.js';
 import { updatePlayerAttacks, updateShots, updateWeapons } from './weapons.js';
 import { difficultyAt, spawnHorde, updateEnemies, updateEnemyShots } from './enemies.js';
@@ -9,6 +9,8 @@ import { applyMeta } from './meta.js';
 import { campaignOf, phaseClock, phaseDuration } from './campaign.js';
 import { movementDelta } from './movement.js';
 import { updateObjective } from './objectives.js';
+import { updateEncounter } from './encounters.js';
+import { healingScale, sanitizeCurses } from './curses.js';
 import { createGrid } from './spatial.js';
 
 export { DROP_TTL, LIMITS, REVIVE, SPECIAL } from './balance.js';
@@ -24,14 +26,15 @@ export function xpNeeded(level) {
   return Math.floor(5 + level * 3 + level * level * 0.65);
 }
 
-export function createGameState(campaign = 'classic') {
-  return { campaign: campaign === 'quick' ? 'quick' : 'classic', altar: null, altarSpawned: false,
+export function createGameState(campaign = 'classic', { curses = [], daily = null } = {}) {
+  return { campaign: ['quick', 'endless'].includes(campaign) ? campaign : 'classic', altar: null, altarSpawned: false,
+    curses: sanitizeCurses(curses), daily, loop: 0, encounter: null, encounterSpawned: false, bloodPact: false,
     time: 0, players: {}, enemies: [], shots: [], enemyShots: [], gems: [], hazards: [], runes: [], zones: [], events: [],
     spawn: 0, spawnCursor: 0, over: false, cleanup: 0, nextId: 0, eventSeq: 0, scheduleCursor: 0,
     phase: 0, phaseTime: 0, phaseStatus: 'horde', transitionTime: 0, victory: false };
 }
 
-export function createPlayer(id, name, color = 0, meta = null) {
+export function createPlayer(id, name, color = 0, meta = null, loadout = null) {
   const player = {
     id, name, color, x: color * 55, y: 0, hp: PLAYER_BASE.hp, maxHp: PLAYER_BASE.hp, xp: 0, level: 1,
     alive: true, input: { x: 0, y: 0 }, speed: PLAYER_BASE.speed, damage: PLAYER_BASE.damage, attackDelay: PLAYER_BASE.attackDelay,
@@ -40,9 +43,10 @@ export function createPlayer(id, name, color = 0, meta = null) {
     specialCharge: 0, specialCooldown: 0, coins: 0, coinFrac: 0, coinMult: 1, xpMult: 1, rerolls: 1, phoenix: 0,
     dashFor: 0, dashCooldown: 0, dashX: 0, dashY: 1, moveX: 0, moveY: 1, motionId: 0,
     reviveProgress: 0, reviveBy: null, reviving: null, castCount: 0, castAngle: 0, orbitAngle: 0, inputSeq: 0,
-    stats: { damage: 0, kills: 0, revives: 0, taken: 0 }
+    specialVariant: 0, signalAt: -Infinity,
+    stats: { damage: 0, kills: 0, revives: 0, taken: 0, by: {} }
   };
-  if (meta) applyMeta(player, meta);
+  if (meta || loadout) applyMeta(player, meta, loadout);
   return player;
 }
 
@@ -64,7 +68,7 @@ function grantXp(ctx, player, amount) {
   while (player.alive && !player.pendingPowers && player.xp >= xpNeeded(player.level)) {
     player.xp -= xpNeeded(player.level);
     player.level += 1;
-    player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.1);
+    player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.1 * healingScale(ctx.s));
     offerPowers(player, ctx.random, ctx);
   }
 }
@@ -80,7 +84,7 @@ function progress(ctx, p) {
     p.pendingChests--;
     if (offerPowers(p, ctx.random, ctx)) return;
     p.coins += 10;
-    p.hp = Math.min(p.maxHp, p.hp + 30);
+    p.hp = Math.min(p.maxHp, p.hp + 30 * healingScale(ctx.s));
   }
   grantXp(ctx, p, 0);
 }
@@ -95,9 +99,10 @@ function reviveAllies(s, players, fallen, dt) {
     if (p.reviveBy !== helper.id) p.reviveProgress = 0;
     p.reviveBy = helper.id;
     helper.reviving = p.id;
-    p.reviveProgress = Math.min(REVIVE.seconds, p.reviveProgress + dt);
+    const guardian = rankOf(helper, 'guardian');
+    p.reviveProgress = Math.min(REVIVE.seconds, p.reviveProgress + dt * (1 + guardian * COOP.guardian.reviveSpeedPerRank));
     if (p.reviveProgress >= REVIVE.seconds) {
-      p.alive = true; p.hp = p.maxHp * REVIVE.health; p.invulnerableFor = 3;
+      p.alive = true; p.hp = p.maxHp * (REVIVE.health + guardian * COOP.guardian.healthPerRank); p.invulnerableFor = 3;
       p.input = { x: 0, y: 0 }; p.hitCooldown = 0; p.pendingPowers = null;
       p.reviveProgress = 0; p.reviveBy = null; helper.reviving = null;
       if (helper.stats) helper.stats.revives++;
@@ -110,7 +115,7 @@ function collect(ctx, gem, target) {
   const { s } = ctx;
   gem.dead = true;
   const type = gem.type || 'gem';
-  if (type === 'heart') target.hp = Math.min(target.maxHp, target.hp + gem.value);
+  if (type === 'heart') target.hp = Math.min(target.maxHp, target.hp + gem.value * healingScale(s));
   else if (type === 'greenGem') target.specialCharge = Math.min(SPECIAL.max, target.specialCharge + gem.value);
   else if (type === 'coin') {
     for (const p of Object.values(s.players)) {
@@ -166,15 +171,46 @@ function updateHazards({ s, dt, alive }) {
   s.hazards = s.hazards.filter(h => h.ttl > 0);
 }
 
+/** Vínculo vital: allies (not yourself) near a linked player slowly regenerate. */
+function updateLifelink({ s, alive }) {
+  for (const p of alive) {
+    const rank = rankOf(p, 'lifelink');
+    if (!rank || (p.lifelinkAt ?? 0) > s.time) continue;
+    p.lifelinkAt = s.time + COOP.lifelink.every;
+    for (const ally of alive) {
+      if (ally !== p && distanceSq(ally, p) < COOP.lifelink.range ** 2) {
+        ally.hp = Math.min(ally.maxHp, ally.hp + rank * COOP.lifelink.healPerRank * healingScale(s));
+      }
+    }
+  }
+}
+
+/** Co-op callouts: a marker every teammate sees, rate-limited per player. */
+export function sendSignal(s, playerId, kind, at = null) {
+  const p = s.players[playerId];
+  if (!p || s.over || !SIGNAL.kinds.includes(kind) || s.time - (p.signalAt ?? -Infinity) < SIGNAL.cooldown) return false;
+  const x = Number.isFinite(at?.x) ? at.x : p.x, y = Number.isFinite(at?.y) ? at.y : p.y;
+  if ((x - p.x) ** 2 + (y - p.y) ** 2 > SIGNAL.range ** 2) return false;
+  p.signalAt = s.time;
+  pushEvent(s, 'signal', { x: Math.round(x), y: Math.round(y), signal: kind, player: p.id, name: p.name, color: p.color });
+  return true;
+}
+
 function startNextPhase(s, alive) {
   s.phase++;
+  if (s.phase >= PHASES.length) {
+    s.phase = 0;
+    s.loop = (s.loop || 0) + 1;
+    pushEvent(s, 'loop', { loop: s.loop });
+  }
   s.phaseTime = 0;
   s.phaseStatus = 'horde';
   s.spawn = 0;
   s.scheduleCursor = 0;
   s.altar = null; s.altarSpawned = false;
+  s.encounter = null; s.encounterSpawned = false; s.bloodPact = false;
   for (const p of alive) {
-    p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.35);
+    p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.35 * healingScale(s));
     p.invulnerableFor = 3;
     p.pendingChests++; // The guardian's reward: a free power choice.
   }
@@ -201,7 +237,7 @@ export function updateGame(s, dt, random = Math.random) {
     if (s.phaseTime >= phaseDuration(s)) summonBoss(s, alive);
   }
   const ctx = { s, dt, random, alive, grid, coop: players.length > 1,
-    difficulty: difficultyAt(phaseClock(s), alive.length, s.phase) };
+    difficulty: difficultyAt(phaseClock(s), alive.length, s.phase, s) };
 
   for (const p of alive) {
     progress(ctx, p);
@@ -220,6 +256,7 @@ export function updateGame(s, dt, random = Math.random) {
 
   if (s.phaseStatus === 'horde') spawnHorde(ctx);
   updateObjective(ctx);
+  updateEncounter(ctx);
   updatePlayerAttacks(ctx);
   updateEnemies(ctx);
   grid.clear();
@@ -230,6 +267,7 @@ export function updateGame(s, dt, random = Math.random) {
   updateWeapons(ctx);
   s.enemies = s.enemies.filter(enemy => enemy.hp > 0);
 
+  if (ctx.coop) updateLifelink(ctx);
   reviveAllies(s, players, fallen, dt);
   const survivors = players.filter(p => p.alive);
   collectDrops(ctx, survivors);
@@ -245,8 +283,11 @@ export function updateGame(s, dt, random = Math.random) {
   if (players.every(p => !p.alive)) s.over = true;
   if (!s.over && s.phaseStatus === 'boss' && !s.enemies.some(e => e.boss)) {
     s.enemies = []; s.shots = []; s.enemyShots = []; s.gems = []; s.hazards = []; s.runes = []; s.zones = [];
-    pushEvent(s, 'bossDown', { phase: s.phase });
-    if (s.phase === PHASES.length - 1) {
+    pushEvent(s, 'bossDown', { phase: s.phase, loop: s.loop || 0 });
+    if (s.phase === PHASES.length - 1 && campaignOf(s).endless) {
+      // Endless: the ritual circles back to the first realm, one lap harder (see startNextPhase).
+      s.phaseStatus = 'transition'; s.transitionTime = TRANSITION_DURATION;
+    } else if (s.phase === PHASES.length - 1) {
       s.victory = true; s.over = true; s.phaseStatus = 'complete';
       for (const p of players) p.pendingPowers = null;
     } else {
@@ -258,17 +299,17 @@ export function updateGame(s, dt, random = Math.random) {
 const PLAYER_FIELDS = ['id', 'name', 'color', 'x', 'y', 'hp', 'maxHp', 'xp', 'level', 'alive', 'speed', 'powers', 'pendingPowers',
   'specialCharge', 'coins', 'reviveProgress', 'reviveBy', 'reviving', 'castCount', 'castAngle', 'invulnerableFor', 'orbitAngle',
   'rerolls', 'phoenix', 'stats', 'inputSeq', 'powerTimer', 'connected',
-  'specialCooldown', 'dashFor', 'dashCooldown', 'dashX', 'dashY', 'moveX', 'moveY', 'motionId', 'familiar'];
+  'specialCooldown', 'dashFor', 'dashCooldown', 'dashX', 'dashY', 'moveX', 'moveY', 'motionId', 'familiar', 'specialVariant', 'shopProgress'];
 
 /** The client-facing view of the state: what rendering and the HUD need, nothing private to the simulation. */
 export function publicState(s) {
   return {
-    campaign: s.campaign, altar: s.altar, time: s.time, over: s.over, victory: s.victory, phase: s.phase, phaseTime: s.phaseTime,
+    campaign: s.campaign, altar: s.altar, encounter: s.encounter, curses: s.curses || [], loop: s.loop || 0, bloodPact: Boolean(s.bloodPact), time: s.time, over: s.over, victory: s.victory, phase: s.phase, phaseTime: s.phaseTime,
     phaseStatus: s.phaseStatus, transitionTime: s.transitionTime, hazards: s.hazards,
     players: Object.fromEntries(Object.entries(s.players).map(([id, p]) => [id, Object.fromEntries(PLAYER_FIELDS.map(key => [key, p[key]]))])),
-    enemies: s.enemies.map(({ id, type, x, y, hp, maxHp, boss, elite, stage, slowFor, windup, fuse, dashWarn, dashAngle }) =>
-      ({ id, type, x, y, hp, maxHp, boss, elite, stage, slowFor, windup, fuse, dashWarn, dashAngle })),
-    shots: s.shots.map(({ x, y, vx, vy, color, special, shard, returning }) => ({ x, y, vx, vy, color, special, shard, returning })),
+    enemies: s.enemies.map(({ id, type, x, y, hp, maxHp, boss, elite, thief, stage, slowFor, windup, fuse, dashWarn, dashAngle }) =>
+      ({ id, type, x, y, hp, maxHp, boss, elite, thief, stage, slowFor, windup, fuse, dashWarn, dashAngle })),
+    shots: s.shots.map(({ x, y, vx, vy, color, special, shard, returning, fullmoon }) => ({ x, y, vx, vy, color, special, shard, returning, fullmoon })),
     enemyShots: s.enemyShots, gems: s.gems.map(({ id, x, y, type, value, ttl }) => ({ id, x, y, type, value, ttl })),
     runes: s.runes || [], zones: s.zones || [], events: s.events || []
   };

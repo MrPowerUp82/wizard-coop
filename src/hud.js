@@ -1,9 +1,10 @@
 import { POWERS, REVIVE, SPECIAL, SPELLS, xpNeeded } from '../server/game.js';
-import { POWER_CHOICE_TIMEOUT } from '../server/balance.js';
+import { ENCOUNTERS, POWER_CHOICE_TIMEOUT } from '../server/balance.js';
+import { CURSES } from '../server/curses.js';
 import { PHASES } from '../server/phases.js';
 import { phaseDuration } from '../server/campaign.js';
-import { SPECIALS } from '../server/weapons.js';
-import { KIND_LABELS, POWER_INFO } from './powerInfo.js';
+import { specialOf } from '../server/weapons.js';
+import { KIND_LABELS, POWER_INFO, requirementText } from './powerInfo.js';
 
 const $ = selector => document.querySelector(selector);
 
@@ -35,12 +36,14 @@ export function createHud() {
   const el = Object.fromEntries(['hpBar', 'xpBar', 'level', 'timer', 'spellName', 'specialFill', 'specialBtn', 'coinCount', 'reviveHint',
     'phaseName', 'phasePanel', 'phaseTime', 'phaseProgress', 'bossPanel', 'bossName', 'bossHp', 'bossHealth', 'bossHint', 'phaseTransition',
     'transitionText', 'players', 'powerRow', 'announce', 'reconnectBanner', 'powerModal', 'powerChoices', 'powerTimer', 'rerollBtn',
-    'damageVignette', 'toast', 'dashBtn', 'specialHint', 'objectivePanel', 'objectiveText'].map(id => [id, $(`#${id}`)]));
+    'damageVignette', 'toast', 'dashBtn', 'specialHint', 'objectivePanel', 'objectiveText', 'cursesRow', 'encounterPanel',
+    'encounterTitle', 'encounterText', 'encounterHint', 'signalBar'].map(id => [id, $(`#${id}`)]));
   const powerTimerFill = el.powerTimer.querySelector('i');
   let announceTimer = null;
   let shownPowers = '';
   let playersSignature = '';
   let rowSignature = '';
+  let curseSignature = '';
 
   function toast(message) {
     el.toast.textContent = message;
@@ -77,6 +80,56 @@ export function createHud() {
     }));
   }
 
+  function renderCurses(view) {
+    const loop = view.loop || 0;
+    const signature = `${(view.curses || []).join()}|${view.bloodPact}|${loop}`;
+    if (signature === curseSignature) return;
+    curseSignature = signature;
+    const chips = (view.curses || []).map(id => {
+      const chip = document.createElement('span');
+      chip.textContent = CURSES[id]?.icon || '?';
+      chip.title = `${CURSES[id]?.title}: ${CURSES[id]?.description}`;
+      return chip;
+    });
+    if (view.bloodPact) {
+      const pact = document.createElement('span');
+      pact.className = 'pact'; pact.textContent = '☥ +30% dano inimigo'; pact.title = 'Pacto do santuário até o fim do reino';
+      chips.push(pact);
+    }
+    if (loop) {
+      const lap = document.createElement('span');
+      lap.className = 'loop'; lap.textContent = `∞ Volta ${loop + 1}`;
+      chips.push(lap);
+    }
+    el.cursesRow.replaceChildren(...chips);
+    el.cursesRow.classList.toggle('hidden', !chips.length);
+  }
+
+  function renderEncounter(view, me) {
+    const encounter = view.encounter;
+    const visible = Boolean(encounter) && view.phaseStatus === 'horde' && !view.over && !['complete', 'expired'].includes(encounter.status);
+    set(el.encounterPanel, 'hidden', !visible);
+    if (!visible) return;
+    const ttl = Math.ceil(encounter.ttl);
+    if (encounter.kind === 'merchant') {
+      const cfg = ENCOUNTERS.merchant;
+      const bought = encounter.buyers?.includes(me.id);
+      set(el.encounterTitle, 'text', '⚖ MERCADOR ERRANTE');
+      set(el.encounterText, 'text', bought ? 'Você já comprou. Seus aliados ainda podem.'
+        : (me.coins || 0) < cfg.cost ? `Precisa de ${cfg.cost} moedas da partida (você tem ${me.coins || 0}) · ${ttl}s`
+          : me.shopProgress > 0 ? `Negociando… ${Math.ceil(cfg.seconds - me.shopProgress)}s` : `Fique perto dele: ${cfg.cost} moedas por um poder · ${ttl}s`);
+      set(el.encounterHint, 'text', 'Cada arcanista pode comprar uma vez');
+    } else if (encounter.kind === 'shrine') {
+      set(el.encounterTitle, 'text', '☥ SANTUÁRIO AMALDIÇOADO');
+      set(el.encounterText, 'text', `${Math.floor(encounter.progress)}/${ENCOUNTERS.shrine.seconds}s para aceitar o pacto · some em ${ttl}s`);
+      set(el.encounterHint, 'text', `Poder + ${ENCOUNTERS.shrine.coins} moedas para todos, mas inimigos ferem 30% mais neste reino`);
+    } else {
+      set(el.encounterTitle, 'text', '✪ LADRÃO DE RELÍQUIAS');
+      set(el.encounterText, 'text', `Derrube-o antes que fuja: ${ttl}s`);
+      set(el.encounterHint, 'text', 'Ele carrega um baú, um ímã e uma bolsa de moedas');
+    }
+  }
+
   function renderPowerRow(me) {
     const owned = Object.entries(me.powers || {}).filter(([, rank]) => rank > 0);
     const signature = owned.map(([id, rank]) => `${id}${rank}`).join();
@@ -104,7 +157,8 @@ export function createHud() {
       button.innerHTML = `<i></i><b></b><small></small>${badge ? '<em></em>' : ''}<kbd>${index + 1}</kbd>`;
       button.querySelector('i').textContent = icon;
       button.querySelector('b').textContent = title;
-      button.querySelector('small').textContent = `${description} · Grau ${rank}/${power.max}`;
+      button.querySelector('small').textContent = power.kind === 'evolution'
+        ? `${description} · ${requirementText(power.requires)}` : `${description} · Grau ${rank}/${power.max}`;
       if (badge) button.querySelector('em').textContent = badge;
       button.onclick = () => onChoose(id);
       return button;
@@ -114,7 +168,7 @@ export function createHud() {
 
   return {
     toast, announce, flashDamage,
-    resetCaches() { shownPowers = ''; playersSignature = ''; rowSignature = ''; },
+    resetCaches() { shownPowers = ''; playersSignature = ''; rowSignature = ''; curseSignature = ''; },
     syncPowers(me, { offline, onChoose, onReroll }) {
       if (me?.alive !== false && me?.pendingPowers?.length) {
         const key = me.pendingPowers.join(',');
@@ -140,7 +194,7 @@ export function createHud() {
       set(el.timer, 'text', format(view.time || 0));
       const charge = Math.round(me.specialCharge || 0);
       const blocked = !me.alive || paused || Boolean(me.pendingPowers) || view.over || view.phaseStatus === 'transition';
-      const special = SPECIALS[me.color ?? 0];
+      const special = specialOf(me);
       set(el.spellName, 'text', SPELLS[me.color ?? 0].name);
       set(el.specialFill, 'width', `${charge}%`);
       set(el.specialBtn, 'disabled', charge < SPECIAL.max || blocked || me.specialCooldown > 0);
@@ -160,7 +214,7 @@ export function createHud() {
         : me.reviveBy ? `Aliado ressuscitando você… ${Math.ceil(REVIVE.seconds - me.reviveProgress)}s` : 'Aguarde um aliado chegar até seu corpo.');
       const phase = PHASES[view.phase || 0];
       const status = view.phaseStatus || 'horde';
-      set(el.phaseName, 'text', `${(view.phase || 0) + 1} / ${PHASES.length} · ${phase.name}`);
+      set(el.phaseName, 'text', `${view.loop ? `∞${view.loop + 1} · ` : ''}${(view.phase || 0) + 1} / ${PHASES.length} · ${phase.name}`);
       set(el.phasePanel, '--phase-color', phase.color);
       set(el.phaseTime, 'text', status === 'horde' ? `${format(Math.ceil(phaseDuration(view) - (view.phaseTime || 0)))} ATÉ O CHEFE`
         : status === 'boss' ? 'DERROTE O GUARDIÃO' : status === 'transition' ? 'GUARDIÃO DERROTADO' : 'CAMPANHA CONCLUÍDA');
@@ -174,7 +228,10 @@ export function createHud() {
         set(el.bossHint, 'text', boss.stage === 3 ? 'Fúria final: padrões mais rápidos e densos' : 'Desvie dos projéteis vermelhos e saia dos círculos');
       }
       set(el.phaseTransition, 'hidden', status !== 'transition');
-      if (status === 'transition') set(el.transitionText, 'text', `${PHASES[(view.phase || 0) + 1]?.name} · ${Math.ceil(view.transitionTime)}s`);
+      if (status === 'transition') set(el.transitionText, 'text', `${PHASES[((view.phase || 0) + 1) % PHASES.length].name} · ${Math.ceil(view.transitionTime)}s`);
+      set(el.signalBar, 'hidden', offline || view.over || !me.alive);
+      renderCurses(view);
+      renderEncounter(view, me);
       renderPlayers(view);
       renderPowerRow(me);
     }

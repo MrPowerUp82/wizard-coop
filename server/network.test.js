@@ -50,7 +50,7 @@ test('snapshot compacto preserva o que o cliente desenha e omite o que está lon
   assert.equal(decoded.players.p.color, 1);
   assert.deepEqual(decoded.enemies.map(e => e.id), [1, 3], 'inimigo distante some, chefe permanece');
   assert.deepEqual({ ...decoded.enemies[0], x: 0, y: 0, hp: 0 }, { id: 1, type: 'scorpion', x: 0, y: 0, hp: 0, maxHp: 55, boss: undefined, elite: true,
-    slowFor: 1, windup: 0, fuse: 0, dashWarn: 0, stage: undefined, dashAngle: undefined, rootFor: 0, freezeFor: 0, burningFor: 0 });
+    slowFor: 1, windup: 0, fuse: 0, dashWarn: 0, stage: undefined, dashAngle: undefined, thief: undefined, rootFor: 0, freezeFor: 0, burningFor: 0 });
   assert.equal(decoded.enemies[1].stage, 2);
   assert.equal(decoded.shots[0].special, true);
   assert.equal(decoded.shots[0].hitIds, undefined);
@@ -135,6 +135,35 @@ test('trocar poderes e entrar atrasado funcionam pelo servidor', { timeout: 1500
   host.send({ type: 'reroll' });
   const after = decodeState((await host.receive('state')).state);
   assert.equal(after.players[created.playerId].rerolls, 2, 'sem escolha pendente a troca não é gasta');
+});
+
+test('sala co-op leva maldições, bloqueia o infinito sem desbloqueio, aplica loadout e repassa sinais', { timeout: 15000 }, async t => {
+  const connect = await startServer(t);
+  const host = await connect();
+  host.send({ type: 'create', color: 0, campaign: 'endless', curses: ['swarm', 'bogus'], meta: {}, loadout: { weapon: 'aura' } });
+  const created = await host.receive('joined');
+  const lobby = await host.receive('lobby');
+  assert.equal(lobby.campaign, 'quick', 'infinito exige desbloqueio');
+  assert.deepEqual(lobby.curses, ['swarm']);
+  const guest = await connect();
+  guest.send({ type: 'join', room: created.room, color: 2, meta: { arsenal: 1, secondSpell: 1 }, loadout: { weapon: 'chain', special: 1 } });
+  const joined = await guest.receive('joined');
+  host.send({ type: 'start' });
+  const state = decodeState((await host.receive('start')).state);
+  assert.deepEqual(state.curses, ['swarm']);
+  assert.equal(state.players[created.playerId].powers.aura, undefined);
+  assert.equal(state.players[joined.playerId].powers.chain, 1);
+  assert.equal(state.players[joined.playerId].specialVariant, 1);
+  guest.send({ type: 'signal', signal: 'help' });
+  const signalled = await host.receive('state', m => decodeState(m.state).events.some(event => event.kind === 'signal'));
+  const event = decodeState(signalled.state).events.find(e => e.kind === 'signal');
+  assert.equal(event.player, joined.playerId);
+  assert.equal(event.signal, 'help');
+
+  const unlocked = await connect();
+  unlocked.send({ type: 'create', color: 1, campaign: 'endless', meta: { endless: 1 } });
+  await unlocked.receive('joined');
+  assert.equal((await unlocked.receive('lobby')).campaign, 'endless');
 });
 
 test('snapshot compacto transmite a posição do familiar', () => {

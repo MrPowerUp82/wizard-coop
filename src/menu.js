@@ -1,6 +1,10 @@
 import { SPELLS } from '../server/game.js';
-import { SPECIALS } from '../server/weapons.js';
+import { ALT_SPECIALS, SPECIALS } from '../server/weapons.js';
 import { CAMPAIGNS, campaignId } from '../server/campaign.js';
+import { CURSES, curseReward, dailyChallenge, sanitizeCurses } from '../server/curses.js';
+import { STARTING_WEAPONS } from '../server/meta.js';
+import { POWER_INFO } from './powerInfo.js';
+import { renderCodex } from './codex.js';
 
 const $ = selector => document.querySelector(selector);
 const DEFAULT_SERVER = 'wss://vps65228.publiccloud.com.br/ws';
@@ -45,11 +49,31 @@ export function renderCharacterPicker(element, selected, players, ownId, onChoos
   if (focused !== undefined) element.querySelector(`[data-color="${focused}"]`)?.focus();
 }
 
-export function createMenu({ wallet, toast, onOffline, onCreate, onJoin, isIdle, audio }) {
+const readJson = (key, fallback) => { try { return JSON.parse(storage.get(key) || '') ?? fallback; } catch { return fallback; } };
+
+/** Best daily-challenge result of today, kept in this browser. */
+export function dailyRecord(key) {
+  const saved = readJson('arcana-daily', null);
+  return saved?.key === key ? saved : null;
+}
+
+export function saveDailyRecord(key, result) {
+  const best = dailyRecord(key);
+  const score = r => (r.loop || 0) * 100 + r.phase * 10 + (r.victory ? 5 : 0) + r.time / 10000;
+  const improved = !best || score(result) > score(best);
+  if (improved) storage.set('arcana-daily', JSON.stringify({ key, ...result }));
+  return { improved, best: improved ? { key, ...result } : best };
+}
+
+export function createMenu({ wallet, codex, toast, onOffline, onDaily, onCreate, onJoin, isIdle, audio }) {
   const saved = Number(storage.get('arcana-character') ?? 0);
   let selected = Number.isInteger(saved) && saved >= 0 && saved < 4 ? saved : 0;
   let visibility = 'open';
   let campaign = campaignId(storage.get('arcana-campaign'));
+  let curses = sanitizeCurses(readJson('arcana-curses', []));
+  let weapon = storage.get('arcana-weapon') || '';
+  let variant = storage.get('arcana-variant') === '1' ? 1 : 0;
+  let codexTab = 'powers';
   let cancelRoomRequest = () => {};
 
   function selectCharacter(color) {
@@ -57,6 +81,60 @@ export function createMenu({ wallet, toast, onOffline, onCreate, onJoin, isIdle,
     storage.set('arcana-character', String(color));
     renderCharacterPicker($('#characterPicker'), color, [], null, selectCharacter);
     $('.sprite-preview').style.backgroundPosition = `${color * 100 / 3}% 0`;
+    renderOptions();
+  }
+
+  const unlocked = id => (wallet.upgrades[id] || 0) > 0;
+
+  function renderOptions() {
+    const picker = $('#cursePicker');
+    if (!picker) return;
+    picker.replaceChildren(...Object.entries(CURSES).map(([id, curse]) => {
+      const chip = document.createElement('button');
+      chip.type = 'button'; chip.className = 'curse-chip';
+      chip.setAttribute('aria-pressed', String(curses.includes(id)));
+      const title = document.createElement('b'); title.textContent = `${curse.icon} ${curse.title}`;
+      const text = document.createElement('small'); text.textContent = `${curse.description} · +${Math.round(curse.reward * 100)}% moedas`;
+      chip.append(title, text);
+      chip.onclick = () => {
+        curses = curses.includes(id) ? curses.filter(other => other !== id) : [...curses, id];
+        storage.set('arcana-curses', JSON.stringify(curses));
+        renderOptions();
+      };
+      return chip;
+    }));
+    const bonus = Math.round((curseReward({ curses }) - 1) * 100);
+    $('#curseReward').textContent = curses.length ? `${curses.length} ativa(s) · +${bonus}% moedas` : 'Sem maldições';
+
+    const endlessOption = /** @type {HTMLOptionElement} */ ($('#campaignSelect option[value="endless"]'));
+    endlessOption.disabled = !unlocked('endless');
+    endlessOption.textContent = unlocked('endless') ? 'Infinito · os reinos se repetem cada vez mais difíceis' : 'Infinito · desbloqueie no Grimório';
+    if (campaign === 'endless' && !unlocked('endless')) campaign = 'quick';
+    $('#campaignSelect').value = campaign;
+
+    const arsenal = unlocked('arsenal'), second = unlocked('secondSpell');
+    $('#loadoutBox').classList.toggle('hidden', !arsenal && !second);
+    $('#weaponLabel').classList.toggle('hidden', !arsenal);
+    $('#variantLabel').classList.toggle('hidden', !second);
+    const weaponSelect = /** @type {HTMLSelectElement} */ ($('#weaponSelect'));
+    weaponSelect.replaceChildren(new Option('Nenhuma (sorteio normal)', ''),
+      ...STARTING_WEAPONS.map(id => new Option(`${POWER_INFO[id][0]} ${POWER_INFO[id][1]}`, id)));
+    weaponSelect.value = STARTING_WEAPONS.includes(weapon) ? weapon : '';
+    const variantSelect = /** @type {HTMLSelectElement} */ ($('#variantSelect'));
+    variantSelect.replaceChildren(new Option(SPECIALS[selected].name, '0'), new Option(ALT_SPECIALS[selected].name, '1'));
+    variantSelect.value = String(variant);
+    variantSelect.title = (variant ? ALT_SPECIALS : SPECIALS)[selected].description;
+
+    const challenge = dailyChallenge();
+    const record = dailyRecord(challenge.key);
+    $('#dailyInfo').textContent = `${challenge.curses.map(id => CURSES[id].title).join(' + ')} · ${characterNames[challenge.character]}`
+      + (record ? ` · recorde: reino ${record.phase}${record.loop ? ` (volta ${record.loop + 1})` : ''}` : '');
+    const { found, total } = codex.progress();
+    $('#codexInfo').textContent = `${found}/${total} registros descobertos`;
+  }
+
+  function showCodex() {
+    renderCodex(codex, { tabs: $('#codexTabs'), list: $('#codexList'), progress: $('#codexProgress') }, codexTab, tab => { codexTab = tab; showCodex(); });
   }
 
   function renderOpenRooms(rooms) {
@@ -136,8 +214,9 @@ export function createMenu({ wallet, toast, onOffline, onCreate, onJoin, isIdle,
       buy.textContent = offer.cost === null ? 'Completo' : `Comprar · ${offer.cost}`;
       buy.disabled = offer.cost === null || wallet.coins < offer.cost;
       buy.onclick = () => {
-        if (wallet.buy(offer.id)) { audio.play('chest'); toast(`${offer.title} aprimorado`); renderShop(); }
+        if (wallet.buy(offer.id)) { audio.play('chest'); toast(offer.unlock ? `${offer.title} desbloqueado` : `${offer.title} aprimorado`); renderShop(); renderOptions(); }
       };
+      if (offer.unlock) card.classList.add('unlock');
       card.append(title, pips, description, buy);
       return card;
     }));
@@ -147,7 +226,12 @@ export function createMenu({ wallet, toast, onOffline, onCreate, onJoin, isIdle,
   const campaignSelect = $('#campaignSelect');
   campaignSelect.value = campaign;
   campaignSelect.onchange = () => { campaign = campaignId(campaignSelect.value); storage.set('arcana-campaign', campaign); };
-  $('#respecBtn').onclick = () => { const refund = wallet.respec(); toast(`${refund} moedas devolvidas ao Grimório`); renderShop(); };
+  $('#respecBtn').onclick = () => { const refund = wallet.respec(); toast(`${refund} moedas devolvidas ao Grimório`); renderShop(); renderOptions(); };
+  $('#weaponSelect').onchange = event => { weapon = event.target.value; storage.set('arcana-weapon', weapon); };
+  $('#variantSelect').onchange = event => { variant = event.target.value === '1' ? 1 : 0; storage.set('arcana-variant', String(variant)); renderOptions(); };
+  $('#dailyBtn').onclick = () => onDaily(dailyChallenge());
+  $('#codexBtn').onclick = () => { showCodex(); $('#codexModal').classList.remove('hidden'); };
+  $('#codexClose').onclick = () => { $('#codexModal').classList.add('hidden'); renderOptions(); };
   renderShop();
   $('#offlineBtn').onclick = () => onOffline();
   $('#shopBtn').onclick = () => { renderShop(); $('#shopModal').classList.remove('hidden'); };
@@ -198,8 +282,11 @@ export function createMenu({ wallet, toast, onOffline, onCreate, onJoin, isIdle,
   return {
     get character() { return selected; },
     get campaign() { return campaign; },
+    get curses() { return [...curses]; },
+    get loadout() { return { weapon: weapon || null, special: variant }; },
     selectCharacter,
     fetchOpenRooms,
-    renderShop
+    renderShop,
+    renderOptions
   };
 }

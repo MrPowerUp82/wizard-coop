@@ -1,6 +1,6 @@
 import { ENEMIES } from '../server/phases.js';
 import { REVIVE, SPELLS } from '../server/game.js';
-import { WEAPONS } from '../server/balance.js';
+import { ENCOUNTERS, WEAPONS } from '../server/balance.js';
 import { auraRadius, orbitRadius } from '../server/weapons.js';
 import { drawTerrain } from './terrain.js';
 import { drawEffects, drawNumbers } from './animation.js';
@@ -82,6 +82,111 @@ function drawFamiliar(ctx, x, y, color, time, evolved, reduced) {
   ctx.restore();
 }
 
+const ENCOUNTER_LOOK = {
+  merchant: { color: '#ffd36b', icon: '⚖', label: 'MERCADOR', arrow: 'MERCADOR' },
+  shrine: { color: '#ff7aa8', icon: '☥', label: 'SANTUÁRIO AMALDIÇOADO', arrow: 'SANTUÁRIO' },
+  thief: { color: '#ffd36b', icon: '✪', label: '', arrow: 'LADRÃO' }
+};
+
+function drawEncounter(ctx, encounter, me, time, reduced) {
+  const look = ENCOUNTER_LOOK[encounter.kind];
+  if (!look || encounter.kind === 'thief') return;
+  const done = ['complete', 'expired'].includes(encounter.status);
+  const color = done ? '#61706b' : look.color;
+  ctx.save();
+  ctx.fillStyle = `${color}14`; circle(ctx, encounter.x, encounter.y, encounter.radius); ctx.fill();
+  ctx.setLineDash([10, 8]); ctx.lineDashOffset = reduced ? 0 : -time * 20;
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
+  const seconds = encounter.kind === 'merchant' ? ENCOUNTERS.merchant.seconds : ENCOUNTERS.shrine.seconds;
+  const progress = encounter.kind === 'merchant' ? (me?.shopProgress || 0) : encounter.progress;
+  if (progress > 0 && !done) {
+    ctx.lineWidth = 5; ctx.beginPath();
+    ctx.arc(encounter.x, encounter.y, encounter.radius, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, progress / seconds)); ctx.stroke();
+  }
+  const bob = reduced ? 0 : Math.sin(time * 2.4) * 3;
+  if (encounter.kind === 'merchant') {
+    // A small hooded stall: canopy, table and a sack of wares.
+    ctx.fillStyle = '#3b2a1a'; ctx.fillRect(encounter.x - 30, encounter.y - 2, 60, 20);
+    ctx.fillStyle = '#7a4a1c'; ctx.fillRect(encounter.x - 34, encounter.y - 6, 68, 6);
+    ctx.fillStyle = done ? '#4d5552' : '#b3413c';
+    ctx.beginPath(); ctx.moveTo(encounter.x - 40, encounter.y - 34); ctx.lineTo(encounter.x + 40, encounter.y - 34); ctx.lineTo(encounter.x + 32, encounter.y - 18); ctx.lineTo(encounter.x - 32, encounter.y - 18); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#f0e2c0';
+    for (let n = -30; n < 30; n += 20) { ctx.beginPath(); ctx.moveTo(encounter.x + n, encounter.y - 34); ctx.lineTo(encounter.x + n + 10, encounter.y - 34); ctx.lineTo(encounter.x + n + 8, encounter.y - 18); ctx.lineTo(encounter.x + n + 2, encounter.y - 18); ctx.fill(); }
+    ctx.strokeStyle = '#5b3a1f'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(encounter.x - 34, encounter.y - 18); ctx.lineTo(encounter.x - 34, encounter.y + 18); ctx.moveTo(encounter.x + 34, encounter.y - 18); ctx.lineTo(encounter.x + 34, encounter.y + 18); ctx.stroke();
+  } else {
+    // A cracked obelisk with a pulsing crimson eye.
+    ctx.fillStyle = done ? '#3a3f3e' : '#2a1826';
+    ctx.beginPath(); ctx.moveTo(encounter.x - 18, encounter.y + 20); ctx.lineTo(encounter.x - 11, encounter.y - 46); ctx.lineTo(encounter.x, encounter.y - 58);
+    ctx.lineTo(encounter.x + 11, encounter.y - 46); ctx.lineTo(encounter.x + 18, encounter.y + 20); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+    if (!done) {
+      ctx.globalCompositeOperation = 'lighter';
+      const glowRadius = 22 + (reduced ? 0 : Math.sin(time * 5) * 5);
+      const gradient = ctx.createRadialGradient(encounter.x, encounter.y - 24, 0, encounter.x, encounter.y - 24, glowRadius);
+      gradient.addColorStop(0, '#ff7aa8'); gradient.addColorStop(1, 'rgba(255,60,120,0)');
+      ctx.fillStyle = gradient; circle(ctx, encounter.x, encounter.y - 24, glowRadius); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+  ctx.textAlign = 'center';
+  ctx.font = '700 22px serif'; ctx.fillStyle = color; ctx.fillText(look.icon, encounter.x, encounter.y - 66 + bob);
+  ctx.font = '700 11px Inter';
+  const status = encounter.status === 'complete' ? (encounter.kind === 'merchant' ? 'ESGOTADO' : 'PACTO SELADO') : encounter.status === 'expired' ? 'PARTIU' : look.label;
+  ctx.fillText(status, encounter.x, encounter.y + encounter.radius + 16);
+  ctx.restore();
+}
+
+function drawSpecialZone(ctx, zone, time, reduced) {
+  const spin = reduced ? 0 : time;
+  if (zone.kind === 'hail') {
+    const gradient = ctx.createRadialGradient(zone.x, zone.y, 10, zone.x, zone.y, zone.radius);
+    gradient.addColorStop(0, 'rgba(200,245,255,.28)'); gradient.addColorStop(1, 'rgba(118,223,255,0)');
+    ctx.globalAlpha = 1; ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
+    ctx.strokeStyle = '#bff4ff'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6; ctx.stroke();
+    if (reduced) return;
+    // Hailstones: deterministic pseudo-random streaks falling inside the circle.
+    ctx.strokeStyle = '#e8fbff'; ctx.lineCap = 'round';
+    for (let n = 0; n < 22; n++) {
+      const cycle = (time * 1.8 + n * 0.137) % 1;
+      const a = n * 2.399, r = zone.radius * Math.sqrt((n * 0.618) % 1);
+      const x = zone.x + Math.cos(a) * r, y = zone.y + Math.sin(a) * r;
+      ctx.globalAlpha = 1 - cycle; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x - 8 + cycle * 8, y - 40 + cycle * 40); ctx.lineTo(x + cycle * 8, y - 24 + cycle * 40); ctx.stroke();
+      if (cycle > 0.85) { ctx.lineWidth = 1; circle(ctx, x + 8, y + 16, 6 + (cycle - 0.85) * 60); ctx.stroke(); }
+    }
+  } else if (zone.kind === 'flameshield') {
+    ctx.globalCompositeOperation = 'lighter';
+    const gradient = ctx.createRadialGradient(zone.x, zone.y, zone.radius * 0.5, zone.x, zone.y, zone.radius);
+    gradient.addColorStop(0, 'rgba(255,120,40,0)'); gradient.addColorStop(0.8, 'rgba(255,140,60,.35)'); gradient.addColorStop(1, 'rgba(255,90,30,0)');
+    ctx.globalAlpha = 1; ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
+    for (let n = 0; n < 10; n++) {
+      const a = spin * 3 + n * TAU / 10;
+      const x = zone.x + Math.cos(a) * zone.radius * 0.85, y = zone.y + Math.sin(a) * zone.radius * 0.85;
+      const flame = ctx.createRadialGradient(x, y, 0, x, y, 20);
+      flame.addColorStop(0, '#fff1c4'); flame.addColorStop(0.4, '#ff9955'); flame.addColorStop(1, 'rgba(255,60,20,0)');
+      ctx.fillStyle = flame; circle(ctx, x, y, 20); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  } else if (zone.kind === 'vortex') {
+    const gradient = ctx.createRadialGradient(zone.x, zone.y, 0, zone.x, zone.y, zone.radius);
+    gradient.addColorStop(0, 'rgba(20,6,40,.85)'); gradient.addColorStop(0.35, 'rgba(90,40,160,.45)'); gradient.addColorStop(1, 'rgba(196,160,255,0)');
+    ctx.globalAlpha = 1; ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
+    ctx.strokeStyle = '#d9c2ff'; ctx.lineCap = 'round';
+    for (let arm = 0; arm < 4; arm++) {
+      ctx.globalAlpha = 0.7; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let k = 0; k <= 24; k++) {
+        const f = k / 24, a = arm * TAU / 4 - spin * 4 + f * 3.4;
+        const r = zone.radius * (1 - f) + 8;
+        ctx[k ? 'lineTo' : 'moveTo'](zone.x + Math.cos(a) * r, zone.y + Math.sin(a) * r);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1; ctx.fillStyle = '#f1e6ff'; circle(ctx, zone.x, zone.y, 6 + Math.max(0, 1 - zone.ttl) * 10); ctx.fill();
+  }
+}
+
 function gemLook(gem) {
   const type = gem.type || 'gem';
   if (type !== 'gem') return [type, 28];
@@ -127,7 +232,10 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
     ctx.restore();
   }
 
-  for (const zone of game.zones || []) if (visible(zone.x, zone.y)) {
+  if (game.encounter && visible(game.encounter.x, game.encounter.y, 200)) drawEncounter(ctx, game.encounter, me, time, reduced);
+
+  for (const zone of game.zones || []) if (visible(zone.x, zone.y, zone.radius)) {
+    if (['hail', 'flameshield', 'vortex'].includes(zone.kind)) { drawSpecialZone(ctx, zone, time, reduced); ctx.globalAlpha = 1; continue; }
     ctx.globalAlpha = 0.32 + (reduced ? 0 : Math.sin(time * 14 + zone.x) * 0.08);
     const gradient = ctx.createRadialGradient(zone.x, zone.y, 4, zone.x, zone.y, zone.radius);
     const roots = zone.kind === 'roots';
@@ -183,7 +291,7 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
     drawTrail(ctx, shot, spell.tint, reduced);
     const spin = spell.sprite === 'blade' && !reduced ? time * 9 : 0;
     const pulse = reduced ? 1 : 1 + Math.sin(time * 15 + shot.x * 0.05) * 0.06;
-    const size = shot.special ? 65 : shot.shard ? 24 : spell.sprite === 'blade' ? 52 : 38;
+    const size = (shot.special ? 65 : shot.shard ? 24 : spell.sprite === 'blade' ? 52 : 38) * (shot.fullmoon && shot.returning ? WEAPONS.evolutions.fullmoon.size : 1);
     drawSprite(ctx, SHOT_SPRITES[shot.color ?? 0], shot.x, shot.y, size * pulse, Math.atan2(shot.vy, shot.vx) + spin);
   }
   for (const shot of game.enemyShots || []) if (visible(shot.x, shot.y)) {
@@ -200,6 +308,16 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
     if (enemy.freezeFor > 0 || enemy.rootFor > 0) {
       ctx.strokeStyle = enemy.freezeFor > 0 ? '#8cdfff' : '#92ed68'; ctx.lineWidth = 3;
       circle(ctx, enemy.x, enemy.y, size * 0.45); ctx.stroke();
+    }
+    if (enemy.thief) {
+      // The thief carries a glowing purse and leaves a golden dashed ring so it stands out in the crowd.
+      ctx.save();
+      ctx.setLineDash([6, 6]); ctx.lineDashOffset = reduced ? 0 : time * 30;
+      ctx.strokeStyle = '#ffd36b'; ctx.lineWidth = 2;
+      circle(ctx, enemy.x, enemy.y, size * 0.55); ctx.stroke();
+      ctx.restore();
+      ctx.font = '700 20px serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd36b';
+      ctx.fillText('✪', enemy.x, enemy.y - size * 0.62 + (reduced ? 0 : Math.sin(time * 8) * 3));
     }
     if (enemy.elite) {
       ctx.globalAlpha = 0.45 + (reduced ? 0 : Math.sin(time * 6 + enemy.id) * 0.15);
@@ -321,5 +439,13 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
   }
   const boss = game.enemies.find(e => e.boss);
   if (boss && !inView(boss)) drawEdgeArrow(ctx, W, H, focus, boss, '#ff6b5e', 'GUARDIÃO');
+  const encounter = game.encounter;
+  if (encounter && game.phaseStatus === 'horde' && !['complete', 'expired'].includes(encounter.status) && !inView(encounter)) {
+    const look = ENCOUNTER_LOOK[encounter.kind];
+    if (look) drawEdgeArrow(ctx, W, H, focus, encounter, look.color, look.arrow);
+  }
+  for (const mark of animator.signals) {
+    if (!inView(mark)) drawEdgeArrow(ctx, W, H, focus, mark, mark.color, `${mark.icon} ${mark.name}`);
+  }
   if (altar && ['waiting', 'active'].includes(altar.status) && !inView(altar)) drawEdgeArrow(ctx, W, H, focus, altar, '#ffd36b', 'ALTAR');
 }

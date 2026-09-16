@@ -7,6 +7,21 @@ export const SPECIAL = Object.freeze({ max: 100, crystal: 25, shots: 12 });
 export const DASH = Object.freeze({ cooldown: 4, seconds: 0.18, speed: 850 });
 export const SPECIAL_COOLDOWN = 8;
 export const ALTAR = Object.freeze({ appearsAt: 0.3, radius: 120, seconds: 15, expiresAfter: 45, coins: 20 });
+// Mid-realm encounter, rolled once per horde after the altar.
+export const ENCOUNTERS = Object.freeze({
+  appearsAt: 0.6,
+  merchant: { radius: 80, seconds: 1.5, cost: 20, ttl: 40 },
+  shrine: { radius: 90, seconds: 3, ttl: 40, coins: 15, enemyDamage: 1.3 },
+  thief: { ttl: 20, hp: 4, speed: 1.45, purses: 3, coins: 4 }
+});
+export const ENDLESS = Object.freeze({ bossHpPerLoop: 0.9, hpPerLoop: 0.6 });
+export const SIGNAL = Object.freeze({ cooldown: 0.8, kinds: ['here', 'help', 'danger', 'look'], range: 2500 });
+export const COOP = Object.freeze({
+  teamCombo: { damage: 2, charge: 6 },
+  convergence: { window: 1.5, range: 420, radius: 320, damage: 4 },
+  lifelink: { range: 240, every: 2, healPerRank: 2 },
+  guardian: { reviveSpeedPerRank: 0.5, healthPerRank: 0.15 }
+});
 export const POWER_CHOICE_TIMEOUT = 15;
 export const INVULNERABLE_AFTER_CHOICE = 3;
 
@@ -85,6 +100,12 @@ export const WEAPONS = Object.freeze({
     sanctuary: { radius: 30, heal: 2, slow: true },
     tempest: { cooldown: 1, jumps: 8 },
     minefield: { runes: 3, radius: 30 },
-    covenant: { targets: 2, cooldown: 0.6, damage: 1.4 }
+    covenant: { targets: 2, cooldown: 0.6, damage: 1.4 },
+    avalanche: { shards: 8, damage: 0.9 },
+    hellfire: { radius: 80, ttl: 3, dps: 0.75 },
+    bramble: { pierce: 2, damage: 1.15 },
+    fullmoon: { returnDamage: 1.6, size: 1.35 },
+    stormrunes: { jumps: 3, damage: 0.7, jumpRange: 170 },
+    solarcrown: { damage: 1.3 }
   }
 });

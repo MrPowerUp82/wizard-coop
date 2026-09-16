@@ -19,11 +19,19 @@ export const POWERS = Object.freeze({
   ricochet: { title: 'Ricochete', max: 1, kind: 'signature', color: 2, minLevel: 4 },
   boomerang: { title: 'Lua crescente', max: 1, kind: 'signature', color: 3, minLevel: 4 },
   bond: { title: 'Elo arcano', max: 3, kind: 'coop' },
+  lifelink: { title: 'Vínculo vital', max: 3, kind: 'coop' },
+  guardian: { title: 'Guardião', max: 2, kind: 'coop' },
   constellation: { title: 'Constelação', max: 1, kind: 'evolution', requires: { orbit: 5, arcane: 3 } },
   sanctuary: { title: 'Santuário', max: 1, kind: 'evolution', requires: { aura: 5, vitality: 3 } },
   tempest: { title: 'Tempestade', max: 1, kind: 'evolution', requires: { chain: 5, haste: 3 } },
   minefield: { title: 'Campo minado', max: 1, kind: 'evolution', requires: { runes: 5, magnet: 2 } },
-  covenant: { title: 'Pacto ancestral', max: 1, kind: 'evolution', requires: { familiar: 5, swiftness: 2 } }
+  covenant: { title: 'Pacto ancestral', max: 1, kind: 'evolution', requires: { familiar: 5, swiftness: 2 } },
+  avalanche: { title: 'Avalanche', max: 1, kind: 'evolution', requires: { shatter: 1, multishot: 3 } },
+  hellfire: { title: 'Inferno', max: 1, kind: 'evolution', requires: { burn: 1, aura: 3 } },
+  bramble: { title: 'Espinheiro', max: 1, kind: 'evolution', requires: { ricochet: 1, chain: 3 } },
+  fullmoon: { title: 'Lua cheia', max: 1, kind: 'evolution', requires: { boomerang: 1, orbit: 3 } },
+  stormrunes: { title: 'Runas de tempestade', max: 1, kind: 'evolution', requires: { runes: 3, chain: 3 } },
+  solarcrown: { title: 'Coroa solar', max: 1, kind: 'evolution', requires: { orbit: 3, aura: 3 } }
 });
 
 const WEIGHTS = { passive: 1, weapon: 1.25, signature: 1.6, coop: 0.8, evolution: 1000 };

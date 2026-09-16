@@ -3,13 +3,17 @@ import './enhancements.css';
 import { activateDash, activateSpecial, applyPower, createGameState, createPlayer, rerollPowers, updateGame } from '../server/game.js';
 import { CAMPAIGNS } from '../server/campaign.js';
 import { PHASES } from '../server/phases.js';
+import { CURSES, seededRandom } from '../server/curses.js';
+import { sendSignal } from '../server/game.js';
+import { createCodex } from './codex.js';
+import { moodFor } from './music.js';
 import { createAnimator } from './animation.js';
 import { createAudio } from './audio.js';
 import { createHud, format } from './hud.js';
 import { createInput } from './input.js';
-import { createMenu, playerName, renderCharacterPicker, serverUrl } from './menu.js';
+import { createMenu, playerName, renderCharacterPicker, saveDailyRecord, serverUrl } from './menu.js';
 import { createSession, savedSession } from './net.js';
-import { POWER_INFO } from './powerInfo.js';
+import { DAMAGE_SOURCES, POWER_INFO } from './powerInfo.js';
 import { renderWorld } from './render.js';
 import { createWallet } from './wallet.js';
 
@@ -23,6 +27,16 @@ const audio = createAudio();
 const hud = createHud();
 const wallet = createWallet();
 const animator = createAnimator({ onHit: () => audio.play('hit'), onKill: () => audio.play('kill') });
+// Only discoveries worth interrupting play for get a toast; creatures and ordinary powers are logged silently.
+const codex = createCodex({
+  onDiscover(section, entry) {
+    if (mode === 'menu' || !entry) return;
+    if (section === 'reactions' || section === 'bosses' || section === 'encounters' || (section === 'powers' && entry.tag === 'Evolução')) {
+      hud.toast(`Códex: ${entry.name} registrado`);
+    }
+  }
+});
+const FIXED_STEP = 1 / 60;
 
 let mode = 'menu'; // menu | offline | online
 let game = null;   // offline simulation
@@ -32,6 +46,8 @@ let meId = null;
 let paused = false;
 let last = performance.now();
 let round = null;
+let accumulator = 0;
+let camera = { x: 0, y: 0 };
 
 const controls = createInput({
   joystick: $('#joystick'),
@@ -42,8 +58,9 @@ const controls = createInput({
 });
 
 const menu = createMenu({
-  wallet, audio, toast: hud.toast,
-  onOffline: startOffline,
+  wallet, codex, audio, toast: hud.toast,
+  onOffline: () => startOffline(),
+  onDaily: challenge => startOffline(challenge),
   onCreate: visibility => connect('create', '', visibility),
   onJoin: code => connect('join', code),
   isIdle: () => mode === 'menu' && !session && $('#lobby').classList.contains('hidden')
@@ -95,7 +112,8 @@ function feedback(me) {
     if (event.id <= round.lastEventId) continue;
     round.lastEventId = event.id;
     const near = event.x === undefined || Math.hypot(event.x - focus.x, event.y - focus.y) < 800;
-    const phase = PHASES[view.phase || 0];
+    const phase = PHASES[event.kind === 'bossDown' ? event.phase ?? view.phase ?? 0 : view.phase || 0];
+    codex.observeEvent(event, event.phase ?? view.phase ?? 0);
     if (event.kind === 'boss') { audio.play('boss'); hud.announce(`${phase.bossName} despertou!`, 'danger'); }
     else if (event.kind === 'stage') { audio.play('stage'); hud.announce(event.stage === 3 ? 'Fúria final do guardião!' : 'O guardião entrou em fúria!', 'danger'); }
     else if (event.kind === 'bossDown') { audio.play('bossDown'); hud.announce(`${phase.bossName} caiu!`, 'gold'); }
@@ -105,7 +123,16 @@ function feedback(me) {
     else if (event.kind === 'altar') { audio.play('elite'); hud.announce('Altar opcional: defenda por 15s para ganhar um poder', 'gold'); }
     else if (event.kind === 'altarComplete') { audio.play('chest'); hud.announce('Altar purificado! Poder e moedas para todos', 'gold'); }
     else if (event.kind === 'altarExpired') hud.toast('O altar se apagou. A campanha continua.');
+    else if (event.kind === 'combo' && event.team) { audio.play('teamCombo'); if (near) hud.toast('Combo em equipe! Especiais carregados'); }
     else if (event.kind === 'combo' && near) audio.play('chain');
+    else if (event.kind === 'convergence') { audio.play('convergence'); hud.announce('Convergência!', 'gold'); }
+    else if (event.kind === 'signal') { audio.play('signal'); if (event.player !== meId) hud.toast(`${event.name}: ${SIGNAL_TEXT[event.signal] || 'sinal'}`); }
+    else if (event.kind === 'encounter') { audio.play('encounter'); hud.announce(ENCOUNTER_TEXT[event.encounter] || 'Um encontro surgiu', 'gold'); }
+    else if (event.kind === 'merchantSale') { audio.play('chest'); if (event.player === meId) hud.toast('Negócio fechado: escolha um poder'); }
+    else if (event.kind === 'shrineAccepted') { audio.play('stage'); hud.announce('Pacto aceito! Poder para todos — inimigos mais fortes neste reino', 'danger'); }
+    else if (event.kind === 'thiefDown') { audio.play('chest'); hud.announce('Ladrão derrubado! O tesouro é seu', 'gold'); }
+    else if (event.kind === 'thiefEscaped') hud.toast('O ladrão escapou com o tesouro.');
+    else if (event.kind === 'loop') { audio.play('loop'); hud.announce(`Volta ${event.loop + 1}: os reinos despertam mais fortes`, 'danger'); }
     else if (event.kind === 'evade' && near) audio.play('shoot');
     else if (event.kind === 'magnet' && near) audio.play('magnet');
     else if (event.kind === 'boom' && near) audio.play('boom');
@@ -130,6 +157,37 @@ function feedback(me) {
   if (me.castCount > previous.cast) audio.play('shoot');
 }
 
+const SIGNAL_TEXT = { here: 'venham aqui!', help: 'preciso de ajuda!', danger: 'cuidado!', look: 'olhem ali!' };
+const ENCOUNTER_TEXT = {
+  merchant: 'Um mercador errante chegou — troque moedas por um poder',
+  shrine: 'Um santuário amaldiçoado oferece um pacto',
+  thief: 'Um ladrão fugiu com um baú — alcance-o!'
+};
+
+/** Bars for how much each weapon, spell and combo contributed, so the build that worked is visible. */
+function renderDamageBreakdown(player) {
+  const box = $('#damageBreakdown');
+  const sources = Object.entries(player?.stats?.by || {}).filter(([, value]) => value >= 1).sort((a, b) => b[1] - a[1]);
+  box.classList.toggle('hidden', !sources.length);
+  if (!sources.length) return;
+  const total = sources.reduce((sum, [, value]) => sum + value, 0);
+  const title = document.createElement('h3');
+  title.textContent = 'SEU DANO POR FONTE';
+  box.replaceChildren(title, ...sources.map(([kind, value]) => {
+    const row = document.createElement('div');
+    row.className = 'damage-row';
+    const [icon, label] = DAMAGE_SOURCES[kind] || ['•', kind];
+    const iconEl = document.createElement('i'); iconEl.textContent = icon;
+    const name = document.createElement('span'); name.textContent = label;
+    const bar = document.createElement('div'); bar.className = 'bar';
+    const fill = document.createElement('i'); fill.style.width = `${(value / sources[0][1]) * 100}%`; bar.append(fill);
+    const amount = document.createElement('span'); amount.textContent = `${Math.round(value / total * 100)}%`;
+    amount.title = Math.round(value).toLocaleString('pt-BR');
+    row.append(iconEl, name, bar, amount);
+    return row;
+  }));
+}
+
 function depositCoins() {
   if (!round || round.deposited) return;
   round.deposited = true;
@@ -146,7 +204,17 @@ function showDefeat(allDead) {
   $('#defeatTitle').textContent = view.victory ? 'Ritual concluído!' : allDead ? 'Ritual encerrado' : 'Você caiu';
   $('#defeatText').textContent = view.victory ? 'Todos os guardiões caíram. A aurora pertence aos arcanistas.'
     : allDead ? 'Nenhum arcanista permaneceu de pé.' : 'Um aliado pode ressuscitar você permanecendo dentro do círculo por 4 segundos.';
-  $('#finalStats').textContent = `TEMPO ${format(view.time)}  •  NÍVEL ${me.level}  •  FASE ${(view.phase || 0) + 1}/${PHASES.length}  •  MOEDAS ${me.coins || 0}`;
+  $('#finalStats').textContent = `TEMPO ${format(view.time)}  •  NÍVEL ${me.level}  •  FASE ${(view.phase || 0) + 1}/${PHASES.length}${view.loop ? ` · VOLTA ${view.loop + 1}` : ''}  •  MOEDAS ${me.coins || 0}`;
+  renderDamageBreakdown(allDead ? me : null);
+  $('#dailyResult').classList.add('hidden');
+  if (allDead && game?.daily && !round.dailySaved) {
+    round.dailySaved = true;
+    const { improved, best } = saveDailyRecord(game.daily, { phase: (view.phase || 0) + 1, loop: view.loop || 0, time: Math.round(view.time), victory: Boolean(view.victory) });
+    $('#dailyResult').textContent = improved ? `Novo recorde do desafio diário: reino ${best.phase} em ${format(best.time)}`
+      : `Recorde de hoje: reino ${best.phase} em ${format(best.time)}`;
+    $('#dailyResult').classList.remove('hidden');
+    menu.renderOptions();
+  }
   $('#defeatModal').classList.toggle('victory', Boolean(view.victory));
   $('#spectateBtn').classList.toggle('hidden', allDead);
   const table = $('#resultsTable');
@@ -195,7 +263,7 @@ function choosePower(id) {
 function reroll() {
   const me = view?.players[meId];
   if (!me?.pendingPowers || !(me.rerolls > 0)) return;
-  if (mode === 'offline') rerollPowers(game.players.me, Math.random, { coop: false });
+  if (mode === 'offline') rerollPowers(game.players.me, game.random, { coop: false });
   else session?.send({ type: 'reroll' });
   audio.play('click');
 }
@@ -208,13 +276,34 @@ addEventListener('keydown', event => {
   if (event.key.toLowerCase() === 'r') reroll();
 });
 
+function signal(kind, at = null) {
+  if (mode !== 'online' || !view || view.over || !view.players[meId]?.alive) return;
+  session?.send({ type: 'signal', signal: kind, ...(at ? { x: Math.round(at.x), y: Math.round(at.y) } : {}) });
+}
+const SIGNAL_KEYS = { q: 'here', e: 'help', x: 'danger' };
+addEventListener('keydown', event => {
+  if (event.repeat || event.target instanceof HTMLInputElement || !$('#powerModal').classList.contains('hidden')) return;
+  const kind = SIGNAL_KEYS[event.key.toLowerCase()];
+  if (kind) signal(kind);
+});
+canvas.addEventListener('click', event => signal('look', { x: camera.x + event.clientX, y: camera.y + event.clientY }));
+for (const button of /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('[data-signal]'))) {
+  button.onclick = () => signal(button.dataset.signal);
+}
+
 function step(now, dt) {
-  if (mode === 'menu') { backdrop(now); return; }
+  if (mode === 'menu') { backdrop(now); audio.music('menu'); return; }
   const input = paused ? { x: 0, y: 0 } : controls.read();
   if (mode === 'offline') {
     const me = game.players.me;
     me.input = me.alive && !me.pendingPowers ? input : { x: 0, y: 0 };
-    if (!paused && !me.pendingPowers?.length) updateGame(game, dt);
+    if (!paused && !me.pendingPowers?.length) {
+      if (game.daily) {
+        // The daily ritual runs on a fixed step so its seeded randomness replays the same way on every machine.
+        accumulator = Math.min(accumulator + dt, FIXED_STEP * 4);
+        while (accumulator >= FIXED_STEP) { updateGame(game, FIXED_STEP, game.random); accumulator -= FIXED_STEP; }
+      } else updateGame(game, dt, game.random);
+    }
     view = game;
     meId = 'me';
   } else {
@@ -229,7 +318,10 @@ function step(now, dt) {
   syncOverlays(me);
   animator.update(view, dt, { paused: paused || (mode === 'offline' && choosing), reduced: reducedMotion.matches });
   feedback(me);
+  codex.observe(view, me, now);
+  audio.music(paused ? 'menu' : moodFor(view, mode), view.phase || 0);
   const focus = me.alive === false ? Object.values(view.players).find(p => p.alive !== false) || me : me;
+  camera = { x: focus.x - W / 2, y: focus.y - H / 2 };
   renderWorld(ctx, view, { me, focus, animator, W, H, dpr, reduced: reducedMotion.matches, offline: mode === 'offline' });
   hud.update(view, me, { paused, offline: mode === 'offline' });
 }
@@ -260,16 +352,29 @@ function showGame(label, room = '') {
   $('#playerName').textContent = playerName().toUpperCase();
   $('.avatar').style.backgroundPosition = `${(mode === 'offline' ? menu.character : session?.color ?? 0) * 100 / 3}% 0`;
   $('#pauseBtn').classList.toggle('hidden', mode !== 'offline');
+  $('#hud').classList.toggle('coop', mode === 'online');
+  $('#codexModal').classList.add('hidden');
+  accumulator = 0;
   $('#muteBtn').textContent = audio.muted ? '♪̸' : '♪';
 }
 
-function startOffline() {
+/** Solo run; a daily challenge fixes the seed, curses and character, and ignores permanent upgrades so scores compare. */
+function startOffline(challenge = null) {
   if (session) return;
-  game = createGameState(menu.campaign);
+  if (challenge) {
+    game = createGameState('quick', { curses: challenge.curses, daily: challenge.key });
+    game.random = seededRandom(challenge.seed);
+    game.players.me = createPlayer('me', playerName(), challenge.character);
+    menu.selectCharacter(challenge.character);
+  } else {
+    game = createGameState(menu.campaign, { curses: menu.curses });
+    game.random = Math.random;
+    game.players.me = createPlayer('me', playerName(), menu.character, wallet.upgrades, menu.loadout);
+  }
   game.offline = true;
-  game.players.me = createPlayer('me', playerName(), menu.character, wallet.upgrades);
   mode = 'offline';
-  showGame(`SOLO · ${CAMPAIGNS[game.campaign].name}`);
+  const curses = game.curses.map(id => CURSES[id].title).join(' + ');
+  showGame(challenge ? `DESAFIO DIÁRIO · ${curses}` : `SOLO · ${CAMPAIGNS[game.campaign].name}${curses ? ` · ${curses}` : ''}`);
 }
 
 function endGame() {
@@ -304,7 +409,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { con
 function useSpecial() {
   const me = view?.players[meId];
   if (mode === 'menu' || paused || view?.over || !me?.alive || me.pendingPowers) return;
-  if (mode === 'offline') activateSpecial(game, 'me');
+  if (mode === 'offline') activateSpecial(game, 'me', game.random);
   else session?.send({ type: 'special' });
 }
 
@@ -320,8 +425,10 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
   if (session || mode !== 'menu') return;
   let lobbyPlayers = [];
   let lobbyRunning = false;
-  const entry = { action, code, visibility, name: playerName(), color: menu.character, meta: wallet.upgrades, campaign: menu.campaign, resume };
-  const requestEntry = color => current.send({ type: action, room: code, name: playerName(), visibility, color, meta: wallet.upgrades, campaign: menu.campaign });
+  const entry = { action, code, visibility, name: playerName(), color: menu.character, meta: wallet.upgrades, campaign: menu.campaign,
+    curses: menu.curses, loadout: menu.loadout, resume };
+  const requestEntry = color => current.send({ type: action, room: code, name: playerName(), visibility, color, meta: wallet.upgrades,
+    campaign: menu.campaign, curses: menu.curses, loadout: menu.loadout });
   const renderLobbyCharacters = (disabled = false) => {
     renderCharacterPicker($('#lobbyCharacters'), current.playerId ? current.color : menu.character, lobbyPlayers, current.playerId, color => {
       if (session !== current) return;
@@ -340,7 +447,8 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
     onLobby(message) {
       if (session !== current) return;
       $('#lobbyStatus').textContent = `${message.count} jogador(es) no ritual`;
-      $('#lobbyCampaign').textContent = `${CAMPAIGNS[message.campaign || 'classic'].name} · todas as 6 fases`;
+      const curses = (message.curses || []).map(id => CURSES[id]?.title).filter(Boolean);
+      $('#lobbyCampaign').textContent = `${CAMPAIGNS[message.campaign || 'classic'].name} · todas as 6 fases${curses.length ? ` · Maldições: ${curses.join(', ')}` : ''}`;
       lobbyPlayers = message.players || [];
       lobbyRunning = Boolean(message.running);
       const mine = lobbyPlayers.find(p => p.id === current.playerId);
@@ -420,7 +528,7 @@ if (import.meta.env?.DEV) {
   // Debug hook: the in-app browser pane does not run requestAnimationFrame, so frames can be pumped by hand.
   /** @type {any} */ (window).__ARCANA__ = {
     step(frames = 1, ms = 16) { for (let n = 0; n < frames; n++) { last = performance.now(); step(last, ms / 1000); } },
-    startOffline, endGame,
+    startOffline, endGame, codex, sendSignal,
     get game() { return game; },
     get view() { return view; }
   };

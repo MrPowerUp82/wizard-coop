@@ -1,7 +1,9 @@
+import { createMusic } from './music.js';
+
 // Synthesized sound effects: no audio files to download, and every sound is throttled so hordes
 // never turn into noise.
 const STORAGE_KEY = 'arcana-muted';
-const THROTTLE = { shoot: 0.09, hit: 0.045, kill: 0.05, gem: 0.03, coin: 0.06, hurt: 0.15, boom: 0.08, chain: 0.1, warning: 0.3, familiar: 0.18 };
+const THROTTLE = { shoot: 0.09, hit: 0.045, kill: 0.05, gem: 0.03, coin: 0.06, hurt: 0.15, boom: 0.08, chain: 0.1, warning: 0.3, familiar: 0.18, signal: 0.25, teamCombo: 0.2 };
 
 function readMuted() {
   try { return localStorage.getItem(STORAGE_KEY) === '1'; } catch { return false; }
@@ -14,6 +16,8 @@ export function createAudio() {
   let muted = readMuted();
   const lastPlayed = {};
   let combo = 0, comboAt = 0;
+  let music = null;
+  let wantedMusic = ['menu', 0];
 
   function ensure() {
     if (!context) {
@@ -26,6 +30,8 @@ export function createAudio() {
       noiseBuffer = context.createBuffer(1, context.sampleRate * 0.5, context.sampleRate);
       const data = noiseBuffer.getChannelData(0);
       for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      music = createMusic({ context, destination: master, noiseBuffer });
+      if (!muted) music.set(...wantedMusic);
     }
     if (context.state === 'suspended') context.resume().catch(() => {});
     return context;
@@ -90,7 +96,12 @@ export function createAudio() {
     phoenix: () => { arpeggio([523, 784, 1046, 1568], 0.09, 'triangle', 0.14); noise({ duration: 0.6, gain: 0.08, from: 5000, to: 800 }); },
     victory: () => arpeggio([523, 659, 784, 1046, 784, 1046, 1319], 0.13, 'triangle', 0.13),
     defeat: () => arpeggio([392, 330, 262, 196], 0.18, 'sine', 0.12),
-    click: () => tone({ type: 'sine', from: 900, to: 700, duration: 0.04, gain: 0.05 })
+    click: () => tone({ type: 'sine', from: 900, to: 700, duration: 0.04, gain: 0.05 }),
+    signal: () => arpeggio([988, 1319], 0.06, 'sine', 0.08),
+    encounter: () => arpeggio([392, 523, 659], 0.09, 'triangle', 0.08),
+    teamCombo: () => { arpeggio([659, 988, 1319], 0.05, 'square', 0.05); noise({ duration: 0.2, gain: 0.06, from: 6000, to: 1500 }); },
+    convergence: () => { tone({ type: 'sawtooth', from: 110, to: 1760, duration: 0.5, gain: 0.08 }); noise({ duration: 0.6, gain: 0.14, from: 3000, to: 60 }); },
+    loop: () => arpeggio([262, 392, 523, 784, 1046], 0.12, 'triangle', 0.12)
   };
 
   return {
@@ -108,11 +119,18 @@ export function createAudio() {
       SOUNDS[name](arg);
     },
     unlock() { if (!muted) ensure(); },
+    /** Sets the soundtrack mood; it only starts once the browser allowed audio (after the first input). */
+    music(mood, phase = 0) {
+      wantedMusic = [mood, phase];
+      if (music && !muted) music.set(mood, phase);
+    },
     get muted() { return muted; },
     toggleMute() {
       muted = !muted;
       try { localStorage.setItem(STORAGE_KEY, muted ? '1' : '0'); } catch { /* preference only */ }
       if (master) master.gain.value = muted ? 0 : 0.32;
+      if (music) music.set(muted ? 'silent' : wantedMusic[0], wantedMusic[1]);
+      if (!muted) ensure();
       return muted;
     }
   };

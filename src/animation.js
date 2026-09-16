@@ -3,6 +3,7 @@ export const MAX_EFFECTS = 128;
 export const MAX_NUMBERS = 60;
 const TAU = Math.PI * 2;
 const colors = ['#76dfff', '#ff9955', '#92ed68', '#c4a0ff'];
+const SIGNAL_ICONS = { here: '⚑', help: '✚', danger: '⚠', look: '◉' };
 const EVENT_COLORS = { boom: '#ffb36b', elite: '#ffd36b', chest: '#ffe08a', magnet: '#8fd8ff', revive: '#9dffca', phoenix: '#ffb35c' };
 
 /** @param {{ onHit?: (entity: any, amount: number) => void, onKill?: (actor: any) => void }} [hooks] */
@@ -38,9 +39,34 @@ export function createAnimator({ onHit, onKill } = {}) {
     }
   }
 
+  /** Alternative specials ("Segundo feitiço"); the damage zones themselves are drawn by the renderer. */
+  function altSpecial(event, seed) {
+    if (event.color === 0) {
+      effects.push({ kind: 'nova', x: event.x, y: event.y, age: 0, life: 0.6, radius: 230, seed, major: true });
+      motes(event.x, event.y, 'flake', '#e8fbff', 18, { speed: 160, spread: 120, life: 1.4, size: 6, gravity: 60, drag: 1.2 });
+      flash = { color: '#bdf3ff', alpha: 0.18, life: 0.3, age: 0 };
+    } else if (event.color === 1) {
+      effects.push({ kind: 'impact', x: event.x, y: event.y, age: 0, life: 0.5, radius: 125, major: true });
+      motes(event.x, event.y, 'ember', '#ffb347', 22, { speed: 220, spread: 40, life: 0.9, size: 5, gravity: -80 });
+      flash = { color: '#ffb36b', alpha: 0.16, life: 0.25, age: 0 };
+    } else if (event.color === 2) {
+      effects.push({ kind: 'bloom', x: event.x, y: event.y, age: 0, life: 1.1, radius: 320, seed, major: true });
+      motes(event.x, event.y, 'leaf', '#b8f57f', 16, { speed: 240, life: 1, size: 7, gravity: 30 });
+      motes(event.x, event.y, 'heal', '#9dffca', 14, { speed: 90, spread: 90, life: 1.2, size: 7, gravity: -70 });
+      flash = { color: '#9dffca', alpha: 0.18, life: 0.35, age: 0 };
+    } else {
+      const x = event.tx ?? event.x, y = event.ty ?? event.y;
+      effects.push({ kind: 'implode', x, y, age: 0, life: 0.7, radius: 230, major: true });
+      motes(x, y, 'star', '#f1e6ff', 14, { speed: -160, spread: 200, life: 0.8, size: 5 });
+      flash = { color: '#cdb4ff', alpha: 0.14, life: 0.25, age: 0 };
+    }
+    shake = Math.max(shake, 5);
+  }
+
   /** Each character's special gets its own layered effect: a shape, particles and a brief screen tint. */
   function special(event) {
     const seed = event.id * 7.31;
+    if (event.variant === 1) return altSpecial(event, seed);
     if (event.color === 0) {
       effects.push({ kind: 'nova', x: event.x, y: event.y, age: 0, life: 0.9, radius: 280, seed, major: true });
       motes(event.x, event.y, 'flake', '#e8fbff', 26, { speed: 330, life: 1, size: 7, drag: 2.6 });
@@ -90,8 +116,27 @@ export function createAnimator({ onHit, onKill } = {}) {
   function handleEvent(event) {
     if (event.kind === 'combo') {
       burst(event.x, event.y, '#ffe49b', 8, 90);
-      if (!reduced) effects.push({ kind: 'combo', x: event.x, y: event.y, color: '#ffe49b', age: 0, life: 0.8,
-        text: event.reaction === 'thermal' ? 'CHOQUE TÉRMICO' : event.reaction === 'conduction' ? 'CONDUÇÃO' : 'ECLIPSE' });
+      if (event.team) burst(event.x, event.y, colors[event.helper] || '#ffffff', 10, 120);
+      if (!reduced) effects.push({ kind: 'combo', x: event.x, y: event.y, color: event.team ? '#ffffff' : '#ffe49b', age: 0, life: event.team ? 1.1 : 0.8,
+        text: `${event.reaction === 'thermal' ? 'CHOQUE TÉRMICO' : event.reaction === 'conduction' ? 'CONDUÇÃO' : 'ECLIPSE'}${event.team ? ' · EM EQUIPE' : ''}` });
+    } else if (event.kind === 'convergence' && !reduced) {
+      effects.push({ kind: 'convergence', x: event.x, y: event.y, radius: event.r || 320, colors: (event.colors || [0, 1]).map(c => colors[c]),
+        age: 0, life: 1, major: true });
+      motes(event.x, event.y, 'star', '#ffffff', 24, { speed: 380, life: 1, size: 7, drag: 2.2 });
+      flash = { color: '#ffffff', alpha: 0.35, life: 0.4, age: 0 };
+      shake = Math.max(shake, 16);
+    } else if (event.kind === 'signal') {
+      // Signals stay visible even with reduced motion: they carry information, not decoration.
+      effects.push({ kind: 'signal', x: event.x, y: event.y, color: colors[event.color] || '#ffffff', name: event.name || '',
+        icon: SIGNAL_ICONS[event.signal] || '⚑', age: 0, life: 3, major: true });
+    } else if (event.kind === 'thiefDown' && !reduced) {
+      motes(event.x, event.y, 'ember', '#ffd36b', 20, { speed: 260, life: 0.9, size: 5, gravity: 120 });
+      burst(event.x, event.y, '#ffd36b', 14, 110);
+    } else if ((event.kind === 'encounter' || event.kind === 'shrineAccepted') && event.x !== undefined) {
+      burst(event.x, event.y, event.kind === 'shrineAccepted' ? '#ff7aa8' : '#ffd36b', 16, 140);
+    } else if (event.kind === 'loop' && !reduced) {
+      flash = { color: '#ffd36b', alpha: 0.25, life: 0.6, age: 0 };
+      shake = Math.max(shake, 10);
     } else if (event.kind === 'evade') {
       burst(event.x, event.y, colors[event.color], 5, 50);
     } else if (event.kind === 'chain' && !reduced) {
@@ -132,7 +177,7 @@ export function createAnimator({ onHit, onKill } = {}) {
     },
     update(game, dt, options = {}) {
       reduced = Boolean(options.reduced);
-      if (reduced) { effects.length = 0; shake = 0; flash = null; }
+      if (reduced) { for (let i = effects.length - 1; i >= 0; i--) if (effects[i].kind !== 'signal') effects.splice(i, 1); shake = 0; flash = null; }
       if (options.paused) return;
       dt = Math.max(0, Math.min(dt, 0.05));
       if (freezeFor > 0) { freezeFor -= dt; return; }
@@ -243,6 +288,8 @@ export function createAnimator({ onHit, onKill } = {}) {
       return { x: Math.sin(time * 91) * shake, y: Math.cos(time * 67) * shake };
     },
     /** Full-screen tint that fades out after big spells, or null. */
+    /** Active teammate signals, for off-screen arrows. */
+    get signals() { return effects.filter(fx => fx.kind === 'signal'); },
     get flash() { return flash ? { color: flash.color, alpha: flash.alpha * (1 - flash.age / flash.life) } : null; },
     get time() { return time; },
     get effects() { return effects; },
@@ -297,6 +344,8 @@ function drawMote(ctx, fx, progress) {
     ctx.beginPath();
     for (let n = 0; n < 8; n++) { const a = n * Math.PI / 4, d = n % 2 ? r * 0.28 : r; ctx[n ? 'lineTo' : 'moveTo'](Math.cos(a) * d, Math.sin(a) * d); }
     ctx.closePath(); ctx.fill();
+  } else if (fx.shape === 'heal') {
+    ctx.fillRect(-r / 2, -r / 6, r, r / 3); ctx.fillRect(-r / 6, -r / 2, r / 3, r);
   } else {
     ctx.globalAlpha = fade * 0.5; ctx.beginPath(); ctx.arc(0, 0, r * (0.6 + progress * 0.8), 0, TAU); ctx.fill();
   }
@@ -421,8 +470,67 @@ function drawFamiliarStrike(ctx, fx, progress) {
   }
 }
 
-const DRAWERS = { mote: drawMote, nova: drawNova, meteor: drawMeteor, impact: drawImpact, thorns: drawThorns, lunar: drawLunar, familiar: drawFamiliarStrike };
-const UNCULLED = new Set(['chain', 'familiar', 'lunar']);
+function drawBloom(ctx, fx, progress) {
+  const fade = 1 - progress, grow = easeOut(Math.min(1, progress * 1.8));
+  ctx.globalCompositeOperation = 'lighter';
+  glow(ctx, fx.x, fx.y, fx.radius * grow, '#9dffca', fade * 0.45);
+  ctx.globalAlpha = fade; ctx.strokeStyle = '#d1ff93'; ctx.lineWidth = 3 * fade + 1;
+  ctx.beginPath(); ctx.arc(fx.x, fx.y, fx.radius * grow, 0, TAU); ctx.stroke();
+  // Petals unfold around the caster.
+  for (let n = 0; n < 8; n++) {
+    const a = n * TAU / 8 + fx.seed + progress;
+    ctx.save(); ctx.translate(fx.x + Math.cos(a) * 60 * grow, fx.y + Math.sin(a) * 60 * grow); ctx.rotate(a);
+    ctx.fillStyle = n % 2 ? '#b8f57f' : '#f7ffd9'; ctx.globalAlpha = fade * 0.85;
+    ctx.beginPath(); ctx.ellipse(0, 0, 26 * grow, 10 * grow, 0, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawImplode(ctx, fx, progress) {
+  const fade = 1 - progress;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = '#d9c2ff';
+  for (let n = 0; n < 3; n++) {
+    const r = fx.radius * Math.max(0, 1 - easeOut(Math.min(1, progress * 1.6 + n * 0.15)));
+    ctx.globalAlpha = fade * (0.8 - n * 0.2); ctx.lineWidth = 3 - n;
+    ctx.beginPath(); ctx.arc(fx.x, fx.y, r + 4, 0, TAU); ctx.stroke();
+  }
+  glow(ctx, fx.x, fx.y, 70, '#c4a0ff', fade * 0.7);
+}
+
+function drawConvergence(ctx, fx, progress) {
+  const fade = 1 - progress, grow = easeOut(Math.min(1, progress * 1.5));
+  ctx.globalCompositeOperation = 'lighter';
+  glow(ctx, fx.x, fx.y, fx.radius * (0.4 + grow * 0.7), fx.colors[0], fade * 0.6);
+  glow(ctx, fx.x, fx.y, fx.radius * (0.2 + grow * 0.5), fx.colors[1], fade * 0.6);
+  for (let n = 0; n < 2; n++) {
+    ctx.globalAlpha = fade; ctx.strokeStyle = fx.colors[n]; ctx.lineWidth = 6 * fade + 1;
+    ctx.beginPath(); ctx.arc(fx.x, fx.y, fx.radius * grow * (1 - n * 0.25), 0, TAU); ctx.stroke();
+  }
+  // Twelve rays in alternating colors.
+  ctx.lineCap = 'round';
+  for (let n = 0; n < 12; n++) {
+    const a = n * TAU / 12 + progress * 0.8;
+    ctx.strokeStyle = fx.colors[n % 2]; ctx.lineWidth = 4 * fade; ctx.globalAlpha = fade;
+    ctx.beginPath(); ctx.moveTo(fx.x + Math.cos(a) * 30, fx.y + Math.sin(a) * 30);
+    ctx.lineTo(fx.x + Math.cos(a) * fx.radius * grow, fx.y + Math.sin(a) * fx.radius * grow); ctx.stroke();
+  }
+}
+
+function drawSignal(ctx, fx, progress) {
+  const pulse = (fx.age * 1.6) % 1;
+  const fade = progress > 0.8 ? (1 - progress) / 0.2 : 1;
+  ctx.globalAlpha = fade * (1 - pulse); ctx.strokeStyle = fx.color; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(fx.x, fx.y, 14 + pulse * 46, 0, TAU); ctx.stroke();
+  ctx.globalAlpha = fade; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(fx.x, fx.y); ctx.lineTo(fx.x, fx.y - 48); ctx.stroke();
+  ctx.fillStyle = '#0b1519'; ctx.beginPath(); ctx.arc(fx.x, fx.y - 60, 15, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = fx.color; ctx.textAlign = 'center'; ctx.font = '700 16px serif'; ctx.fillText(fx.icon, fx.x, fx.y - 54);
+  ctx.font = '700 10px Inter'; ctx.fillStyle = '#e6f5ef'; ctx.fillText(fx.name, fx.x, fx.y - 82);
+}
+
+const DRAWERS = { bloom: drawBloom, implode: drawImplode, convergence: drawConvergence, signal: drawSignal, mote: drawMote, nova: drawNova, meteor: drawMeteor, impact: drawImpact, thorns: drawThorns, lunar: drawLunar, familiar: drawFamiliarStrike };
+const UNCULLED = new Set(['chain', 'familiar', 'lunar', 'convergence']);
 
 export function drawEffects(ctx, animator, drawGhost, visible) {
   for (const fx of animator.effects) {

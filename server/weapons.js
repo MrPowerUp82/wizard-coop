@@ -1,5 +1,6 @@
 import { ENEMIES } from './phases.js';
-import { LIMITS, SPECIAL, SPECIAL_COOLDOWN, WEAPONS } from './balance.js';
+import { COOP, LIMITS, SPECIAL, SPECIAL_COOLDOWN, WEAPONS } from './balance.js';
+import { healingScale } from './curses.js';
 import { dashDirection } from './movement.js';
 import { rankOf } from './powers.js';
 import { damageEnemy, distanceSq, nextId, pushEvent } from './combat.js';
@@ -16,6 +17,14 @@ export const SPECIALS = Object.freeze([
   { name: 'Jardim de espinhos', description: 'Prende inimigos em raízes e causa dano por 4s.' },
   { name: 'Passo lunar', description: 'Avança na direção do movimento e lança lâminas que retornam.' }
 ]);
+// Unlocked with "Segundo feitiço": one alternative special per character.
+export const ALT_SPECIALS = Object.freeze([
+  { name: 'Tempestade de granizo', description: 'Granizo cai ao seu redor por 3,5s, ferindo e desacelerando.' },
+  { name: 'Égide flamejante', description: 'Um escudo de fogo gira com você por 5s e queima projéteis inimigos.' },
+  { name: 'Florescer', description: 'Cura você e aliados próximos em 30% e dispara 16 espinhos.' },
+  { name: 'Eclipse', description: 'Um vórtice puxa inimigos para um ponto e explode depois de 2s.' }
+]);
+export const specialOf = p => (p?.specialVariant === 1 ? ALT_SPECIALS : SPECIALS)[p?.color ?? 0];
 
 const ATTACK_RANGE = 900;
 const BOOMERANG_TURN = 0.8;
@@ -26,7 +35,11 @@ function playerShot(p, angle, special = false) {
   const shot = { x: p.x, y: p.y, vx: Math.cos(angle) * spell.speed, vy: Math.sin(angle) * spell.speed,
     ttl: special ? 2 : 1.55, damage: p.damage * (special ? 3 : 1), color: p.color, special,
     pierce: spell.pierce, hitIds: [], owner: p.id };
-  if (!special && p.color === 3 && rankOf(p, 'boomerang')) shot.boomerang = true;
+  if (!special && p.color === 3 && rankOf(p, 'boomerang')) { shot.boomerang = true; shot.fullmoon = Boolean(rankOf(p, 'fullmoon')); }
+  if (!special && p.color === 2 && rankOf(p, 'bramble')) {
+    shot.pierce += WEAPONS.evolutions.bramble.pierce;
+    shot.damage *= WEAPONS.evolutions.bramble.damage;
+  }
   return shot;
 }
 
@@ -34,16 +47,18 @@ export function activateSpecial(s, playerId, random = Math.random) {
   const p = s.players[playerId];
   if (!p?.alive || s.over || s.phaseStatus === 'transition' || p.pendingPowers || p.specialCharge < SPECIAL.max
     || p.specialCooldown > 0) return false;
-  if (p.color === 3 && s.shots.length + 8 > LIMITS.shots) return false;
-  if ((p.color === 1 || p.color === 2) && s.zones.length >= LIMITS.zones) return false;
+  const alt = p.specialVariant === 1;
+  if (alt ? p.color === 2 && s.shots.length + 16 > LIMITS.shots : p.color === 3 && s.shots.length + 8 > LIMITS.shots) return false;
+  if ((alt ? p.color !== 2 : p.color === 1 || p.color === 2) && s.zones.length >= LIMITS.zones) return false;
   p.specialCharge = 0;
   p.specialCooldown = SPECIAL_COOLDOWN;
   p.castCount++;
-  const event = { x: Math.round(p.x), y: Math.round(p.y), color: p.color };
-  if (p.color === 0) {
+  const event = { x: Math.round(p.x), y: Math.round(p.y), color: p.color, variant: alt ? 1 : 0 };
+  if (alt) castAltSpecial(s, p, event);
+  else if (p.color === 0) {
     for (const enemy of [...s.enemies]) if (distanceSq(p, enemy) < 280 ** 2 && enemy.hp > 0) {
       enemy.freezeFor = enemy.boss ? 0 : 2;
-      damageEnemy(s, enemy, p.damage * 4, random, { slow: true, source: p });
+      damageEnemy(s, enemy, p.damage * 4, random, { slow: true, source: p, kind: 'special' });
     }
     s.enemyShots = s.enemyShots.filter(shot => distanceSq(p, shot) > 220 ** 2);
   } else if (p.color === 1) {
@@ -70,7 +85,45 @@ export function activateSpecial(s, playerId, random = Math.random) {
     }
   }
   pushEvent(s, 'special', event);
+  converge(s, p, random);
   return true;
+}
+
+function castAltSpecial(s, p, event) {
+  if (p.color === 0) {
+    s.zones.push({ id: nextId(s), x: p.x, y: p.y, radius: 230, ttl: 3.5, kind: 'hail', dps: p.damage * 2.4, slow: true, owner: p.id, color: 0 });
+  } else if (p.color === 1) {
+    s.zones.push({ id: nextId(s), x: p.x, y: p.y, radius: 125, ttl: 5, kind: 'flameshield', dps: p.damage * 3, follow: true, owner: p.id, color: 1 });
+  } else if (p.color === 2) {
+    for (const ally of Object.values(s.players)) {
+      if (ally.alive && distanceSq(ally, p) < 320 ** 2) ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * 0.3 * healingScale(s));
+    }
+    for (let n = 0; n < 16; n++) s.shots.push(playerShot(p, n * Math.PI / 8, true));
+  } else {
+    const target = s.enemies.filter(e => e.hp > 0 && distanceSq(p, e) < 450 ** 2)
+      .sort((a, b) => distanceSq(p, a) - distanceSq(p, b))[0];
+    const direction = dashDirection(p);
+    const x = target?.x ?? p.x + direction.x * 200, y = target?.y ?? p.y + direction.y * 200;
+    s.zones.push({ id: nextId(s), x, y, radius: 230, ttl: 2.2, kind: 'vortex', dps: p.damage, pull: 260,
+      damage: p.damage * 8, owner: p.id, color: 3 });
+    Object.assign(event, { tx: Math.round(x), ty: Math.round(y) });
+  }
+}
+
+/** Two arcanists casting specials close together within a moment trigger a Convergence blast between them. */
+function converge(s, p, random) {
+  const cfg = COOP.convergence;
+  s.recentSpecials = (s.recentSpecials || []).filter(entry => s.time - entry.t <= cfg.window && s.players[entry.id]?.alive);
+  const partnerEntry = s.recentSpecials.find(entry => entry.id !== p.id && (entry.x - p.x) ** 2 + (entry.y - p.y) ** 2 < cfg.range ** 2);
+  if (!partnerEntry) { s.recentSpecials.push({ id: p.id, t: s.time, x: p.x, y: p.y }); return; }
+  s.recentSpecials = s.recentSpecials.filter(entry => entry !== partnerEntry);
+  const partner = s.players[partnerEntry.id];
+  const x = (p.x + partner.x) / 2, y = (p.y + partner.y) / 2;
+  const damage = (p.damage + partner.damage) * cfg.damage;
+  for (const enemy of [...s.enemies]) {
+    if (enemy.hp > 0 && distanceSq({ x, y }, enemy) < cfg.radius ** 2) damageEnemy(s, enemy, damage, random, { source: p, kind: 'convergence' });
+  }
+  pushEvent(s, 'convergence', { x: Math.round(x), y: Math.round(y), r: cfg.radius, colors: [p.color, partner.color] });
 }
 
 /** Elo arcano: the strongest bond among nearby allies (including yourself) speeds up attacks. */
@@ -108,7 +161,7 @@ function hitRadius(enemy, spell) {
 }
 
 function addBurnZone(s, owner, x, y) {
-  const { radius, ttl, dps } = WEAPONS.burn;
+  const { radius, ttl, dps } = rankOf(owner, 'hellfire') ? WEAPONS.evolutions.hellfire : WEAPONS.burn;
   const existing = s.zones.find(zone => zone.owner === owner.id && (zone.x - x) ** 2 + (zone.y - y) ** 2 < 30 ** 2);
   if (existing) { existing.ttl = ttl; return; }
   if (s.zones.length < LIMITS.zones) s.zones.push({ id: nextId(s), x, y, radius, ttl, dps: owner.damage * dps, owner: owner.id, color: 1 });
@@ -137,6 +190,7 @@ export function updateShots({ s, dt, random, grid }) {
     if (shot.boomerang && owner?.alive) {
       if (!shot.returning && shot.ttl <= BOOMERANG_TURN) {
         shot.returning = true; shot.hitIds = []; shot.pierce = spell.pierce;
+        if (shot.fullmoon) shot.damage *= WEAPONS.evolutions.fullmoon.returnDamage;
       }
       if (shot.returning) {
         const angle = Math.atan2(owner.y - shot.y, owner.x - shot.x);
@@ -147,18 +201,20 @@ export function updateShots({ s, dt, random, grid }) {
     shot.x += shot.vx * dt; shot.y += shot.vy * dt; shot.ttl -= dt;
     if (shot.ttl <= 0) continue;
     hits.length = 0;
-    grid.query(shot.x, shot.y, spell.radius + MAX_BOSS_RADIUS, (enemy, d2) => {
-      if (enemy.hp > 0 && d2 < hitRadius(enemy, spell) ** 2 && !shot.hitIds.includes(enemy.id)) hits.push([d2, enemy]);
+    const reach = shot.fullmoon && shot.returning ? WEAPONS.evolutions.fullmoon.size : 1;
+    grid.query(shot.x, shot.y, spell.radius * reach + MAX_BOSS_RADIUS, (enemy, d2) => {
+      if (enemy.hp > 0 && d2 < (hitRadius(enemy, spell) * reach) ** 2 && !shot.hitIds.includes(enemy.id)) hits.push([d2, enemy]);
     });
     if (!hits.length) continue;
     hits.sort((a, b) => a[0] - b[0]);
     for (const [, enemy] of hits) {
       shot.hitIds.push(enemy.id);
-      damageEnemy(s, enemy, shot.damage, random, { slow: spell.slow, source: owner, shard: shot.shard,
+      const kind = shot.special ? 'special' : shot.shard ? 'shatter' : shot.returning ? 'boomerang' : 'spell';
+      damageEnemy(s, enemy, shot.damage, random, { slow: spell.slow, source: owner, shard: shot.shard, kind,
         element: shot.color === 1 ? 'fire' : shot.color === 3 ? 'moon' : '' });
       if (spell.splash) {
         grid.query(enemy.x, enemy.y, spell.splash, other => {
-          if (other !== enemy) damageEnemy(s, other, shot.damage * 0.6, random, { source: owner, element: 'fire' });
+          if (other !== enemy) damageEnemy(s, other, shot.damage * 0.6, random, { source: owner, element: 'fire', kind });
         });
         if (owner && rankOf(owner, 'burn')) addBurnZone(s, owner, enemy.x, enemy.y);
       }
@@ -182,13 +238,17 @@ function updateOrbit(ctx, p, rank) {
   const evolved = rankOf(p, 'constellation');
   const count = cfg.counts[rank - 1] + (evolved ? WEAPONS.evolutions.constellation.extraOrbs : 0);
   const radius = orbitRadius(rank, evolved);
-  const damage = p.damage * (cfg.damage + cfg.damagePerRank * rank) * (evolved ? WEAPONS.evolutions.constellation.damage : 1);
+  const solar = rankOf(p, 'solarcrown');
+  const damage = p.damage * (cfg.damage + cfg.damagePerRank * rank) * (evolved ? WEAPONS.evolutions.constellation.damage : 1)
+    * (solar ? WEAPONS.evolutions.solarcrown.damage : 1);
   p.orbitAngle = ((p.orbitAngle || 0) + cfg.speed * dt) % (Math.PI * 2);
   for (let n = 0; n < count; n++) {
     const angle = p.orbitAngle + n * Math.PI * 2 / count;
     const x = p.x + Math.cos(angle) * radius, y = p.y + Math.sin(angle) * radius;
     grid.query(x, y, cfg.size + (evolved ? 26 : 18), enemy => {
-      if (enemy.hp > 0 && hitOnce(enemy, `o${p.id}`, s.time, cfg.hitEvery)) damageEnemy(s, enemy, damage, random, { source: p });
+      if (enemy.hp > 0 && hitOnce(enemy, `o${p.id}`, s.time, cfg.hitEvery)) {
+        damageEnemy(s, enemy, damage, random, { source: p, kind: 'orbit', element: solar ? 'fire' : '' });
+      }
     });
   }
 }
@@ -206,7 +266,7 @@ function updateAura(ctx, p, rank) {
   const damage = p.damage * (WEAPONS.aura.damage + WEAPONS.aura.damagePerRank * rank);
   grid.query(p.x, p.y, radius, enemy => {
     if (enemy.hp <= 0) return;
-    damageEnemy(s, enemy, damage, random, { source: p, slow: evolved && !enemy.boss });
+    damageEnemy(s, enemy, damage, random, { source: p, slow: evolved && !enemy.boss, kind: 'aura' });
   });
   if (evolved) {
     for (const ally of alive) {
@@ -242,7 +302,7 @@ function updateChain(ctx, p, rank) {
   for (let n = 0; n <= jumps && target; n++) {
     hit.add(target);
     points.push(Math.round(target.x), Math.round(target.y));
-    damageEnemy(s, target, damage, random, { source: p, element: 'lightning' });
+    damageEnemy(s, target, damage, random, { source: p, element: 'lightning', kind: 'chain' });
     from = target;
     target = findFrom(from, cfg.jumpRange, hit);
   }
@@ -267,6 +327,28 @@ function updateRunes(ctx, p, rank) {
 }
 
 const FAMILIAR_ELEMENTS = ['', 'fire', '', 'moon'];
+const ZONE_ELEMENTS = { burn: 'fire', meteor: 'fire', flameshield: 'fire', roots: '', hail: '', vortex: 'moon' };
+
+/** Runas de tempestade: every rune blast arcs lightning through nearby enemies. */
+function stormArc(s, owner, rune, grid, random) {
+  const cfg = WEAPONS.evolutions.stormrunes;
+  const hit = new Set();
+  const points = [Math.round(rune.x), Math.round(rune.y)];
+  /** @type {any} */
+  let from = rune;
+  for (let n = 0; n < cfg.jumps; n++) {
+    /** @type {any} */
+    let target = null;
+    let best = Infinity;
+    grid.query(from.x, from.y, cfg.jumpRange, (enemy, d2) => { if (enemy.hp > 0 && !hit.has(enemy) && d2 < best) { best = d2; target = enemy; } });
+    if (!target) break;
+    hit.add(target);
+    points.push(Math.round(target.x), Math.round(target.y));
+    damageEnemy(s, target, owner.damage * cfg.damage, random, { source: owner, element: 'lightning', kind: 'runes' });
+    from = target;
+  }
+  if (points.length > 2) pushEvent(s, 'chain', { points, color: owner.color });
+}
 
 /** Where the familiar hovers beside its owner when it is not lunging at a target. */
 export function placeFamiliar(p, time) {
@@ -299,7 +381,7 @@ function updateFamiliar(ctx, p, rank) {
   const points = [];
   for (const [, enemy] of found.slice(0, count)) {
     points.push(Math.round(enemy.x), Math.round(enemy.y));
-    damageEnemy(s, enemy, damage, random, { source: p, slow: p.color === 0, element: FAMILIAR_ELEMENTS[p.color] });
+    damageEnemy(s, enemy, damage, random, { source: p, slow: p.color === 0, element: FAMILIAR_ELEMENTS[p.color], kind: 'familiar' });
     if (p.color === 2 && !enemy.boss) enemy.rootFor = Math.max(enemy.rootFor || 0, 0.35);
   }
   pushEvent(s, 'familiar', { x: Math.round(pet.x), y: Math.round(pet.y), points, color: p.color, evolved: evolved ? 1 : 0 });
@@ -327,23 +409,39 @@ export function updateWeapons(ctx) {
     if (!triggered) continue;
     rune.ttl = 0;
     const owner = s.players[rune.owner] || null;
-    grid.query(rune.x, rune.y, rune.radius, enemy => { damageEnemy(s, enemy, rune.damage, random, { source: owner, element: 'fire' }); });
+    grid.query(rune.x, rune.y, rune.radius, enemy => { damageEnemy(s, enemy, rune.damage, random, { source: owner, element: 'fire', kind: 'runes' }); });
     pushEvent(s, 'boom', { x: Math.round(rune.x), y: Math.round(rune.y), r: Math.round(rune.radius), color: rune.color });
+    if (owner && rankOf(owner, 'stormrunes')) stormArc(s, owner, rune, grid, random);
   }
   s.runes = s.runes.filter(rune => rune.ttl > 0);
   for (const zone of s.zones) {
     zone.ttl -= dt;
     const owner = s.players[zone.owner] || null;
+    if (zone.follow) {
+      if (!owner?.alive) { zone.ttl = 0; continue; }
+      zone.x = owner.x; zone.y = owner.y;
+      s.enemyShots = s.enemyShots.filter(shot => distanceSq(shot, zone) > zone.radius ** 2);
+    }
     if (zone.kind === 'meteor' && zone.warning > 0) {
       zone.warning -= dt;
       if (zone.warning > 0) continue;
-      grid.query(zone.x, zone.y, zone.radius, enemy => { damageEnemy(s, enemy, zone.damage, random, { source: owner, element: 'fire' }); });
+      grid.query(zone.x, zone.y, zone.radius, enemy => { damageEnemy(s, enemy, zone.damage, random, { source: owner, element: 'fire', kind: 'special' }); });
       pushEvent(s, 'boom', { x: zone.x, y: zone.y, r: zone.radius, color: 1 });
     }
-    grid.query(zone.x, zone.y, zone.radius, enemy => {
-      if (zone.kind === 'roots') enemy.rootFor = 0.5;
-      damageEnemy(s, enemy, zone.dps * dt, random, { source: owner, element: zone.kind === 'roots' ? '' : 'fire' });
+    const kind = zone.kind && zone.kind !== 'burn' ? 'special' : 'burn';
+    const element = ZONE_ELEMENTS[zone.kind || 'burn'] ?? 'fire';
+    grid.query(zone.x, zone.y, zone.radius, (enemy, d2) => {
+      if (zone.kind === 'roots') { enemy.rootFor = 0.5; if (owner) enemy.rootBy = owner.id; }
+      if (zone.pull && !enemy.boss && d2 > 400) {
+        const d = Math.sqrt(d2), step = Math.min(d - 20, zone.pull * dt);
+        enemy.x += (zone.x - enemy.x) / d * step; enemy.y += (zone.y - enemy.y) / d * step;
+      }
+      damageEnemy(s, enemy, zone.dps * dt, random, { source: owner, element, slow: Boolean(zone.slow), kind });
     });
+    if (zone.kind === 'vortex' && zone.ttl <= 0) {
+      grid.query(zone.x, zone.y, zone.radius, enemy => { damageEnemy(s, enemy, zone.damage, random, { source: owner, element: 'moon', kind: 'special' }); });
+      pushEvent(s, 'boom', { x: Math.round(zone.x), y: Math.round(zone.y), r: zone.radius, color: 3 });
+    }
   }
   s.zones = s.zones.filter(zone => zone.ttl > 0);
 }
@@ -353,7 +451,8 @@ export function estimateDps(p) {
   const { orbit, aura, chain, runes, familiar } = WEAPONS;
   let dps = p.damage * p.projectiles / p.attackDelay;
   const r = id => rankOf(p, id);
-  if (r('orbit')) dps += p.damage * (orbit.damage + orbit.damagePerRank * r('orbit')) / orbit.hitEvery * 0.35 * (r('constellation') ? 2 : 1);
+  if (r('orbit')) dps += p.damage * (orbit.damage + orbit.damagePerRank * r('orbit')) / orbit.hitEvery * 0.35 * (r('constellation') ? 2 : 1)
+    * (r('solarcrown') ? WEAPONS.evolutions.solarcrown.damage : 1);
   if (r('aura')) dps += p.damage * (aura.damage + aura.damagePerRank * r('aura')) / aura.every * 0.6;
   if (r('chain')) dps += p.damage * (chain.damage + chain.damagePerRank * r('chain')) / Math.max(0.9, chain.cooldown - chain.cooldownPerRank * r('chain'));
   if (r('runes')) dps += p.damage * (runes.damage + runes.damagePerRank * r('runes')) / (runes.cooldown - runes.cooldownPerRank * r('runes')) * 0.3;

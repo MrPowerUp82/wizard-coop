@@ -75,12 +75,12 @@ test('lista apenas salas abertas e disponíveis', { timeout: 10000 }, async t =>
   const browser = await connect();
   browser.send(JSON.stringify({ type: 'listRooms' }));
   const listing = await next(browser, 'rooms');
-  assert.deepEqual(listing.rooms, [{ code: openRoom.room, count: 1, running: false, host: 'Merlin', campaign: 'quick' }]);
+  assert.deepEqual(listing.rooms, [{ code: openRoom.room, count: 1, running: false, host: 'Merlin', campaign: 'quick', curses: [] }]);
 
   openHost.send(JSON.stringify({ type: 'start' }));
   await next(openHost, 'start');
   browser.send(JSON.stringify({ type: 'listRooms' }));
-  assert.deepEqual((await next(browser, 'rooms')).rooms, [{ code: openRoom.room, count: 1, running: true, host: 'Merlin', campaign: 'quick' }]);
+  assert.deepEqual((await next(browser, 'rooms')).rooms, [{ code: openRoom.room, count: 1, running: true, host: 'Merlin', campaign: 'quick', curses: [] }]);
   browser.send(JSON.stringify({ type: 'join', room: openRoom.room, name: 'Aliado' }));
   await next(browser, 'joined');
   browser.send(JSON.stringify({ type: 'ready' }));

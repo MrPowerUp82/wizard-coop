@@ -1,5 +1,5 @@
 // Headless balance probe: bots play full campaigns against the real simulation.
-// Usage: npm run sim -- [runs=8] [players=1]
+// Usage: npm run sim -- [runs=8] [players=1] [quick|classic|endless] [max] [out.json] [curse,curse]
 import { activateDash, activateSpecial, applyPower, createGameState, createPlayer, updateGame } from '../server/game.js';
 import { META_UPGRADES } from '../server/meta.js';
 import fs from 'node:fs';
@@ -7,11 +7,13 @@ import { PHASES, PHASE_DURATION } from '../server/phases.js';
 
 const runs = Number(process.argv[2] || 8);
 const playerCount = Number(process.argv[3] || 1);
-const campaign = process.argv[4] === 'classic' ? 'classic' : 'quick';
+const campaign = ['classic', 'endless'].includes(process.argv[4]) ? process.argv[4] : 'quick';
 const permanent = process.argv[5] === 'max' ? Object.fromEntries(Object.entries(META_UPGRADES).map(([id, p]) => [id, p.costs.length])) : null;
 const TICK = 1 / 30;
-const PREFERENCE = ['constellation', 'tempest', 'sanctuary', 'minefield', 'multishot', 'orbit', 'arcane', 'chain', 'haste',
-  'shatter', 'burn', 'ricochet', 'boomerang', 'aura', 'vitality', 'runes', 'armor', 'bond', 'magnet', 'swiftness'];
+const PREFERENCE = ['constellation', 'tempest', 'sanctuary', 'minefield', 'covenant', 'solarcrown', 'stormrunes', 'avalanche', 'hellfire',
+  'bramble', 'fullmoon', 'multishot', 'orbit', 'arcane', 'chain', 'haste', 'shatter', 'burn', 'ricochet', 'boomerang', 'aura', 'familiar',
+  'vitality', 'runes', 'armor', 'bond', 'guardian', 'lifelink', 'magnet', 'swiftness'];
+const curses = (process.argv[7] || '').split(',').filter(Boolean);
 
 function seeded(seed) {
   return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -54,7 +56,7 @@ function steer(s, p) {
 
 function play(seed) {
   const random = seeded(seed);
-  const s = createGameState(campaign);
+  const s = createGameState(campaign, { curses });
   for (let n = 0; n < playerCount; n++) s.players[`p${n}`] = createPlayer(`p${n}`, 'bot', (seed + n) % 4, permanent);
   const players = Object.values(s.players);
   const bosses = [];
@@ -85,7 +87,7 @@ function play(seed) {
   return {
     seed, campaign, meta: permanent ? 'max' : 'none', end: Math.round(s.time), victory: s.victory, phase: s.phase + 1, status: s.phaseStatus,
     level: lead.level, bossSeconds: bosses, peakEnemies, firstHit, lowestHp: Math.round(lowest * 100),
-    weapons: Object.keys(lead.powers).filter(id => ['orbit', 'aura', 'chain', 'runes'].includes(id)).join('+') || '-',
+    weapons: Object.keys(lead.powers).filter(id => ['orbit', 'aura', 'chain', 'runes', 'familiar'].includes(id)).join('+') || '-',
     kills: lead.stats.kills, coins: lead.coins, levels: players.map(p => p.level), altars, milestones
   };
 }

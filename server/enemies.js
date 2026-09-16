@@ -1,19 +1,24 @@
 import { BEHAVIORS, ENEMIES, PHASES } from './phases.js';
-import { CONTACT, DIFFICULTY, ELITE, LIMITS, PHASE_SCHEDULE, SEPARATION } from './balance.js';
+import { CONTACT, DIFFICULTY, ELITE, ENCOUNTERS, ENDLESS, LIMITS, PHASE_SCHEDULE, SEPARATION } from './balance.js';
+import { CURSE_EFFECTS, hasCurse } from './curses.js';
 import { distanceSq, hurt, nearest, pushEvent, spawnEnemy } from './combat.js';
 import { bossBrain } from './bosses.js';
 import { phaseClock } from './campaign.js';
 
-export function difficultyAt(phaseTime, playerCount = 1, phase = 0) {
+/** `s` is optional: it adds the endless lap and the run's curses on top of the base ramp. */
+export function difficultyAt(phaseTime, playerCount = 1, phase = 0, s = null) {
   const d = DIFFICULTY;
   const minutes = phase * d.phaseOffsetMinutes + phaseTime / 60;
   const extraPlayers = Math.max(0, playerCount - 1);
+  const loop = s?.loop || 0;
+  const spawnCount = 1 + Math.floor(minutes / d.spawnCountEveryMinutes) + Math.floor(extraPlayers / 2) + loop;
   return {
     spawnInterval: Math.max(d.spawnInterval.min, d.spawnInterval.start - minutes * d.spawnInterval.perMinute),
-    hpScale: (1 + minutes * d.hpPerMinute + minutes * minutes * d.hpPerMinuteSquared) * (1 + extraPlayers * d.hpPerExtraPlayer),
-    damageScale: Math.min(d.damage.max, 1 + minutes * d.damage.perMinute),
-    speedScale: Math.min(d.speed.max, 1 + minutes * d.speed.perMinute),
-    spawnCount: 1 + Math.floor(minutes / d.spawnCountEveryMinutes) + Math.floor(extraPlayers / 2)
+    hpScale: (1 + minutes * d.hpPerMinute + minutes * minutes * d.hpPerMinuteSquared) * (1 + extraPlayers * d.hpPerExtraPlayer)
+      * (1 + loop * ENDLESS.hpPerLoop),
+    damageScale: Math.min(d.damage.max, 1 + minutes * d.damage.perMinute) * (1 + loop * 0.15),
+    speedScale: Math.min(d.speed.max, 1 + minutes * d.speed.perMinute) * (hasCurse(s, 'frenzy') ? CURSE_EFFECTS.frenzy.speed : 1),
+    spawnCount: hasCurse(s, 'swarm') ? Math.ceil(spawnCount * CURSE_EFFECTS.swarm.spawnCount) : spawnCount
   };
 }
 
@@ -48,10 +53,13 @@ function runSchedule(ctx) {
     if (beat.kind === 'opening') {
       for (const focus of alive) for (let n = 0; n < 8; n++) spawnAround(ctx, focus, n * Math.PI / 4 + random() * 0.3, phase.enemies[0]);
     } else if (beat.kind === 'elite') {
-      const focus = alive[Math.floor(random() * alive.length)];
-      const type = phase.enemies[Math.floor(random() * 2)];
-      const elite = spawnAround(ctx, focus, random() * Math.PI * 2, type, { elite: true }, 480);
-      if (elite) pushEvent(s, 'elite', { x: Math.round(elite.x), y: Math.round(elite.y), type });
+      const count = hasCurse(s, 'nobility') ? CURSE_EFFECTS.nobility.elites : 1;
+      for (let n = 0; n < count; n++) {
+        const focus = alive[Math.floor(random() * alive.length)];
+        const type = phase.enemies[Math.floor(random() * 2)];
+        const elite = spawnAround(ctx, focus, random() * Math.PI * 2, type, { elite: true }, 480);
+        if (elite) pushEvent(s, 'elite', { x: Math.round(elite.x), y: Math.round(elite.y), type });
+      }
     } else if (beat.kind === 'ring') {
       const focus = alive[Math.floor(random() * alive.length)];
       const count = Math.min(16 + alive.length * 4, LIMITS.enemies - s.enemies.length);
@@ -66,7 +74,8 @@ export function spawnHorde(ctx) {
   runSchedule(ctx);
   s.spawn -= dt;
   const a = DIFFICULTY.adaptiveLimit;
-  const adaptiveLimit = Math.min(LIMITS.enemies, a.base + Math.floor(phaseClock(s) * a.perPhaseSecond) + s.phase * a.perPhase + alive.length * a.perPlayer);
+  const crowd = hasCurse(s, 'swarm') ? CURSE_EFFECTS.swarm.adaptiveLimit : 1;
+  const adaptiveLimit = Math.min(LIMITS.enemies, Math.floor((a.base + Math.floor(phaseClock(s) * a.perPhaseSecond) + s.phase * a.perPhase + alive.length * a.perPlayer) * crowd));
   if (s.spawn > 0 || s.enemies.length >= adaptiveLimit) return;
   s.spawn = difficulty.spawnInterval;
   const batchSize = Math.min(difficulty.spawnCount, adaptiveLimit - s.enemies.length, DIFFICULTY.maxBatch);
@@ -154,6 +163,12 @@ export function updateEnemies(ctx) {
       if (enemy.dash > 0) speed = enemy.dashSpeed;
       const heading = enemy.dash > 0 ? enemy.dashAngle : angle;
       if (!(enemy.dashWarn > 0)) { enemy.x += Math.cos(heading) * speed * dt; enemy.y += Math.sin(heading) * speed * dt; }
+    } else if (enemy.thief) {
+      // The thief never fights: it runs from the nearest arcanist, weaving slightly to stay catchable.
+      const flee = angle + Math.PI + Math.sin(enemy.age * 2.3) * 0.6;
+      const pace = type.speed * ENCOUNTERS.thief.speed * slow * (enemy.rootFor > 0 ? 0 : 1);
+      enemy.x += Math.cos(flee) * pace * dt; enemy.y += Math.sin(flee) * pace * dt;
+      continue;
     } else {
       const move = behave(ctx, enemy, target, angle, speed);
       if (move) { enemy.x += Math.cos(move.angle) * move.speed * dt; enemy.y += Math.sin(move.angle) * move.speed * dt; }

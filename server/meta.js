@@ -12,8 +12,20 @@ export const META_UPGRADES = Object.freeze({
   channel: { title: 'Canalização', description: 'Começa com +20% de carga especial por grau (até 60%)', costs: [55, 130, 240] },
   reroll: { title: 'Destino', description: '+1 troca de poderes por partida', costs: [80, 180, 320] },
   pact: { title: 'Pacto familiar', description: 'Começa a partida com um Familiar arcano invocado', costs: [450] },
-  phoenix: { title: 'Fênix', description: 'Renasce uma vez por partida com 50% da vida', costs: [600] }
+  phoenix: { title: 'Fênix', description: 'Renasce uma vez por partida com 50% da vida', costs: [600] },
+  arsenal: { title: 'Arsenal', description: 'Desbloqueio: escolha a arma inicial antes da partida', costs: [300], unlock: true },
+  secondSpell: { title: 'Segundo feitiço', description: 'Desbloqueio: um especial alternativo para cada personagem', costs: [400], unlock: true },
+  endless: { title: 'Ritual infinito', description: 'Desbloqueio: modo em que os seis reinos se repetem cada vez mais difíceis', costs: [500], unlock: true }
 });
+
+export const STARTING_WEAPONS = Object.freeze(['orbit', 'aura', 'chain', 'runes', 'familiar']);
+
+/** Loadout choices only count when the matching unlock was bought. */
+export function sanitizeLoadout(raw, meta) {
+  const weapon = meta.arsenal && STARTING_WEAPONS.includes(raw?.weapon) ? raw.weapon : null;
+  const special = meta.secondSpell && raw?.special === 1 ? 1 : 0;
+  return { weapon, special };
+}
 
 export function sanitizeMeta(raw) {
   const meta = {};
@@ -24,8 +36,11 @@ export function sanitizeMeta(raw) {
   return meta;
 }
 
-export function applyMeta(player, raw) {
+export function applyMeta(player, raw, rawLoadout = null) {
   const meta = sanitizeMeta(raw);
+  const loadout = sanitizeLoadout(rawLoadout, meta);
+  if (loadout.weapon) player.powers[loadout.weapon] = Math.max(player.powers[loadout.weapon] || 0, 1);
+  player.specialVariant = loadout.special;
   player.maxHp += meta.vigor * 6;
   player.hp = player.maxHp;
   player.damage *= 1 + meta.might * 0.03;

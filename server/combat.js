@@ -1,6 +1,8 @@
 import { BEHAVIORS, ENEMIES, enemyXp } from './phases.js';
-import { CONTACT, DROP_TTL, DROPS, ELITE, LIMITS, SPECIAL, WEAPONS } from './balance.js';
+import { CONTACT, COOP, DROP_TTL, DROPS, ELITE, ENCOUNTERS, LIMITS, SPECIAL, WEAPONS } from './balance.js';
 import { rankOf } from './powers.js';
+import { CURSE_EFFECTS, hasCurse } from './curses.js';
+import { thiefDown } from './encounters.js';
 
 export const distanceSq = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 export const nearest = (origin, entities) => entities.reduce((a, b) => distanceSq(origin, b) < distanceSq(origin, a) ? b : a);
@@ -66,7 +68,9 @@ function onKill(s, enemy, source, random, shard) {
     }
   }
   if (source && !shard && enemy.slowFor > 0 && rankOf(source, 'shatter')) {
-    const { shards, damage, ttl } = WEAPONS.shatter;
+    const avalanche = rankOf(source, 'avalanche') ? WEAPONS.evolutions.avalanche : null;
+    const { ttl } = WEAPONS.shatter;
+    const shards = avalanche?.shards ?? WEAPONS.shatter.shards, damage = avalanche?.damage ?? WEAPONS.shatter.damage;
     const offset = random() * Math.PI;
     for (let n = 0; n < shards && s.shots.length < LIMITS.shots; n++) {
       const angle = offset + n * Math.PI * 2 / shards;
@@ -74,25 +78,47 @@ function onKill(s, enemy, source, random, shard) {
         damage: source.damage * damage, pierce: 1, hitIds: [enemy.id], owner: source.id, shard: true });
     }
   }
+  if (enemy.thief) thiefDown(s, enemy);
   if (enemy.elite) pushEvent(s, 'eliteDown', { x: Math.round(enemy.x), y: Math.round(enemy.y) });
 }
 
-export function damageEnemy(s, enemy, damage, random, { slow = false, source = null, shard = false, element = '' } = {}) {
+const REACTION_STATUS = { thermal: 'slowBy', conduction: 'rootBy', eclipse: 'burnBy' };
+
+function track(source, kind, amount) {
+  if (!source || !(amount > 0)) return;
+  source.stats.damage += amount;
+  source.stats.by ??= {};
+  source.stats.by[kind] = (source.stats.by[kind] || 0) + amount;
+}
+
+/** `kind` names the damage source for the end-of-run breakdown (spell, orbit, aura, chain, ...). */
+export function damageEnemy(s, enemy, damage, random, { slow = false, source = null, shard = false, element = '', kind = 'spell' } = {}) {
   if (enemy.hp <= 0) return false;
   // A target can react once per second. Reaction damage cannot recursively trigger reactions.
   const reaction = element === 'fire' && enemy.slowFor > 0 ? 'thermal'
     : element === 'lightning' && enemy.rootFor > 0 ? 'conduction'
       : element === 'moon' && enemy.burningFor > 0 ? 'eclipse' : null;
+  let bonus = 0;
   if (reaction && (enemy.comboAt ?? -1) <= s.time) {
     enemy.comboAt = s.time + 1;
-    damage += (source?.damage || damage) * 1.5;
+    // A combo finished by a different arcanist than the one who set it up is a team combo: stronger, and it charges both specials.
+    const setter = enemy[REACTION_STATUS[reaction]];
+    const team = Boolean(source && setter && setter !== source.id && s.players[setter]);
+    bonus = (source?.damage || damage) * (team ? COOP.teamCombo.damage : 1.5);
+    if (team) {
+      for (const p of [source, s.players[setter]]) p.specialCharge = Math.min(SPECIAL.max, p.specialCharge + COOP.teamCombo.charge);
+    }
     if (reaction === 'thermal') { enemy.slowFor = 0; enemy.freezeFor = 0; }
-    pushEvent(s, 'combo', { x: enemy.x, y: enemy.y, color: source?.color ?? 0, reaction });
+    pushEvent(s, 'combo', { x: enemy.x, y: enemy.y, color: source?.color ?? 0, reaction, team: team ? 1 : 0,
+      helper: team ? s.players[setter].color : undefined });
   }
-  if (element === 'fire') enemy.burningFor = 1.5;
-  if (source) source.stats.damage += Math.min(enemy.hp, damage);
-  enemy.hp -= damage;
-  if (slow) enemy.slowFor = 1.2;
+  if (element === 'fire') { enemy.burningFor = 1.5; if (source) enemy.burnBy = source.id; }
+  const total = damage + bonus;
+  const dealt = Math.min(enemy.hp, total);
+  track(source, kind, dealt * damage / total);
+  track(source, 'combo', dealt * bonus / total);
+  enemy.hp -= total;
+  if (slow) { enemy.slowFor = 1.2; if (source) enemy.slowBy = source.id; }
   if (enemy.hp <= 0) { onKill(s, enemy, source, random, shard); return true; }
   return false;
 }
@@ -100,6 +126,8 @@ export function damageEnemy(s, enemy, damage, random, { slow = false, source = n
 /** Returns true when damage was applied. */
 export function hurt(player, damage, s = null) {
   if (!player.alive || player.hitCooldown > 0 || player.pendingPowers || player.invulnerableFor > 0) return false;
+  if (hasCurse(s, 'brittle')) damage *= CURSE_EFFECTS.brittle.damageTaken;
+  if (s?.bloodPact) damage *= ENCOUNTERS.shrine.enemyDamage;
   const taken = Math.max(2, damage - player.armor);
   player.hp = Math.max(0, player.hp - taken);
   player.hitCooldown = CONTACT.playerCooldown;

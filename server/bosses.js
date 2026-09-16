@@ -1,11 +1,13 @@
 import { ENEMIES, PHASES } from './phases.js';
-import { BOSS, LIMITS } from './balance.js';
+import { BOSS, ENDLESS, LIMITS } from './balance.js';
+import { CURSE_EFFECTS, hasCurse } from './curses.js';
 import { nextId, pushEvent, spawnEnemy } from './combat.js';
 import { campaignOf } from './campaign.js';
 
 export function summonBoss(s, alive) {
   const type = PHASES[s.phase].boss;
-  const hp = BOSS.health[s.phase] * campaignOf(s).bossHp * (1 + (alive.length - 1) * BOSS.extraPlayerHp);
+  const hp = BOSS.health[s.phase] * campaignOf(s).bossHp * (1 + (alive.length - 1) * BOSS.extraPlayerHp)
+    * (1 + (s.loop || 0) * ENDLESS.bossHpPerLoop) * (hasCurse(s, 'tyrant') ? CURSE_EFFECTS.tyrant.bossHp : 1);
   s.altar = null;
   s.enemies = [{ id: nextId(s), type, boss: true, hp, maxHp: hp, age: 0, stage: 1,
     x: alive[0].x + 330, y: alive[0].y - 180, attackCooldown: 2.5, rangedCooldown: 1.5 }];
