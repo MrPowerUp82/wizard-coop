@@ -45,7 +45,13 @@ export function createAnimator({ onHit, onKill } = {}) {
   }
 
   function handleEvent(event) {
-    if (event.kind === 'chain' && !reduced) {
+    if (event.kind === 'combo') {
+      burst(event.x, event.y, '#ffe49b', 8, 90);
+      if (!reduced) effects.push({ kind: 'combo', x: event.x, y: event.y, color: '#ffe49b', age: 0, life: 0.8,
+        text: event.reaction === 'thermal' ? 'CHOQUE TÉRMICO' : event.reaction === 'conduction' ? 'CONDUÇÃO' : 'ECLIPSE' });
+    } else if (event.kind === 'evade') {
+      burst(event.x, event.y, colors[event.color], 5, 50);
+    } else if (event.kind === 'chain' && !reduced) {
       effects.push({ kind: 'chain', points: event.points, color: colors[event.color] || '#bfe8ff', age: 0, life: 0.28, seed: event.id });
     } else if (event.kind === 'boom') {
       burst(event.x, event.y, event.color >= 0 ? colors[event.color] : EVENT_COLORS.boom, 12, event.r || 70);
@@ -211,6 +217,8 @@ export function drawEffects(ctx, animator, drawGhost, visible) {
     } else if (fx.kind === 'chain') {
       ctx.lineWidth = 5; ctx.globalAlpha = (1 - progress) * 0.35; jagged(ctx, fx.points, fx.seed, progress);
       ctx.lineWidth = 2; ctx.globalAlpha = 1 - progress; ctx.strokeStyle = '#f4fbff'; jagged(ctx, fx.points, fx.seed, progress);
+    } else if (fx.kind === 'combo') {
+      ctx.font = '800 11px Inter'; ctx.textAlign = 'center'; ctx.fillText(fx.text, fx.x, fx.y - 35 - progress * 25);
     } else drawGhost(fx, progress);
     ctx.restore();
   }

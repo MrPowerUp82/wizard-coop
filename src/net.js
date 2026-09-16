@@ -1,4 +1,5 @@
 import { decodeState } from '../server/protocol.js';
+import { movementDelta } from '../server/movement.js';
 
 const INTERPOLATION_DELAY = 0.1;
 const RETRY_DELAYS = [400, 800, 1500, 2500, 4000, 6000, 8000, 8000];
@@ -41,6 +42,7 @@ export function createSession(url, entry, handlers) {
   let pingTimer = null;
   let lastInput = { x: 99, y: 99 }, lastInputAt = 0, inputSeq = 0;
   let predicted = null, visualOffset = { x: 0, y: 0 };
+  let motionId = 0;
   const history = [];
 
   const session = { playerId: null, room: null, token: null, color: entry.color, failure: null, reconnecting: false };
@@ -57,7 +59,7 @@ export function createSession(url, entry, handlers) {
     socket = ws;
     ws.onopen = () => {
       if (resume) ws.send(JSON.stringify({ type: 'resume', room: session.room, token: session.token }));
-      else ws.send(JSON.stringify({ type: entry.action, room: entry.code, name: entry.name, visibility: entry.visibility, color: entry.color, meta: entry.meta }));
+      else ws.send(JSON.stringify({ type: entry.action, room: entry.code, name: entry.name, visibility: entry.visibility, color: entry.color, meta: entry.meta, campaign: entry.campaign }));
       clearInterval(pingTimer);
       const ping = () => send({ type: 'ping', t: performance.now() });
       ping();
@@ -121,6 +123,12 @@ export function createSession(url, entry, handlers) {
   function reconcile(state, at) {
     const me = state.players[session.playerId];
     if (!predicted || !me) return;
+    if (motionId !== (me.motionId || 0)) {
+      motionId = me.motionId || 0;
+      predicted = { x: me.x, y: me.y };
+      visualOffset = { x: 0, y: 0 }; history.length = 0;
+      return;
+    }
     // Compare the server position with where we predicted ourselves roughly one round trip ago.
     const target = at - rtt;
     let past = history[0];
@@ -203,8 +211,10 @@ export function createSession(url, entry, handlers) {
         history.length = 0;
       }
       if (canMove) {
-        predicted.x += input.x * serverMe.speed * dt;
-        predicted.y += input.y * serverMe.speed * dt;
+        const latest = snapshots[snapshots.length - 1];
+        const age = Math.max(0, (now - clockOffset) / 1000 - latest.t);
+        const movement = movementDelta({ ...serverMe, dashFor: Math.max(0, (serverMe.dashFor || 0) - age) }, input, dt);
+        predicted.x += movement.x; predicted.y += movement.y;
         history.push({ at: now, x: predicted.x, y: predicted.y });
         while (history.length && history[0].at < now - 1500) history.shift();
       }

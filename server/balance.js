@@ -4,6 +4,9 @@ export const LIMITS = Object.freeze({ enemies: 180, shots: 320, enemyShots: 96, 
 export const DROP_TTL = 24;
 export const REVIVE = Object.freeze({ seconds: 4, radius: 44, health: 0.4 });
 export const SPECIAL = Object.freeze({ max: 100, crystal: 25, shots: 12 });
+export const DASH = Object.freeze({ cooldown: 4, seconds: 0.18, speed: 850 });
+export const SPECIAL_COOLDOWN = 8;
+export const ALTAR = Object.freeze({ appearsAt: 0.3, radius: 120, seconds: 15, expiresAfter: 45, coins: 20 });
 export const POWER_CHOICE_TIMEOUT = 15;
 export const INVULNERABLE_AFTER_CHOICE = 3;
 
@@ -14,12 +17,12 @@ export const PLAYER_BASE = Object.freeze({
 export const DIFFICULTY = Object.freeze({
   // Each phase starts this many "minutes" into the ramp instead of inheriting the global clock.
   phaseOffsetMinutes: 3,
-  spawnInterval: { start: 0.5, perMinute: 0.04, min: 0.2 },
+  spawnInterval: { start: 0.5, perMinute: 0.04, min: 0.25 },
   hpPerMinute: 0.2,
-  hpPerMinuteSquared: 0.03,
-  hpPerExtraPlayer: 0.12,
-  damage: { perMinute: 0.1, max: 2.3 },
-  speed: { perMinute: 0.028, max: 1.26 },
+  hpPerMinuteSquared: 0.018,
+  hpPerExtraPlayer: 0.3,
+  damage: { perMinute: 0.085, max: 2.1 },
+  speed: { perMinute: 0.028, max: 1.22 },
   spawnCountEveryMinutes: 1.5,
   adaptiveLimit: { base: 45, perPhaseSecond: 0.3, perPhase: 20, perPlayer: 18 },
   spawnDistance: { min: 520, spread: 120 },
@@ -34,7 +37,7 @@ export const CONTACT = Object.freeze({
 export const SEPARATION = Object.freeze({ radius: 30, strength: 0.5 });
 
 export const DROPS = Object.freeze({
-  heart: 0.05, greenGem: 0.2, coin: 0.2,
+  heart: 0.05, greenGem: 0.2, coin: 0.03,
   mergeAt: 140, mergeRadius: 90,
   magnetSpeed: 620, pickupSpeed: 350, collectRadius: 24
 });
@@ -52,10 +55,11 @@ export const PHASE_SCHEDULE = Object.freeze([
 ]);
 
 export const BOSS = Object.freeze({
+  health: [4500, 14000, 26000, 40000, 58000, 76000],
   // Boss HP targets this many seconds of the group's estimated sustained damage.
   timeToKill: [45, 60, 70, 75, 80, 90],
   dpsEfficiency: 0.7,
-  extraPlayerHp: 0.65,
+  extraPlayerHp: 0.6,
   stageThresholds: [0.66, 0.33],
   stageCooldown: [1, 0.8, 0.65],
   stageMinions: 4,

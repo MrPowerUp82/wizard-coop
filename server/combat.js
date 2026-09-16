@@ -77,8 +77,19 @@ function onKill(s, enemy, source, random, shard) {
   if (enemy.elite) pushEvent(s, 'eliteDown', { x: Math.round(enemy.x), y: Math.round(enemy.y) });
 }
 
-export function damageEnemy(s, enemy, damage, random, { slow = false, source = null, shard = false } = {}) {
+export function damageEnemy(s, enemy, damage, random, { slow = false, source = null, shard = false, element = '' } = {}) {
   if (enemy.hp <= 0) return false;
+  // A target can react once per second. Reaction damage cannot recursively trigger reactions.
+  const reaction = element === 'fire' && enemy.slowFor > 0 ? 'thermal'
+    : element === 'lightning' && enemy.rootFor > 0 ? 'conduction'
+      : element === 'moon' && enemy.burningFor > 0 ? 'eclipse' : null;
+  if (reaction && (enemy.comboAt ?? -1) <= s.time) {
+    enemy.comboAt = s.time + 1;
+    damage += (source?.damage || damage) * 1.5;
+    if (reaction === 'thermal') { enemy.slowFor = 0; enemy.freezeFor = 0; }
+    pushEvent(s, 'combo', { x: enemy.x, y: enemy.y, color: source?.color ?? 0, reaction });
+  }
+  if (element === 'fire') enemy.burningFor = 1.5;
   if (source) source.stats.damage += Math.min(enemy.hp, damage);
   enemy.hp -= damage;
   if (slow) enemy.slowFor = 1.2;

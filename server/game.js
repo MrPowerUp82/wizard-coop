@@ -1,4 +1,4 @@
-import { PHASES, PHASE_DURATION, TRANSITION_DURATION } from './phases.js';
+import { PHASES, TRANSITION_DURATION } from './phases.js';
 import { DROPS, LIMITS, PLAYER_BASE, POWER_CHOICE_TIMEOUT, REVIVE, SPECIAL } from './balance.js';
 import { applyPower, offerPowers } from './powers.js';
 import { distanceSq, hurt, nearest, pushEvent } from './combat.js';
@@ -6,12 +6,16 @@ import { updatePlayerAttacks, updateShots, updateWeapons } from './weapons.js';
 import { difficultyAt, spawnHorde, updateEnemies, updateEnemyShots } from './enemies.js';
 import { summonBoss } from './bosses.js';
 import { applyMeta } from './meta.js';
+import { campaignOf, phaseClock, phaseDuration } from './campaign.js';
+import { movementDelta } from './movement.js';
+import { updateObjective } from './objectives.js';
 import { createGrid } from './spatial.js';
 
 export { DROP_TTL, LIMITS, REVIVE, SPECIAL } from './balance.js';
 export { POWERS, applyPower, availablePowers, rerollPowers } from './powers.js';
 export { SPELLS, activateSpecial } from './weapons.js';
 export { difficultyAt } from './enemies.js';
+export { activateDash } from './movement.js';
 
 const EVENT_WINDOW = 1.5;
 const grid = createGrid();
@@ -20,8 +24,9 @@ export function xpNeeded(level) {
   return Math.floor(5 + level * 3 + level * level * 0.65);
 }
 
-export function createGameState() {
-  return { time: 0, players: {}, enemies: [], shots: [], enemyShots: [], gems: [], hazards: [], runes: [], zones: [], events: [],
+export function createGameState(campaign = 'classic') {
+  return { campaign: campaign === 'quick' ? 'quick' : 'classic', altar: null, altarSpawned: false,
+    time: 0, players: {}, enemies: [], shots: [], enemyShots: [], gems: [], hazards: [], runes: [], zones: [], events: [],
     spawn: 0, spawnCursor: 0, over: false, cleanup: 0, nextId: 0, eventSeq: 0, scheduleCursor: 0,
     phase: 0, phaseTime: 0, phaseStatus: 'horde', transitionTime: 0, victory: false };
 }
@@ -32,7 +37,8 @@ export function createPlayer(id, name, color = 0, meta = null) {
     alive: true, input: { x: 0, y: 0 }, speed: PLAYER_BASE.speed, damage: PLAYER_BASE.damage, attackDelay: PLAYER_BASE.attackDelay,
     attackCooldown: 0, projectiles: PLAYER_BASE.projectiles, pickupRadius: PLAYER_BASE.pickupRadius, armor: 0,
     hitCooldown: 0, invulnerableFor: 0, powers: {}, pendingPowers: null, powerTimer: 0, pendingChests: 0,
-    specialCharge: 0, coins: 0, coinFrac: 0, coinMult: 1, xpMult: 1, rerolls: 0, phoenix: 0,
+    specialCharge: 0, specialCooldown: 0, coins: 0, coinFrac: 0, coinMult: 1, xpMult: 1, rerolls: 1, phoenix: 0,
+    dashFor: 0, dashCooldown: 0, dashX: 0, dashY: 1, moveX: 0, moveY: 1, motionId: 0,
     reviveProgress: 0, reviveBy: null, reviving: null, castCount: 0, castAngle: 0, orbitAngle: 0, inputSeq: 0,
     stats: { damage: 0, kills: 0, revives: 0, taken: 0 }
   };
@@ -55,7 +61,7 @@ export function addLatePlayer(s, player) {
 
 function grantXp(ctx, player, amount) {
   player.xp += amount * (player.xpMult || 1);
-  while (!player.pendingPowers && player.xp >= xpNeeded(player.level)) {
+  while (player.alive && !player.pendingPowers && player.xp >= xpNeeded(player.level)) {
     player.xp -= xpNeeded(player.level);
     player.level += 1;
     player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.1);
@@ -107,17 +113,22 @@ function collect(ctx, gem, target) {
   if (type === 'heart') target.hp = Math.min(target.maxHp, target.hp + gem.value);
   else if (type === 'greenGem') target.specialCharge = Math.min(SPECIAL.max, target.specialCharge + gem.value);
   else if (type === 'coin') {
-    const earned = gem.value * (target.coinMult || 1) + (target.coinFrac || 0);
-    target.coins += Math.floor(earned);
-    target.coinFrac = earned - Math.floor(earned);
+    for (const p of Object.values(s.players)) {
+      const earned = gem.value * campaignOf(s).coins * (p.coinMult || 1) + (p.coinFrac || 0);
+      p.coins += Math.floor(earned);
+      p.coinFrac = earned - Math.floor(earned);
+    }
   } else if (type === 'magnet') {
     for (const other of s.gems) if ((other.type || 'gem') === 'gem') { other.pull = target.id; other.ttl = Math.max(other.ttl, 10); }
     pushEvent(s, 'magnet', { x: Math.round(target.x), y: Math.round(target.y) });
   } else if (type === 'chest') {
-    target.pendingChests++;
-    target.coins += 5;
+    for (const p of Object.values(s.players)) { p.pendingChests++; p.coins += 5; }
     pushEvent(s, 'chest', { x: Math.round(target.x), y: Math.round(target.y), player: target.id });
-  } else grantXp(ctx, target, gem.value);
+  } else {
+    // Every teammate earns the same base XP, including a fallen ally awaiting rescue.
+    const reward = gem.value * campaignOf(s).xp;
+    for (const p of Object.values(s.players)) grantXp(ctx, p, reward);
+  }
 }
 
 function collectDrops(ctx, survivors) {
@@ -161,6 +172,7 @@ function startNextPhase(s, alive) {
   s.phaseStatus = 'horde';
   s.spawn = 0;
   s.scheduleCursor = 0;
+  s.altar = null; s.altarSpawned = false;
   for (const p of alive) {
     p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.35);
     p.invulnerableFor = 3;
@@ -185,24 +197,29 @@ export function updateGame(s, dt, random = Math.random) {
     return;
   }
   if (s.phaseStatus === 'horde') {
-    s.phaseTime = Math.min(PHASE_DURATION, s.phaseTime + dt);
-    if (s.phaseTime >= PHASE_DURATION) summonBoss(s, alive);
+    s.phaseTime = Math.min(phaseDuration(s), s.phaseTime + dt);
+    if (s.phaseTime >= phaseDuration(s)) summonBoss(s, alive);
   }
   const ctx = { s, dt, random, alive, grid, coop: players.length > 1,
-    difficulty: difficultyAt(s.phaseTime, alive.length, s.phase) };
+    difficulty: difficultyAt(phaseClock(s), alive.length, s.phase) };
 
   for (const p of alive) {
     progress(ctx, p);
     p.hitCooldown = Math.max(0, p.hitCooldown - dt);
     p.invulnerableFor = Math.max(0, p.invulnerableFor - dt);
     p.attackCooldown -= dt;
+    p.dashCooldown = Math.max(0, (p.dashCooldown || 0) - dt);
+    p.specialCooldown = Math.max(0, (p.specialCooldown || 0) - dt);
     if (!p.pendingPowers) {
-      p.x += p.input.x * p.speed * dt;
-      p.y += p.input.y * p.speed * dt;
+      if (p.input.x || p.input.y) { p.moveX = p.input.x; p.moveY = p.input.y; }
+      const movement = movementDelta(p, p.input, dt);
+      p.x += movement.x; p.y += movement.y;
     }
+    p.dashFor = Math.max(0, (p.dashFor || 0) - dt);
   }
 
   if (s.phaseStatus === 'horde') spawnHorde(ctx);
+  updateObjective(ctx);
   updatePlayerAttacks(ctx);
   updateEnemies(ctx);
   grid.clear();
@@ -240,12 +257,13 @@ export function updateGame(s, dt, random = Math.random) {
 
 const PLAYER_FIELDS = ['id', 'name', 'color', 'x', 'y', 'hp', 'maxHp', 'xp', 'level', 'alive', 'speed', 'powers', 'pendingPowers',
   'specialCharge', 'coins', 'reviveProgress', 'reviveBy', 'reviving', 'castCount', 'castAngle', 'invulnerableFor', 'orbitAngle',
-  'rerolls', 'phoenix', 'stats', 'inputSeq', 'powerTimer', 'connected'];
+  'rerolls', 'phoenix', 'stats', 'inputSeq', 'powerTimer', 'connected',
+  'specialCooldown', 'dashFor', 'dashCooldown', 'dashX', 'dashY', 'moveX', 'moveY', 'motionId'];
 
 /** The client-facing view of the state: what rendering and the HUD need, nothing private to the simulation. */
 export function publicState(s) {
   return {
-    time: s.time, over: s.over, victory: s.victory, phase: s.phase, phaseTime: s.phaseTime,
+    campaign: s.campaign, altar: s.altar, time: s.time, over: s.over, victory: s.victory, phase: s.phase, phaseTime: s.phaseTime,
     phaseStatus: s.phaseStatus, transitionTime: s.transitionTime, hazards: s.hazards,
     players: Object.fromEntries(Object.entries(s.players).map(([id, p]) => [id, Object.fromEntries(PLAYER_FIELDS.map(key => [key, p[key]]))])),
     enemies: s.enemies.map(({ id, type, x, y, hp, maxHp, boss, elite, stage, slowFor, windup, fuse, dashWarn, dashAngle }) =>

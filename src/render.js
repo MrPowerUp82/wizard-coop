@@ -74,11 +74,34 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
   drawTerrain(ctx, game.phase || 0, camX - shake.x, camY - shake.y, W, H);
   worldTransform(ctx);
 
+  const altar = game.altar;
+  if (altar && visible(altar.x, altar.y, 180)) {
+    ctx.save();
+    const color = altar.status === 'complete' ? '#8dffcc' : altar.status === 'expired' ? '#61706b' : '#ffd36b';
+    ctx.fillStyle = `${color}18`; circle(ctx, altar.x, altar.y, altar.radius); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+    ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(altar.x, altar.y, altar.radius, -Math.PI / 2, -Math.PI / 2 + TAU * altar.progress / 15); ctx.stroke();
+    ctx.translate(altar.x, altar.y); ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = '#17342f'; ctx.fillRect(-26, -26, 52, 52); ctx.strokeRect(-26, -26, 52, 52);
+    ctx.rotate(-Math.PI / 4); ctx.font = '700 26px serif'; ctx.textAlign = 'center'; ctx.fillStyle = color; ctx.fillText('◇', 0, 9);
+    ctx.font = '700 11px Inter'; ctx.fillText(altar.status === 'complete' ? 'PURIFICADO' : altar.status === 'expired' ? 'APAGADO' : 'DEFENDA O ALTAR', 0, -48);
+    ctx.restore();
+  }
+
   for (const zone of game.zones || []) if (visible(zone.x, zone.y)) {
     ctx.globalAlpha = 0.32 + (reduced ? 0 : Math.sin(time * 14 + zone.x) * 0.08);
     const gradient = ctx.createRadialGradient(zone.x, zone.y, 4, zone.x, zone.y, zone.radius);
-    gradient.addColorStop(0, '#ffcf6b'); gradient.addColorStop(0.6, '#ff6a2b'); gradient.addColorStop(1, 'rgba(255,80,30,0)');
+    const roots = zone.kind === 'roots';
+    gradient.addColorStop(0, roots ? '#d1ff93' : '#ffcf6b'); gradient.addColorStop(0.6, roots ? '#55c46a' : '#ff6a2b'); gradient.addColorStop(1, roots ? 'rgba(50,180,80,0)' : 'rgba(255,80,30,0)');
     ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
+    if (zone.warning > 0 || roots) {
+      ctx.globalAlpha = 0.8; ctx.strokeStyle = roots ? '#92ed68' : '#ffd36b'; ctx.lineWidth = 2; ctx.stroke();
+      if (roots) for (let n = 0; n < 8; n++) {
+        const a = n * TAU / 8;
+        ctx.beginPath(); ctx.moveTo(zone.x, zone.y); ctx.lineTo(zone.x + Math.cos(a) * zone.radius, zone.y + Math.sin(a) * zone.radius); ctx.stroke();
+      }
+      else { ctx.textAlign = 'center'; ctx.font = '700 12px Inter'; ctx.fillStyle = '#ffe8a8'; ctx.fillText('METEORO', zone.x, zone.y); }
+    }
   }
   ctx.globalAlpha = 1;
   for (const rune of game.runes || []) if (visible(rune.x, rune.y)) {
@@ -135,6 +158,10 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
     const type = ENEMIES[enemy.type] || {};
     if (!enemy.boss && !visible(enemy.x, enemy.y)) continue;
     const size = (type.size || 64) * (enemy.elite ? 1.35 : 1);
+    if (enemy.freezeFor > 0 || enemy.rootFor > 0) {
+      ctx.strokeStyle = enemy.freezeFor > 0 ? '#8cdfff' : '#92ed68'; ctx.lineWidth = 3;
+      circle(ctx, enemy.x, enemy.y, size * 0.45); ctx.stroke();
+    }
     if (enemy.elite) {
       ctx.globalAlpha = 0.45 + (reduced ? 0 : Math.sin(time * 6 + enemy.id) * 0.15);
       ctx.strokeStyle = '#ffd36b'; ctx.lineWidth = 3;
@@ -248,4 +275,5 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
   }
   const boss = game.enemies.find(e => e.boss);
   if (boss && !inView(boss)) drawEdgeArrow(ctx, W, H, focus, boss, '#ff6b5e', 'GUARDIÃO');
+  if (altar && ['waiting', 'active'].includes(altar.status) && !inView(altar)) drawEdgeArrow(ctx, W, H, focus, altar, '#ffd36b', 'ALTAR');
 }

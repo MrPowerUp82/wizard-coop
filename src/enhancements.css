@@ -359,3 +359,15 @@ body, .menu-shell { min-height: 100dvh; }
 /* Keep toasts clear of the boss panel, which sits at the bottom center during guardian fights. */
 .toast { bottom: 178px; }
 @media (max-width: 800px) { .toast { bottom: 252px; } }
+
+.campaign-select { display: grid; gap: 8px; margin: 20px 0; }
+.campaign-select select { width: 100%; padding: 12px; color: #d8fff1; background: #112328; border: 1px solid #386458; border-radius: 8px; font: inherit; }
+.campaign-select small { color: #a0b9b2; font-size: 11px; line-height: 1.5; }
+.special-panel small { max-width: 230px; line-height: 1.4; }
+#dashBtn { margin-top: 8px; border-color: #78caba; touch-action: manipulation; }
+#specialBtn { touch-action: manipulation; }
+#lobbyCampaign { display: block; margin: 8px 0; color: #ffd36b; }
+#respecBtn { display: block; margin: 12px auto; color: #e6ca89; }
+.objective-panel { position: fixed; left: 24px; bottom: 90px; display: grid; gap: 5px; max-width: 250px; padding: 12px; border: 1px solid #806a37; border-radius: 9px; background: #101a20ed; color: #ffe3a0; font-size: 12px; pointer-events: none; }
+.objective-panel small { color: #b0bfb5; font-size: 10px; line-height: 1.4; }
+@media (max-width: 800px) { .objective-panel { top: 145px; bottom: auto; left: 12px; max-width: 165px; padding: 8px; font-size: 10px; } .objective-panel small { display: none; } .special-panel { max-width: 175px; } .special-panel small { font-size: 9px; } .controls-hint { display: none; } }

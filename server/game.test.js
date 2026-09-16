@@ -74,7 +74,7 @@ test('coleta preserva XP excedente e cria três escolhas únicas', () => {
   const player = createPlayer('p1', 'Teste');
   state.players.p1 = player;
   state.spawn = 999;
-  state.gems.push({ x: 0, y: 0, value: xpNeeded(1) + 2, ttl: DROP_TTL });
+  state.gems.push({ x: 0, y: 0, value: (xpNeeded(1) + 2) * 2, ttl: DROP_TTL });
   updateGame(state, 0.016, fixedRandom);
   assert.equal(player.level, 2);
   assert.equal(player.xp, 2);

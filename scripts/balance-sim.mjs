@@ -1,13 +1,17 @@
 // Headless balance probe: bots play full campaigns against the real simulation.
 // Usage: npm run sim -- [runs=8] [players=1]
-import { activateSpecial, applyPower, createGameState, createPlayer, updateGame } from '../server/game.js';
+import { activateDash, activateSpecial, applyPower, createGameState, createPlayer, updateGame } from '../server/game.js';
+import { META_UPGRADES } from '../server/meta.js';
+import fs from 'node:fs';
 import { PHASES, PHASE_DURATION } from '../server/phases.js';
 
 const runs = Number(process.argv[2] || 8);
 const playerCount = Number(process.argv[3] || 1);
+const campaign = process.argv[4] === 'classic' ? 'classic' : 'quick';
+const permanent = process.argv[5] === 'max' ? Object.fromEntries(Object.entries(META_UPGRADES).map(([id, p]) => [id, p.costs.length])) : null;
 const TICK = 1 / 30;
-const PREFERENCE = ['multishot', 'orbit', 'arcane', 'chain', 'haste', 'aura', 'vitality', 'runes', 'armor', 'magnet', 'swiftness',
-  'constellation', 'tempest', 'sanctuary', 'minefield', 'shatter', 'burn', 'ricochet', 'boomerang', 'bond'];
+const PREFERENCE = ['constellation', 'tempest', 'sanctuary', 'minefield', 'multishot', 'orbit', 'arcane', 'chain', 'haste',
+  'shatter', 'burn', 'ricochet', 'boomerang', 'aura', 'vitality', 'runes', 'armor', 'bond', 'magnet', 'swiftness'];
 
 function seeded(seed) {
   return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
@@ -39,29 +43,39 @@ function steer(s, p) {
   if (boss) { const dx = boss.x - p.x, dy = boss.y - p.y, d = Math.hypot(dx, dy); if (d > 380) { ax += dx / d * 0.8; ay += dy / d * 0.8; } }
   const fallen = Object.values(s.players).find(q => !q.alive);
   if (fallen) { const dx = fallen.x - p.x, dy = fallen.y - p.y, d = Math.hypot(dx, dy) + 1; ax += dx / d * 2; ay += dy / d * 2; }
+  const altar = s.altar;
+  if (altar && ['waiting', 'active'].includes(altar.status) && p.hp > p.maxHp * 0.5 && !fallen) {
+    const dx = altar.x - p.x, dy = altar.y - p.y, d = Math.hypot(dx, dy) + 1;
+    if (d > 35) { ax += dx / d * 2; ay += dy / d * 2; }
+  }
   const length = Math.hypot(ax, ay);
   return length ? { x: ax / length, y: ay / length } : { x: 0, y: 0 };
 }
 
 function play(seed) {
   const random = seeded(seed);
-  const s = createGameState();
-  for (let n = 0; n < playerCount; n++) s.players[`p${n}`] = createPlayer(`p${n}`, 'bot', (seed + n) % 4);
+  const s = createGameState(campaign);
+  for (let n = 0; n < playerCount; n++) s.players[`p${n}`] = createPlayer(`p${n}`, 'bot', (seed + n) % 4, permanent);
   const players = Object.values(s.players);
   const bosses = [];
   let bossStart = null, peakEnemies = 0, firstHit = null, lowest = 1;
+  let altars = 0, lastAltarPhase = -1;
+  const milestones = [];
   while (!s.over && s.time < PHASES.length * (PHASE_DURATION + 180)) {
     for (const p of players) {
       if (!p.alive) continue;
       p.input = steer(s, p);
       if (p.pendingPowers) applyPower(p, PREFERENCE.find(id => p.pendingPowers.includes(id)) || p.pendingPowers[0]);
-      if (p.specialCharge >= 100) activateSpecial(s, p.id);
+      if (p.specialCharge >= 100) activateSpecial(s, p.id, random);
+      if (s.enemies.some(e => e.hp > 0 && Math.hypot(e.x - p.x, e.y - p.y) < 90)
+        || s.hazards.some(h => h.warning < 0.4 && Math.hypot(h.x - p.x, h.y - p.y) < h.radius)) activateDash(s, p.id, p.input);
     }
     const status = s.phaseStatus;
     updateGame(s, TICK, random);
-    if (status !== 'boss' && s.phaseStatus === 'boss') bossStart = s.time;
+    if (status !== 'boss' && s.phaseStatus === 'boss') { bossStart = s.time; milestones.push({ phase: s.phase + 1, levels: players.map(p => p.level), ranks: players.map(p => Object.values(p.powers).reduce((a, b) => a + b, 0)) }); }
     if (status === 'boss' && s.phaseStatus !== 'boss') bosses.push(Math.round(s.time - bossStart));
     peakEnemies = Math.max(peakEnemies, s.enemies.length);
+    if (s.altar?.status === 'complete' && lastAltarPhase !== s.phase) { altars++; lastAltarPhase = s.phase; }
     for (const p of players) {
       if (firstHit === null && p.hp < p.maxHp) firstHit = Math.round(s.time);
       if (p.alive) lowest = Math.min(lowest, p.hp / p.maxHp);
@@ -69,15 +83,16 @@ function play(seed) {
   }
   const lead = players[0];
   return {
-    seed, end: Math.round(s.time), victory: s.victory, phase: s.phase + 1, status: s.phaseStatus,
+    seed, campaign, meta: permanent ? 'max' : 'none', end: Math.round(s.time), victory: s.victory, phase: s.phase + 1, status: s.phaseStatus,
     level: lead.level, bossSeconds: bosses, peakEnemies, firstHit, lowestHp: Math.round(lowest * 100),
     weapons: Object.keys(lead.powers).filter(id => ['orbit', 'aura', 'chain', 'runes'].includes(id)).join('+') || '-',
-    kills: lead.stats.kills
+    kills: lead.stats.kills, coins: lead.coins, levels: players.map(p => p.level), altars, milestones
   };
 }
 
 const results = Array.from({ length: runs }, (_, n) => play(11 + n * 7));
-console.table(results.map(r => ({ ...r, bossSeconds: r.bossSeconds.join('/') })));
+console.table(results.map(r => ({ ...r, milestones: undefined, levels: r.levels.join('/'), bossSeconds: r.bossSeconds.join('/') })));
+if (process.argv[6]) fs.writeFileSync(process.argv[6], JSON.stringify(results, null, 2));
 const wins = results.filter(r => r.victory).length;
 const bossTimes = results.flatMap(r => r.bossSeconds);
 console.log(`${playerCount} jogador(es): ${wins}/${runs} vitórias · chefe médio ${bossTimes.length ? Math.round(bossTimes.reduce((a, b) => a + b, 0) / bossTimes.length) : '-'}s · fim médio ${Math.round(results.reduce((a, r) => a + r.end, 0) / runs)}s`);

@@ -30,6 +30,10 @@
             <div id="characterPicker" class="character-grid" role="group" aria-label="Personagem para jogar"></div>
             <small>Escolha para offline ou co-op. Cada personagem é único por sala.</small>
           </section>
+          <label class="campaign-select" for="campaignSelect"><span class="setup-label">RITMO DA CAMPANHA · SEMPRE OS 6 REINOS</span>
+            <select id="campaignSelect"><option value="quick">Rápido · 6 hordas de 2 min + chefes</option><option value="classic">Clássico · 6 hordas de 5 min + chefes</option></select>
+            <small>O anfitrião escolhe o ritmo do co-op. XP e recompensas são ajustados à duração.</small>
+          </label>
           <div class="menu-actions">
             <button id="offlineBtn" class="primary"><span class="button-icon">◆</span><b>Jogar offline</b><small>Sobreviva no seu ritmo</small></button>
             <button id="createBtn"><span class="button-icon">✦</span><b>Criar sala co-op</b><small>Abra um ritual para amigos</small></button>
@@ -64,7 +68,7 @@
         <aside class="preview-card">
           <div class="moon"></div>
           <div class="sprite-preview"></div>
-          <div class="preview-copy"><strong>SEIS REINOS. UM ÚLTIMO RITUAL.</strong><span>6 fases de 5 minutos • 6 chefes • até 4 jogadores</span></div>
+          <div class="preview-copy"><strong>SEIS REINOS. UM ÚLTIMO RITUAL.</strong><span>Rápido ou clássico • 6 chefes • até 4 jogadores</span></div>
         </aside>
       </main>
 
@@ -72,8 +76,10 @@
         <div class="modal-card shop-card">
           <span class="rune">❖</span><h2 id="shopTitle">Grimório</h2>
           <p>Moedas recolhidas nas partidas compram melhorias permanentes neste navegador.</p>
+          <small>Bônus moderados: até +30 de vida e +15% de dano. Uma troca de poderes já é gratuita em toda partida. Compras anteriores foram preservadas.</small>
           <div class="shop-coins" id="shopCoins">0 moedas</div>
           <div id="shopList" class="shop-list"></div>
+          <button id="respecBtn" class="text-btn">Redistribuir melhorias</button>
           <button id="shopClose" class="primary compact">Voltar</button>
         </div>
       </section>
@@ -83,6 +89,7 @@
           <span class="rune">✦</span><h2>Ritual criado</h2><p id="lobbyVisibility">Compartilhe o código com seus aliados</p>
           <button id="roomCode" class="room-code" title="Copiar código">------</button>
           <small id="lobbyStatus">Conectando ao servidor…</small>
+          <small id="lobbyCampaign"></small>
           <div id="lobbyCharacters" class="character-grid" role="group" aria-label="Personagens da sala"></div>
           <small id="lobbyCharacterHint">Você pode trocar de personagem antes da batalha.</small>
           <button id="startBtn" class="primary compact">Começar batalha</button>
@@ -132,13 +139,15 @@
           <b id="spellName">Raio glacial</b><span id="coinCount">Moedas: 0</span>
           <div class="bar special-bar"><i id="specialFill"></i></div>
           <button id="specialBtn" class="compact" disabled>✦ Especial 0%</button>
-          <small>Cristais verdes carregam o especial</small>
+          <small id="specialHint">Cristais verdes carregam o especial</small>
+          <button id="dashBtn" class="compact">➤ Esquiva · SHIFT</button>
         </div>
+        <div id="objectivePanel" class="objective-panel hidden" role="status"><b>◇ ALTAR OPCIONAL</b><span id="objectiveText"></span><small>Poder + 20 moedas para todos · sair do círculo preserva o progresso</small></div>
         <p id="reviveHint" class="revive-hint" role="status"></p>
         <div id="announce" class="announce" role="status" aria-live="polite"></div>
         <div id="reconnectBanner" class="reconnect-banner hidden" role="status">Conexão perdida — reconectando…</div>
         <div id="phaseTransition" class="phase-transition hidden"><small>PASSAGEM ABERTA</small><strong id="transitionText"></strong><span>Os sobreviventes recuperam 35% da vida e ganham um poder</span></div>
-        <div class="controls-hint">WASD / SETAS PARA MOVER <span>•</span> ATAQUE AUTOMÁTICO <span>•</span> ESPAÇO: ESPECIAL</div>
+        <div class="controls-hint">WASD / SETAS: MOVER <span>•</span> SHIFT: ESQUIVA <span>•</span> ESPAÇO: ESPECIAL <span>•</span> GELO + FOGO / RAÍZES + RAIO / BRASAS + LUA: COMBOS</div>
         <button id="muteBtn" class="exit mute" aria-label="Ativar ou silenciar sons" title="Som">♪</button>
         <button id="pauseBtn" class="exit pause" aria-label="Pausar partida" title="Pausar (Esc)">Ⅱ</button>
         <button id="exitBtn" class="exit" aria-label="Voltar ao menu">×</button>

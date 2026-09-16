@@ -4,7 +4,7 @@ import {
   LIMITS, POWERS, addLatePlayer, applyPower, availablePowers, createGameState, createPlayer, difficultyAt,
   rerollPowers, updateGame, xpNeeded
 } from './game.js';
-import { CONTACT, DIFFICULTY, DROPS, ELITE, POWER_CHOICE_TIMEOUT } from './balance.js';
+import { BOSS, CONTACT, DIFFICULTY, DROPS, ELITE, POWER_CHOICE_TIMEOUT } from './balance.js';
 import { ENEMIES, PHASE_DURATION, enemyXp } from './phases.js';
 import { META_UPGRADES, applyMeta, sanitizeMeta } from './meta.js';
 
@@ -104,7 +104,7 @@ test('elite surge no horário marcado e deixa baú e ímã; baú oferece poder e
   assert.ok(p.pendingPowers?.length);
   applyPower(p, p.pendingPowers[0]);
   tick(s, 3.5);
-  assert.equal(p.xp, 3);
+  assert.equal(p.xp, 1.5);
 });
 
 test('lodo se divide, besouro investe, olho atira à distância e morcego explode sem deixar loot', () => {
@@ -193,6 +193,8 @@ test('evoluções, assinaturas e elo aparecem só quando os requisitos são cump
 
 test('trocar opções consome cargas do Destino e evita repetir as mesmas escolhas', () => {
   const p = createPlayer('p', 'Mago');
+  assert.equal(p.rerolls, 1, 'uma troca gratuita por partida');
+  p.rerolls = 0;
   p.pendingPowers = availablePowers(p, () => 0.1);
   assert.equal(rerollPowers(p, () => 0.1), false);
   p.rerolls = 1;
@@ -203,7 +205,7 @@ test('trocar opções consome cargas do Destino e evita repetir as mesmas escolh
   assert.ok(p.pendingPowers.every(id => !before.includes(id)));
 });
 
-test('vida do chefe acompanha a força do grupo e ele muda de estágio com lacaios e onda de choque', () => {
+test('vida do chefe independe da build e ele muda de estágio com lacaios e onda de choque', () => {
   const bossFor = damage => {
     const { s, p } = fixture();
     p.damage = damage;
@@ -214,8 +216,8 @@ test('vida do chefe acompanha a força do grupo e ele muda de estágio com lacai
   };
   const weak = bossFor(14).enemies[0];
   const strong = bossFor(400).enemies[0];
-  assert.equal(weak.maxHp, ENEMIES.treant.hp);
-  assert.ok(strong.maxHp > weak.maxHp * 5);
+  assert.equal(weak.maxHp, BOSS.health[0]);
+  assert.equal(strong.maxHp, weak.maxHp);
 
   const s = bossFor(14);
   const boss = s.enemies[0];
@@ -265,8 +267,8 @@ test('melhorias permanentes são validadas e aplicadas; Fênix salva uma vez', (
   assert.deepEqual(sanitizeMeta({ vigor: 99, might: -3, wisdom: 1.5, greed: '2', reroll: 2, phoenix: 1, hack: 5 }),
     { vigor: META_UPGRADES.vigor.costs.length, might: 0, wisdom: 0, greed: 0, reroll: 2, phoenix: 1 });
   const p = applyMeta(createPlayer('p', 'Mago'), { vigor: 2, might: 1, wisdom: 1, greed: 1, reroll: 2, phoenix: 1 });
-  assert.equal(p.maxHp, 120); assert.equal(p.hp, 120);
-  assert.equal(p.rerolls, 2);
+  assert.equal(p.maxHp, 112); assert.equal(p.hp, 112);
+  assert.equal(p.rerolls, 3);
   assert.ok(p.damage > 14 && p.xpMult > 1 && p.coinMult > 1);
 
   const { s } = fixture();

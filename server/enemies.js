@@ -2,6 +2,7 @@ import { BEHAVIORS, ENEMIES, PHASES } from './phases.js';
 import { CONTACT, DIFFICULTY, ELITE, LIMITS, PHASE_SCHEDULE, SEPARATION } from './balance.js';
 import { distanceSq, hurt, nearest, pushEvent, spawnEnemy } from './combat.js';
 import { bossBrain } from './bosses.js';
+import { phaseClock } from './campaign.js';
 
 export function difficultyAt(phaseTime, playerCount = 1, phase = 0) {
   const d = DIFFICULTY;
@@ -9,7 +10,7 @@ export function difficultyAt(phaseTime, playerCount = 1, phase = 0) {
   const extraPlayers = Math.max(0, playerCount - 1);
   return {
     spawnInterval: Math.max(d.spawnInterval.min, d.spawnInterval.start - minutes * d.spawnInterval.perMinute),
-    hpScale: 1 + minutes * d.hpPerMinute + minutes * minutes * d.hpPerMinuteSquared + extraPlayers * d.hpPerExtraPlayer,
+    hpScale: (1 + minutes * d.hpPerMinute + minutes * minutes * d.hpPerMinuteSquared) * (1 + extraPlayers * d.hpPerExtraPlayer),
     damageScale: Math.min(d.damage.max, 1 + minutes * d.damage.perMinute),
     speedScale: Math.min(d.speed.max, 1 + minutes * d.speed.perMinute),
     spawnCount: 1 + Math.floor(minutes / d.spawnCountEveryMinutes) + Math.floor(extraPlayers / 2)
@@ -39,10 +40,10 @@ function spawnAround(ctx, focus, angle, type, extra = {}, distance) {
 function runSchedule(ctx) {
   const { s, alive, random } = ctx;
   s.scheduleCursor ??= 0;
-  while (s.scheduleCursor < PHASE_SCHEDULE.length && s.phaseTime >= PHASE_SCHEDULE[s.scheduleCursor].at) {
+  while (s.scheduleCursor < PHASE_SCHEDULE.length && phaseClock(s) >= PHASE_SCHEDULE[s.scheduleCursor].at) {
     const beat = PHASE_SCHEDULE[s.scheduleCursor++];
     // Skip beats that were jumped over (e.g. a long pause or a test fast-forward).
-    if (s.phaseTime - beat.at > 2) continue;
+    if (phaseClock(s) - beat.at > 2) continue;
     const phase = PHASES[s.phase];
     if (beat.kind === 'opening') {
       for (const focus of alive) for (let n = 0; n < 8; n++) spawnAround(ctx, focus, n * Math.PI / 4 + random() * 0.3, phase.enemies[0]);
@@ -65,7 +66,7 @@ export function spawnHorde(ctx) {
   runSchedule(ctx);
   s.spawn -= dt;
   const a = DIFFICULTY.adaptiveLimit;
-  const adaptiveLimit = Math.min(LIMITS.enemies, a.base + Math.floor(s.phaseTime * a.perPhaseSecond) + s.phase * a.perPhase + alive.length * a.perPlayer);
+  const adaptiveLimit = Math.min(LIMITS.enemies, a.base + Math.floor(phaseClock(s) * a.perPhaseSecond) + s.phase * a.perPhase + alive.length * a.perPlayer);
   if (s.spawn > 0 || s.enemies.length >= adaptiveLimit) return;
   s.spawn = difficulty.spawnInterval;
   const batchSize = Math.min(difficulty.spawnCount, adaptiveLimit - s.enemies.length, DIFFICULTY.maxBatch);
@@ -74,7 +75,7 @@ export function spawnHorde(ctx) {
     const focus = alive[(s.spawnCursor + n) % alive.length];
     const angle = angleOffset + n * (Math.PI * 2 / batchSize) + random() * 0.25;
     const distance = DIFFICULTY.spawnDistance.min + random() * DIFFICULTY.spawnDistance.spread;
-    spawnAround(ctx, focus, angle, pickType(s.phase, s.phaseTime, random), {}, distance);
+    spawnAround(ctx, focus, angle, pickType(s.phase, phaseClock(s), random), {}, distance);
   }
   s.spawnCursor = (s.spawnCursor + batchSize) % alive.length;
 }
@@ -136,6 +137,10 @@ export function updateEnemies(ctx) {
   for (const enemy of s.enemies) {
     if (enemy.hp <= 0) continue;
     enemy.age += dt;
+    enemy.burningFor = Math.max(0, (enemy.burningFor || 0) - dt);
+    enemy.rootFor = Math.max(0, (enemy.rootFor || 0) - dt);
+    enemy.freezeFor = Math.max(0, (enemy.freezeFor || 0) - dt);
+    if (!enemy.boss && enemy.freezeFor > 0) continue;
     const target = nearest(enemy, alive);
     const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
     enemy.slowFor = Math.max(0, (enemy.slowFor || 0) - dt);
@@ -143,6 +148,7 @@ export function updateEnemies(ctx) {
     const type = ENEMIES[enemy.type];
     const slow = enemy.slowFor > 0 ? (enemy.boss ? 0.85 : 0.6) : 1;
     let speed = type.speed * slow * difficulty.speedScale * (enemy.elite ? ELITE.speed : 1);
+    if (enemy.rootFor > 0) speed *= enemy.boss ? 0.75 : 0;
     if (enemy.boss) {
       bossBrain(ctx, enemy, target);
       if (enemy.dash > 0) speed = enemy.dashSpeed;

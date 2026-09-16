@@ -1,6 +1,8 @@
 import { POWERS, REVIVE, SPECIAL, SPELLS, xpNeeded } from '../server/game.js';
 import { POWER_CHOICE_TIMEOUT } from '../server/balance.js';
-import { PHASES, PHASE_DURATION } from '../server/phases.js';
+import { PHASES } from '../server/phases.js';
+import { phaseDuration } from '../server/campaign.js';
+import { SPECIALS } from '../server/weapons.js';
 import { KIND_LABELS, POWER_INFO } from './powerInfo.js';
 
 const $ = selector => document.querySelector(selector);
@@ -33,7 +35,7 @@ export function createHud() {
   const el = Object.fromEntries(['hpBar', 'xpBar', 'level', 'timer', 'spellName', 'specialFill', 'specialBtn', 'coinCount', 'reviveHint',
     'phaseName', 'phasePanel', 'phaseTime', 'phaseProgress', 'bossPanel', 'bossName', 'bossHp', 'bossHealth', 'bossHint', 'phaseTransition',
     'transitionText', 'players', 'powerRow', 'announce', 'reconnectBanner', 'powerModal', 'powerChoices', 'powerTimer', 'rerollBtn',
-    'damageVignette', 'toast'].map(id => [id, $(`#${id}`)]));
+    'damageVignette', 'toast', 'dashBtn', 'specialHint', 'objectivePanel', 'objectiveText'].map(id => [id, $(`#${id}`)]));
   const powerTimerFill = el.powerTimer.querySelector('i');
   let announceTimer = null;
   let shownPowers = '';
@@ -137,10 +139,21 @@ export function createHud() {
       set(el.level, 'text', `NÍVEL ${me.level}`);
       set(el.timer, 'text', format(view.time || 0));
       const charge = Math.round(me.specialCharge || 0);
+      const blocked = !me.alive || paused || Boolean(me.pendingPowers) || view.over || view.phaseStatus === 'transition';
+      const special = SPECIALS[me.color ?? 0];
       set(el.spellName, 'text', SPELLS[me.color ?? 0].name);
       set(el.specialFill, 'width', `${charge}%`);
-      set(el.specialBtn, 'disabled', charge < SPECIAL.max || !me.alive || paused || Boolean(me.pendingPowers) || view.over || view.phaseStatus === 'transition');
-      set(el.specialBtn, 'text', charge >= SPECIAL.max ? '✦ Especial · ESPAÇO' : `✦ Especial ${charge}%`);
+      set(el.specialBtn, 'disabled', charge < SPECIAL.max || blocked || me.specialCooldown > 0);
+      set(el.specialBtn, 'text', me.specialCooldown > 0 ? `${special.name} · ${Math.ceil(me.specialCooldown)}s`
+        : charge >= SPECIAL.max ? `${special.name} · ESPAÇO` : `${special.name} ${charge}%`);
+      set(el.specialHint, 'text', special.description);
+      set(el.dashBtn, 'disabled', blocked || me.dashCooldown > 0);
+      set(el.dashBtn, 'text', me.dashCooldown > 0 ? `Esquiva · ${Math.ceil(me.dashCooldown)}s` : '➤ Esquiva · SHIFT');
+      const altar = view.altar;
+      set(el.objectivePanel, 'hidden', !altar || view.phaseStatus !== 'horde' || view.over);
+      if (altar) set(el.objectiveText, 'text', altar.status === 'complete' ? 'Purificado! Recompensa compartilhada.'
+        : altar.status === 'expired' ? 'O altar se apagou. Continue a campanha.'
+          : `${Math.floor(altar.progress)}/15s defendidos · expira em ${Math.ceil(altar.ttl)}s`);
       set(el.coinCount, 'text', `Moedas: ${me.coins || 0}`);
       set(el.reviveHint, 'text', view.over ? '' : me.alive
         ? me.reviving ? 'Ressuscitando aliado… permaneça no círculo.' : offline ? '' : 'Para reviver um aliado, fique no círculo por 4s.'
@@ -149,9 +162,9 @@ export function createHud() {
       const status = view.phaseStatus || 'horde';
       set(el.phaseName, 'text', `${(view.phase || 0) + 1} / ${PHASES.length} · ${phase.name}`);
       set(el.phasePanel, '--phase-color', phase.color);
-      set(el.phaseTime, 'text', status === 'horde' ? `${format(Math.ceil(PHASE_DURATION - (view.phaseTime || 0)))} ATÉ O CHEFE`
+      set(el.phaseTime, 'text', status === 'horde' ? `${format(Math.ceil(phaseDuration(view) - (view.phaseTime || 0)))} ATÉ O CHEFE`
         : status === 'boss' ? 'DERROTE O GUARDIÃO' : status === 'transition' ? 'GUARDIÃO DERROTADO' : 'CAMPANHA CONCLUÍDA');
-      set(el.phaseProgress, 'width', `${Math.min(100, (view.phaseTime || 0) / PHASE_DURATION * 100)}%`);
+      set(el.phaseProgress, 'width', `${Math.min(100, (view.phaseTime || 0) / phaseDuration(view) * 100)}%`);
       const boss = view.enemies.find(e => e.boss);
       set(el.bossPanel, 'hidden', !boss);
       if (boss) {

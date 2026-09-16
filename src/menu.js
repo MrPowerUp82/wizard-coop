@@ -1,4 +1,6 @@
 import { SPELLS } from '../server/game.js';
+import { SPECIALS } from '../server/weapons.js';
+import { CAMPAIGNS, campaignId } from '../server/campaign.js';
 
 const $ = selector => document.querySelector(selector);
 const DEFAULT_SERVER = 'wss://vps65228.publiccloud.com.br/ws';
@@ -34,7 +36,8 @@ export function renderCharacterPicker(element, selected, players, ownId, onChoos
     const title = document.createElement('b'); title.textContent = characterNames[color];
     const power = document.createElement('span'); power.textContent = spell.name;
     const detail = document.createElement('small');
-    detail.textContent = occupant ? `Em uso: ${occupant.name}` : characterEffects[color];
+    detail.textContent = occupant ? `Em uso: ${occupant.name}` : `${characterEffects[color]} · Especial: ${SPECIALS[color].name}`;
+    button.title = SPECIALS[color].description;
     button.append(portrait, title, power, detail);
     button.onclick = () => onChoose(color);
     return button;
@@ -46,6 +49,7 @@ export function createMenu({ wallet, toast, onOffline, onCreate, onJoin, isIdle,
   const saved = Number(storage.get('arcana-character') ?? 0);
   let selected = Number.isInteger(saved) && saved >= 0 && saved < 4 ? saved : 0;
   let visibility = 'open';
+  let campaign = campaignId(storage.get('arcana-campaign'));
   let cancelRoomRequest = () => {};
 
   function selectCharacter(color) {
@@ -70,7 +74,7 @@ export function createMenu({ wallet, toast, onOffline, onCreate, onJoin, isIdle,
       const host = document.createElement('b');
       host.textContent = room.host;
       const code = document.createElement('small');
-      code.textContent = `Sala ${room.code} • ${room.running ? 'Em andamento' : 'Aguardando jogadores'}`;
+      code.textContent = `${CAMPAIGNS[room.campaign || 'classic'].name} • ${room.running ? 'Em andamento' : 'Aguardando jogadores'}`;
       description.append(host, code);
       const occupancy = document.createElement('em');
       occupancy.textContent = `${room.count}/4  ›`;
@@ -118,6 +122,8 @@ export function createMenu({ wallet, toast, onOffline, onCreate, onJoin, isIdle,
     const offers = wallet.offers();
     $('#shopCoins').textContent = `${wallet.coins} moedas`;
     $('#shopBtnCoins').textContent = wallet.coins ? `${wallet.coins} moedas para gastar` : 'Melhorias permanentes com moedas';
+    $('#respecBtn').disabled = wallet.invested <= 0;
+    $('#respecBtn').textContent = `Redistribuir melhorias · devolver ${wallet.invested} moedas`;
     $('#shopList').replaceChildren(...offers.map(offer => {
       const card = document.createElement('div');
       card.className = 'shop-item';
@@ -138,6 +144,10 @@ export function createMenu({ wallet, toast, onOffline, onCreate, onJoin, isIdle,
   }
 
   selectCharacter(selected);
+  const campaignSelect = $('#campaignSelect');
+  campaignSelect.value = campaign;
+  campaignSelect.onchange = () => { campaign = campaignId(campaignSelect.value); storage.set('arcana-campaign', campaign); };
+  $('#respecBtn').onclick = () => { const refund = wallet.respec(); toast(`${refund} moedas devolvidas ao Grimório`); renderShop(); };
   renderShop();
   $('#offlineBtn').onclick = () => onOffline();
   $('#shopBtn').onclick = () => { renderShop(); $('#shopModal').classList.remove('hidden'); };
@@ -187,6 +197,7 @@ export function createMenu({ wallet, toast, onOffline, onCreate, onJoin, isIdle,
 
   return {
     get character() { return selected; },
+    get campaign() { return campaign; },
     selectCharacter,
     fetchOpenRooms,
     renderShop

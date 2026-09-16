@@ -1,6 +1,7 @@
 import { WebSocketServer } from 'ws';
 import crypto from 'node:crypto';
-import { activateSpecial, addLatePlayer, applyPower, createGameState, createPlayer, rerollPowers, updateGame } from './game.js';
+import { activateDash, activateSpecial, addLatePlayer, applyPower, createGameState, createPlayer, rerollPowers, updateGame } from './game.js';
+import { campaignId } from './campaign.js';
 import { encodeState } from './protocol.js';
 import { sanitizeMeta } from './meta.js';
 
@@ -66,13 +67,14 @@ function openRoomList() {
       count: playerCount(room),
       running: room.running,
       host: room.state.players[room.host?.id]?.name || 'Arcanista'
+      , campaign: room.state.campaign
     }));
 }
 
 const roomPlayers = room => Object.values(room.state.players).map(({ id, name, color, connected }) => ({ id, name, color, connected: connected !== false }));
 function lobbyState(room) {
   return { type: 'lobby', count: playerCount(room), visibility: room.visibility,
-    players: roomPlayers(room), hostId: room.host?.id, running: room.running };
+    players: roomPlayers(room), hostId: room.host?.id, running: room.running, campaign: room.state.campaign };
 }
 function characterTaken(ws, room) {
   return send(ws, { type: 'error', code: 'CHARACTER_TAKEN', message: 'Este personagem já está em uso. Escolha outro para entrar.',
@@ -191,7 +193,7 @@ wss.on('connection', (/** @type {Client} */ ws) => {
         return send(ws, { type: 'error', message: `O servidor atingiu o limite de ${MAX_ROOMS} salas. Entre em uma sala disponível ou tente novamente mais tarde.` });
       }
       const created = { code: createCode(), host: null, clients: new Set(), sessions: new Map(), grace: new Map(),
-        state: createGameState(), running: false, visibility: message.visibility === 'open' ? 'open' : 'closed' };
+        state: createGameState(campaignId(message.campaign)), running: false, visibility: message.visibility === 'open' ? 'open' : 'closed' };
       created.expire = setTimeout(() => { if (!created.running) destroyRoom(created, 4001, 'Sala expirou antes da batalha'); }, LOBBY_IDLE_MS);
       rooms.set(created.code, created);
       join(ws, created, message.name, message.color, message.meta);
@@ -224,6 +226,8 @@ wss.on('connection', (/** @type {Client} */ ws) => {
       rerollPowers(player, Math.random, { coop: playerCount(room) > 1 });
     } else if (message.type === 'special' && room?.running) {
       activateSpecial(room.state, ws.id);
+    } else if (message.type === 'dash' && room?.running) {
+      activateDash(room.state, ws.id, { x: message.x, y: message.y });
     } else if (message.type === 'leave' && room) {
       leave(ws, true);
     }
