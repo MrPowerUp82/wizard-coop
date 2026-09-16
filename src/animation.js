@@ -177,7 +177,7 @@ export function createAnimator({ onHit, onKill } = {}) {
     },
     update(game, dt, options = {}) {
       reduced = Boolean(options.reduced);
-      if (reduced) { for (let i = effects.length - 1; i >= 0; i--) if (effects[i].kind !== 'signal') effects.splice(i, 1); shake = 0; flash = null; }
+      if (reduced) { for (let i = effects.length - 1; i >= 0; i--) if (effects[i].kind !== 'signal') effects.splice(i, 1); shake = 0; flash = null; freezeFor = 0; }
       if (options.paused) return;
       dt = Math.max(0, Math.min(dt, 0.05));
       if (freezeFor > 0) { freezeFor -= dt; return; }
@@ -213,10 +213,23 @@ export function createAnimator({ onHit, onKill } = {}) {
             boss: entity.boss, elite: entity.elite, color, seed: actors.size * 2.39, movedAt: -10, dx: 0,
             stride: 0, walking: 0, hit: 0, cast: 0, down: alive ? 0 : 1, facing: 1,
             castCount: entity.castCount || 0, charge: entity.specialCharge || 0, level: entity.level,
-            bossCooldown: entity.attackCooldown, rangedCooldown: entity.rangedCooldown });
+            bossCooldown: entity.attackCooldown, rangedCooldown: entity.rangedCooldown,
+            dashFor: entity.dashFor || 0, trailAt: -1 });
           return;
         }
         const distance = Math.hypot(entity.x - old.x, entity.y - old.y);
+        // Space stamps along real movement, including the last dash snapshot. Never bridge teleports.
+        if (player && alive && !game.over && !reduced && distance > 0.5 && distance < 220
+          && (entity.dashFor > 0 || old.dashFor > 0) && time - old.trailAt >= 0.025
+          && previousPhase === `${game.phase}:${game.phaseStatus}`) {
+          const count = Math.min(4, Math.max(1, Math.ceil(distance / 18)));
+          for (let i = 0; i < count; i++) {
+            const t = i / count;
+            effects.push({ kind: 'afterimage', x: old.x + (entity.x - old.x) * t, y: old.y + (entity.y - old.y) * t,
+              color, character: entity.color ?? 0, facing: old.facing, age: 0, life: 0.24 });
+          }
+          old.trailAt = time;
+        }
         if (distance > 0.1 && alive && !game.over) {
           old.movedAt = time; old.dx = Math.sign(entity.x - old.x);
           // Keep the last horizontal direction when stationary or moving vertically.
@@ -244,11 +257,17 @@ export function createAnimator({ onHit, onKill } = {}) {
           old.cast = 1;
           old.castAngle = entity.castAngle || 0;
           burst(entity.x + (player ? 17 * old.facing : 0), entity.y - (player ? 12 : 0), color, 3, entity.boss ? 75 : 20);
+          if (player && !reduced) effects.push({ kind: 'sigil', x: entity.x, y: entity.y + 22, color,
+            age: 0, life: 0.32, radius: 31, seed: entity.castAngle || 0 });
         }
         if (player && (entity.specialCharge < old.charge || entity.level > old.level)) burst(entity.x, entity.y, color, 12, 95);
+        if (player && entity.level > old.level && !reduced) {
+          effects.push({ kind: 'ascend', x: entity.x, y: entity.y, color: '#ffe49b', age: 0, life: 1.15, radius: 85, major: true });
+          motes(entity.x, entity.y, 'star', '#ffe49b', 12, { speed: 70, spread: 45, gravity: -100, life: 1.1, size: 5 });
+        }
         Object.assign(old, { x: entity.x, y: entity.y, hp: entity.hp, alive,
           castCount: entity.castCount || 0, charge: entity.specialCharge || 0, level: entity.level,
-          bossCooldown: entity.attackCooldown, rangedCooldown: entity.rangedCooldown });
+          bossCooldown: entity.attackCooldown, rangedCooldown: entity.rangedCooldown, dashFor: entity.dashFor || 0 });
       };
       for (const p of Object.values(game.players)) track(p, `p:${p.id}`, true);
       for (const enemy of game.enemies) track(enemy, `e:${enemy.id}`, false);
@@ -262,6 +281,7 @@ export function createAnimator({ onHit, onKill } = {}) {
         }
         actors.delete(key);
       }
+      trim();
       previousPhase = `${game.phase}:${game.phaseStatus}`;
     },
     pose(key) {
@@ -277,14 +297,14 @@ export function createAnimator({ onHit, onKill } = {}) {
         x: -Math.cos(a.castAngle || 0) * a.cast * 3,
         y: bounce + breath * 0.7 + down * 12,
         rotation: step * (a.boss ? 0.015 : 0.045) + a.dx * a.walking * 0.025 + down * 0.65 - a.cast * 0.07,
-        sx: a.facing * (1 + breath * 0.015 + Math.abs(step) * 0.025 + a.cast * 0.06),
-        sy: 1 - breath * 0.015 - Math.abs(step) * 0.035 - down * 0.18,
+        sx: a.facing * (1 + breath * 0.015 + Math.abs(step) * 0.025 + a.cast * 0.06 + a.hit * 0.1),
+        sy: 1 - breath * 0.015 - Math.abs(step) * 0.035 - down * 0.18 - a.hit * 0.08,
         alpha: 1 - down * 0.72, flash: a.hit
       };
     },
     shake(amount) { if (!reduced) shake = Math.max(shake, amount); },
     get shakeOffset() {
-      if (!shake) return { x: 0, y: 0 };
+      if (reduced || !shake) return { x: 0, y: 0 };
       return { x: Math.sin(time * 91) * shake, y: Math.cos(time * 67) * shake };
     },
     /** Full-screen tint that fades out after big spells, or null. */
@@ -529,20 +549,62 @@ function drawSignal(ctx, fx, progress) {
   ctx.font = '700 10px Inter'; ctx.fillStyle = '#e6f5ef'; ctx.fillText(fx.name, fx.x, fx.y - 82);
 }
 
-const DRAWERS = { bloom: drawBloom, implode: drawImplode, convergence: drawConvergence, signal: drawSignal, mote: drawMote, nova: drawNova, meteor: drawMeteor, impact: drawImpact, thorns: drawThorns, lunar: drawLunar, familiar: drawFamiliarStrike };
+function drawSigil(ctx, fx, progress) {
+  const radius = fx.radius * (0.7 + easeOut(progress) * 0.3);
+  ctx.translate(fx.x, fx.y); ctx.scale(1, 0.42); ctx.rotate(fx.seed + progress * 0.5);
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (1 - progress) ** 2 * 0.7;
+  ctx.strokeStyle = fx.color; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(0, 0, radius, 0, TAU); ctx.stroke();
+  ctx.beginPath();
+  for (let i = 0; i <= 6; i++) {
+    const angle = i * TAU / 6;
+    ctx[i ? 'lineTo' : 'moveTo'](Math.cos(angle) * radius * 0.72, Math.sin(angle) * radius * 0.72);
+  }
+  ctx.stroke();
+  for (let i = 0; i < 6; i++) {
+    const angle = i * TAU / 6;
+    ctx.beginPath(); ctx.moveTo(Math.cos(angle) * radius * 0.88, Math.sin(angle) * radius * 0.88);
+    ctx.lineTo(Math.cos(angle) * radius * 1.15, Math.sin(angle) * radius * 1.15); ctx.stroke();
+  }
+}
+
+function drawAscend(ctx, fx, progress) {
+  const fade = Math.sin(Math.PI * progress) * (1 - progress);
+  const radius = fx.radius * (0.4 + easeOut(progress) * 0.6);
+  ctx.globalCompositeOperation = 'lighter';
+  const beam = ctx.createLinearGradient(fx.x, fx.y + 24, fx.x, fx.y - 150);
+  beam.addColorStop(0, '#ffe49b'); beam.addColorStop(1, 'rgba(255,228,155,0)');
+  ctx.fillStyle = beam; ctx.globalAlpha = fade * 0.3;
+  ctx.beginPath(); ctx.moveTo(fx.x - 28, fx.y + 24); ctx.lineTo(fx.x - 48, fx.y - 150);
+  ctx.lineTo(fx.x + 48, fx.y - 150); ctx.lineTo(fx.x + 28, fx.y + 24); ctx.fill();
+  ctx.globalAlpha = (1 - progress) ** 2; ctx.strokeStyle = fx.color; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(fx.x, fx.y + 24, radius, radius * 0.38, 0, 0, TAU); ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = Math.min(1, (1 - progress) * 3);
+  ctx.font = '800 12px Inter, system-ui, sans-serif'; ctx.textAlign = 'center';
+  ctx.lineWidth = 4; ctx.strokeStyle = '#15151d'; ctx.fillStyle = fx.color;
+  const y = fx.y - 54 - easeOut(progress) * 26;
+  ctx.strokeText('NÍVEL +', fx.x, y); ctx.fillText('NÍVEL +', fx.x, y);
+}
+
+const DRAWERS = { sigil: drawSigil, ascend: drawAscend, bloom: drawBloom, implode: drawImplode, convergence: drawConvergence, signal: drawSignal, mote: drawMote, nova: drawNova, meteor: drawMeteor, impact: drawImpact, thorns: drawThorns, lunar: drawLunar, familiar: drawFamiliarStrike };
 const UNCULLED = new Set(['chain', 'familiar', 'lunar', 'convergence']);
 
 export function drawEffects(ctx, animator, drawGhost, visible) {
   for (const fx of animator.effects) {
+    if (fx.kind === 'afterimage') continue; // Drawn behind actors by the world renderer.
     if (!UNCULLED.has(fx.kind) && !visible(fx.x, fx.y)) continue;
     const progress = fx.age / fx.life;
     ctx.save();
     ctx.globalAlpha = 1 - progress;
     ctx.strokeStyle = fx.color; ctx.fillStyle = fx.color; ctx.lineWidth = 2;
     if (fx.kind === 'ring') {
-      ctx.beginPath(); ctx.arc(fx.x, fx.y, 5 + progress * fx.radius, 0, TAU); ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (1 - progress) ** 2;
+      ctx.lineWidth = 1 + (1 - progress) * 2;
+      ctx.beginPath(); ctx.arc(fx.x, fx.y, 5 + easeOut(progress) * fx.radius, 0, TAU); ctx.stroke();
     } else if (fx.kind === 'spark') {
-      ctx.fillRect(fx.x + fx.vx * fx.age, fx.y + fx.vy * fx.age + 35 * fx.age ** 2, 3, 3);
+      const x = fx.x + fx.vx * fx.age, y = fx.y + fx.vy * fx.age + 35 * fx.age ** 2;
+      ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineWidth = 2 * (1 - progress) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - fx.vx * 0.045, y - (fx.vy + 70 * fx.age) * 0.045); ctx.stroke();
     } else if (fx.kind === 'chain') {
       ctx.lineWidth = 5; ctx.globalAlpha = (1 - progress) * 0.35; jagged(ctx, fx.points, fx.seed, progress);
       ctx.lineWidth = 2; ctx.globalAlpha = 1 - progress; ctx.strokeStyle = '#f4fbff'; jagged(ctx, fx.points, fx.seed, progress);
@@ -560,10 +622,11 @@ export function drawNumbers(ctx, animator, visible, reduced) {
   for (const number of animator.numbers) {
     if (!visible(number.x, number.y)) continue;
     const progress = number.age / number.life;
-    const rise = reduced ? 0 : progress * 26;
+    const rise = reduced ? 0 : easeOut(progress) * 32;
     const big = number.value >= 60 || number.boss;
     ctx.globalAlpha = Math.min(1, (1 - progress) * 1.6);
-    ctx.font = `800 ${big ? 17 : 12}px Inter, system-ui, sans-serif`;
+    const pop = reduced ? 1 : 1 + Math.sin(Math.min(1, progress / 0.3) * Math.PI) * 0.3;
+    ctx.font = `800 ${(big ? 17 : 12) * pop}px Inter, system-ui, sans-serif`;
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(8, 10, 16, .85)';
     const text = String(Math.round(number.value));

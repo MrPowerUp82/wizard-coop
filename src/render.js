@@ -14,12 +14,35 @@ function circle(ctx, x, y, radius) { ctx.beginPath(); ctx.arc(x, y, radius, 0, T
 function drawTrail(ctx, shot, color, reduced) {
   if (reduced) return;
   const speed = Math.hypot(shot.vx, shot.vy) || 1;
-  const length = shot.special ? 42 : shot.shard ? 14 : 24;
-  ctx.globalAlpha = shot.special ? 0.45 : 0.25;
-  ctx.strokeStyle = color; ctx.lineWidth = shot.special ? 6 : 3; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(shot.x, shot.y);
-  ctx.lineTo(shot.x - shot.vx / speed * length, shot.y - shot.vy / speed * length); ctx.stroke();
-  ctx.globalAlpha = 1;
+  const length = Math.min(shot.special ? 95 : shot.shard ? 25 : 58, speed * 0.14);
+  const tx = shot.x - shot.vx / speed * length, ty = shot.y - shot.vy / speed * length;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  const trail = ctx.createLinearGradient(shot.x, shot.y, tx, ty);
+  trail.addColorStop(0, color); trail.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.strokeStyle = trail; ctx.globalAlpha = 0.3; ctx.lineWidth = shot.special ? 14 : 7;
+  ctx.beginPath(); ctx.moveTo(shot.x, shot.y); ctx.lineTo(tx, ty); ctx.stroke();
+  ctx.globalAlpha = 0.85; ctx.lineWidth = shot.special ? 4 : 2; ctx.stroke();
+  ctx.restore();
+}
+
+/** A fixed world grid keeps the atmosphere continuous as the camera moves, with no particle allocation. */
+function drawAtmosphere(ctx, phase, camX, camY, W, H, time, reduced) {
+  if (reduced) return;
+  const spacing = 190;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = ['#b8f57f', '#b9cbff', '#ffad68', '#a6e5bd', '#ffe49b', '#c4a0ff'][phase % 6];
+  for (let gx = Math.floor((camX - 50) / spacing); gx <= Math.ceil((camX + W + 50) / spacing); gx++) {
+    for (let gy = Math.floor((camY - 50) / spacing); gy <= Math.ceil((camY + H + 50) / spacing); gy++) {
+      const seed = Math.sin(gx * 127.1 + gy * 311.7) * 43758.5453;
+      const offset = seed - Math.floor(seed);
+      const x = gx * spacing + offset * spacing + Math.sin(time * 0.35 + seed) * 24;
+      const y = gy * spacing + ((offset * 7) % 1) * spacing + Math.cos(time * 0.45 + seed) * 30;
+      const pulse = 0.5 + Math.sin(time * 1.2 + seed) * 0.5;
+      ctx.globalAlpha = 0.035 + pulse * 0.08; circle(ctx, x, y, 5 + offset * 3); ctx.fill();
+      ctx.globalAlpha = 0.12 + pulse * 0.3; circle(ctx, x, y, 0.8 + offset); ctx.fill();
+    }
+  }
+  ctx.restore();
 }
 
 function drawChest(ctx, x, y, time) {
@@ -217,6 +240,7 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   drawTerrain(ctx, game.phase || 0, camX - shake.x, camY - shake.y, W, H);
   worldTransform(ctx);
+  drawAtmosphere(ctx, game.phase || 0, camX, camY, W, H, time, reduced);
 
   const altar = game.altar;
   if (altar && visible(altar.x, altar.y, 180)) {
@@ -266,7 +290,7 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
   }
   ctx.globalAlpha = 1;
 
-  for (const hazard of game.hazards || []) {
+  for (const hazard of game.hazards || []) if (visible(hazard.x, hazard.y, hazard.radius)) {
     circle(ctx, hazard.x, hazard.y, hazard.radius);
     ctx.fillStyle = hazard.fired ? 'rgba(255,150,75,.55)' : 'rgba(245,85,80,.12)'; ctx.fill();
     ctx.strokeStyle = hazard.fired ? '#ffc778' : '#ef7f78'; ctx.lineWidth = 2; ctx.stroke();
@@ -279,8 +303,8 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
   for (const gem of game.gems || []) if (visible(gem.x, gem.y)) {
     const phase = time * 2.9 + gem.x * 0.017 + gem.y * 0.013;
     const bob = reduced ? 0 : Math.sin(phase) * 3;
-    if (gem.type === 'chest') { drawChest(ctx, gem.x, gem.y + bob, time); continue; }
-    if (gem.type === 'magnet') { drawMagnet(ctx, gem.x, gem.y + bob, time); continue; }
+    if (gem.type === 'chest') { drawChest(ctx, gem.x, gem.y + bob, reduced ? 0 : time); continue; }
+    if (gem.type === 'magnet') { drawMagnet(ctx, gem.x, gem.y + bob, reduced ? 0 : time); continue; }
     const [sprite, size] = gemLook(gem);
     const spin = !reduced && gem.type === 'coin' ? 0.2 + Math.abs(Math.cos(phase)) * 0.8 : 1;
     drawSprite(ctx, sprite, gem.x, gem.y + bob, size, 0, Math.min(0.95, (gem.ttl ?? 24) / 4), spin);
@@ -299,6 +323,16 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
     ctx.strokeStyle = '#ff6666'; ctx.lineWidth = 2;
     circle(ctx, shot.x, shot.y, 19); ctx.stroke();
     drawSprite(ctx, shot.sprite, shot.x, shot.y, 38, Math.atan2(shot.vy, shot.vx));
+  }
+
+  // Afterimages share the effect budget but sit below creatures, names and attack warnings.
+  for (const fx of animator.effects) if (fx.kind === 'afterimage' && visible(fx.x, fx.y)) {
+    const fade = (1 - fx.age / fx.life) ** 2;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    drawSprite(ctx, PLAYER_SPRITES[fx.character], fx.x, fx.y, 68, 0, fade * 0.3, fx.facing, 1, 0.5);
+    ctx.globalAlpha = fade * 0.25; ctx.strokeStyle = fx.color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(fx.x, fx.y + 24, 20, 6, 0, 0, TAU); ctx.stroke();
+    ctx.restore();
   }
 
   for (const enemy of game.enemies || []) {
@@ -386,6 +420,15 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
       ctx.fillStyle = 'rgba(87, 215, 180, .08)'; ctx.fill();
     }
     const pose = animator.pose(`p:${player.id}`);
+    if (alive && player.specialCharge >= 100) {
+      ctx.save(); ctx.translate(player.x, player.y + 24); ctx.scale(1, 0.4);
+      ctx.rotate(reduced ? 0 : time * 0.65);
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.globalAlpha = reduced ? 0.65 : 0.55 + Math.sin(time * 3) * 0.15;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath(); ctx.arc(0, 0, 33, i * TAU / 3, i * TAU / 3 + 1.5); ctx.stroke();
+      }
+      ctx.restore();
+    }
     ctx.globalAlpha = player.connected === false ? 0.4 : 1;
     ctx.fillStyle = `rgba(0,0,0,${pose.alpha * 0.24})`;
     ctx.beginPath(); ctx.ellipse(player.x, player.y + 24, 19, 6, 0, 0, TAU); ctx.fill();

@@ -155,3 +155,61 @@ test('movimento reduzido não gera efeitos de especial nem clarão', () => {
   assert.equal(animator.effects.length, 0);
   assert.equal(animator.flash, null);
 });
+
+test('rastro de esquiva respeita pausa, snapshots repetidos, teleporte e limpeza', () => {
+  const game = fixture(); const animator = createAnimator(); const player = game.players.p;
+  animator.update(game, 0.033);
+  player.dashFor = 0.15; player.x += 48;
+  const snapshot = JSON.stringify(game);
+  animator.update(game, 0.033);
+  assert.equal(JSON.stringify(game), snapshot);
+  const stamps = animator.effects.filter(fx => fx.kind === 'afterimage');
+  assert.ok(stamps.length > 0 && stamps.length <= 4);
+  const effects = JSON.stringify(animator.effects);
+  animator.update(game, 1, { paused: true });
+  assert.equal(JSON.stringify(animator.effects), effects);
+  animator.update(game, 0.033);
+  assert.equal(animator.effects.filter(fx => fx.kind === 'afterimage').length, stamps.length);
+  player.x += 900;
+  animator.update(game, 0.033);
+  assert.equal(animator.effects.filter(fx => fx.kind === 'afterimage').length, stamps.length);
+  player.dashFor = 0;
+  for (let i = 0; i < 10; i++) animator.update(game, 0.05);
+  assert.equal(animator.effects.length, 0);
+});
+
+test('subida de nível e conjuração não repetem efeitos em snapshots e respeitam orçamento', () => {
+  const game = fixture(); const animator = createAnimator();
+  animator.update(game, 0.033);
+  game.players.p.level++; game.players.p.castCount++;
+  animator.update(game, 0.033);
+  assert.ok(animator.effects.some(fx => fx.kind === 'ascend'));
+  assert.ok(animator.effects.some(fx => fx.kind === 'sigil'));
+  const count = animator.effects.length;
+  animator.update(game, 0.033);
+  assert.equal(animator.effects.length, count);
+  for (let i = 0; i < 80; i++) {
+    game.players.p.level++; game.players.p.castCount++;
+    animator.update(game, 0.001);
+    assert.ok(animator.effects.length <= MAX_EFFECTS);
+  }
+  for (let i = 0; i < 30; i++) animator.update(game, 0.05);
+  assert.equal(animator.effects.length, 0);
+});
+
+test('movimento reduzido remove rastros e impede tremor e pausa visual de eventos fortes', () => {
+  const game = fixture(); const animator = createAnimator(); const player = game.players.p;
+  animator.update(game, 0.033);
+  player.dashFor = 0.2; player.x += 30;
+  animator.update(game, 0.033);
+  assert.ok(animator.effects.some(fx => fx.kind === 'afterimage'));
+  player.x += 30; player.level++; player.castCount++;
+  game.events = [{ id: 1, kind: 'boom', x: 0, y: 0 }, { id: 2, kind: 'bossDown' }];
+  animator.update(game, 0.033, { reduced: true });
+  assert.equal(animator.effects.length, 0);
+  assert.deepEqual(animator.shakeOffset, { x: 0, y: 0 });
+  const time = animator.time;
+  animator.update(game, 0.033, { reduced: true });
+  assert.ok(animator.time > time);
+  assert.equal(animator.flash, null);
+});
