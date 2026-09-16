@@ -1,5 +1,5 @@
 // Keyboard and virtual joystick merged into one normalized movement vector.
-export function createInput({ joystick, onPause, onSpecial, isPlaying }) {
+export function createInput({ joystick, onPause, onSpecial, onDash, isPlaying }) {
   const knob = joystick.querySelector('i');
   const keys = new Set();
   let touch = null;
@@ -10,6 +10,7 @@ export function createInput({ joystick, onPause, onSpecial, isPlaying }) {
     if (isPlaying() && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) event.preventDefault();
     if (key === 'escape' && !event.repeat) onPause();
     if (key === ' ' && !event.repeat) onSpecial();
+    if (key === 'shift' && !event.repeat) { event.preventDefault(); onDash?.(); }
     keys.add(key);
   });
   addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));

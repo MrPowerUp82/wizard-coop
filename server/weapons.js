@@ -1,5 +1,6 @@
 import { ENEMIES } from './phases.js';
-import { LIMITS, SPECIAL, WEAPONS } from './balance.js';
+import { LIMITS, SPECIAL, SPECIAL_COOLDOWN, WEAPONS } from './balance.js';
+import { dashDirection } from './movement.js';
 import { rankOf } from './powers.js';
 import { damageEnemy, distanceSq, nextId, pushEvent } from './combat.js';
 
@@ -8,6 +9,12 @@ export const SPELLS = Object.freeze([
   { name: 'Bola de fogo', sprite: 'fire', tint: '#ff9955', speed: 430, radius: 29, pierce: 1, splash: 75 },
   { name: 'Espinho', sprite: 'thorn', tint: '#92ed68', speed: 560, radius: 29, pierce: 3 },
   { name: 'Lâmina lunar', sprite: 'blade', tint: '#c4a0ff', speed: 400, radius: 48, pierce: 2 }
+]);
+export const SPECIALS = Object.freeze([
+  { name: 'Nova glacial', description: 'Congela inimigos próximos; desacelera chefes.' },
+  { name: 'Meteoro', description: 'Explode sobre o inimigo mais próximo e deixa brasas.' },
+  { name: 'Jardim de espinhos', description: 'Prende inimigos em raízes e causa dano por 4s.' },
+  { name: 'Passo lunar', description: 'Avança na direção do movimento e lança lâminas que retornam.' }
 ]);
 
 const ATTACK_RANGE = 900;
@@ -23,13 +30,41 @@ function playerShot(p, angle, special = false) {
   return shot;
 }
 
-export function activateSpecial(s, playerId) {
+export function activateSpecial(s, playerId, random = Math.random) {
   const p = s.players[playerId];
   if (!p?.alive || s.over || s.phaseStatus === 'transition' || p.pendingPowers || p.specialCharge < SPECIAL.max
-    || s.shots.length + SPECIAL.shots > LIMITS.shots) return false;
+    || p.specialCooldown > 0) return false;
+  if (p.color === 3 && s.shots.length + 8 > LIMITS.shots) return false;
+  if ((p.color === 1 || p.color === 2) && s.zones.length >= LIMITS.zones) return false;
   p.specialCharge = 0;
+  p.specialCooldown = SPECIAL_COOLDOWN;
   p.castCount++;
-  for (let n = 0; n < SPECIAL.shots; n++) s.shots.push(playerShot(p, n * Math.PI * 2 / SPECIAL.shots, true));
+  if (p.color === 0) {
+    for (const enemy of [...s.enemies]) if (distanceSq(p, enemy) < 280 ** 2 && enemy.hp > 0) {
+      enemy.freezeFor = enemy.boss ? 0 : 2;
+      damageEnemy(s, enemy, p.damage * 4, random, { slow: true, source: p });
+    }
+    s.enemyShots = s.enemyShots.filter(shot => distanceSq(p, shot) > 220 ** 2);
+  } else if (p.color === 1) {
+    const target = s.enemies.filter(e => e.hp > 0 && distanceSq(p, e) < 500 ** 2)
+      .sort((a, b) => distanceSq(p, a) - distanceSq(p, b))[0];
+    const direction = dashDirection(p);
+    s.zones.push({ id: nextId(s), x: target?.x ?? p.x + direction.x * 180, y: target?.y ?? p.y + direction.y * 180,
+      radius: 165, ttl: 3.6, warning: 0.6, kind: 'meteor', damage: p.damage * 9, dps: p.damage * 0.5, owner: p.id, color: 1 });
+  } else if (p.color === 2) {
+    s.zones.push({ id: nextId(s), x: p.x, y: p.y, radius: 190, ttl: 4, kind: 'roots', dps: p.damage * 2, owner: p.id, color: 2 });
+  } else {
+    const direction = dashDirection(p);
+    const from = { x: p.x, y: p.y };
+    p.x += direction.x * 170; p.y += direction.y * 170;
+    p.motionId = (p.motionId || 0) + 1;
+    p.invulnerableFor = Math.max(p.invulnerableFor, 0.3);
+    for (let n = 0; n < 8; n++) {
+      const shot = playerShot({ ...p, ...from }, n * Math.PI / 4, true);
+      shot.boomerang = true;
+      s.shots.push(shot);
+    }
+  }
   pushEvent(s, 'special', { x: Math.round(p.x), y: Math.round(p.y), color: p.color });
   return true;
 }
@@ -115,10 +150,11 @@ export function updateShots({ s, dt, random, grid }) {
     hits.sort((a, b) => a[0] - b[0]);
     for (const [, enemy] of hits) {
       shot.hitIds.push(enemy.id);
-      damageEnemy(s, enemy, shot.damage, random, { slow: spell.slow, source: owner, shard: shot.shard });
+      damageEnemy(s, enemy, shot.damage, random, { slow: spell.slow, source: owner, shard: shot.shard,
+        element: shot.color === 1 ? 'fire' : shot.color === 3 ? 'moon' : '' });
       if (spell.splash) {
         grid.query(enemy.x, enemy.y, spell.splash, other => {
-          if (other !== enemy) damageEnemy(s, other, shot.damage * 0.6, random, { source: owner });
+          if (other !== enemy) damageEnemy(s, other, shot.damage * 0.6, random, { source: owner, element: 'fire' });
         });
         if (owner && rankOf(owner, 'burn')) addBurnZone(s, owner, enemy.x, enemy.y);
       }
@@ -170,7 +206,10 @@ function updateAura(ctx, p, rank) {
   });
   if (evolved) {
     for (const ally of alive) {
-      if (distanceSq(ally, p) < radius ** 2) ally.hp = Math.min(ally.maxHp, ally.hp + WEAPONS.evolutions.sanctuary.heal);
+      if (distanceSq(ally, p) < radius ** 2 && (ally.sanctuaryAt || 0) <= s.time) {
+        ally.hp = Math.min(ally.maxHp, ally.hp + WEAPONS.evolutions.sanctuary.heal);
+        ally.sanctuaryAt = s.time + WEAPONS.aura.every;
+      }
     }
   }
 }
@@ -199,7 +238,7 @@ function updateChain(ctx, p, rank) {
   for (let n = 0; n <= jumps && target; n++) {
     hit.add(target);
     points.push(Math.round(target.x), Math.round(target.y));
-    damageEnemy(s, target, damage, random, { source: p });
+    damageEnemy(s, target, damage, random, { source: p, element: 'lightning' });
     from = target;
     target = findFrom(from, cfg.jumpRange, hit);
   }
@@ -241,14 +280,23 @@ export function updateWeapons(ctx) {
     if (!triggered) continue;
     rune.ttl = 0;
     const owner = s.players[rune.owner] || null;
-    grid.query(rune.x, rune.y, rune.radius, enemy => { damageEnemy(s, enemy, rune.damage, random, { source: owner }); });
+    grid.query(rune.x, rune.y, rune.radius, enemy => { damageEnemy(s, enemy, rune.damage, random, { source: owner, element: 'fire' }); });
     pushEvent(s, 'boom', { x: Math.round(rune.x), y: Math.round(rune.y), r: Math.round(rune.radius), color: rune.color });
   }
   s.runes = s.runes.filter(rune => rune.ttl > 0);
   for (const zone of s.zones) {
     zone.ttl -= dt;
     const owner = s.players[zone.owner] || null;
-    grid.query(zone.x, zone.y, zone.radius, enemy => { damageEnemy(s, enemy, zone.dps * dt, random, { source: owner }); });
+    if (zone.kind === 'meteor' && zone.warning > 0) {
+      zone.warning -= dt;
+      if (zone.warning > 0) continue;
+      grid.query(zone.x, zone.y, zone.radius, enemy => { damageEnemy(s, enemy, zone.damage, random, { source: owner, element: 'fire' }); });
+      pushEvent(s, 'boom', { x: zone.x, y: zone.y, r: zone.radius, color: 1 });
+    }
+    grid.query(zone.x, zone.y, zone.radius, enemy => {
+      if (zone.kind === 'roots') enemy.rootFor = 0.5;
+      damageEnemy(s, enemy, zone.dps * dt, random, { source: owner, element: zone.kind === 'roots' ? '' : 'fire' });
+    });
   }
   s.zones = s.zones.filter(zone => zone.ttl > 0);
 }

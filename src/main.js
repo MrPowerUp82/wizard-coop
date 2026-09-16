@@ -1,6 +1,7 @@
 import './style.css';
 import './enhancements.css';
-import { activateSpecial, applyPower, createGameState, createPlayer, rerollPowers, updateGame } from '../server/game.js';
+import { activateDash, activateSpecial, applyPower, createGameState, createPlayer, rerollPowers, updateGame } from '../server/game.js';
+import { CAMPAIGNS } from '../server/campaign.js';
 import { PHASES } from '../server/phases.js';
 import { createAnimator } from './animation.js';
 import { createAudio } from './audio.js';
@@ -36,7 +37,8 @@ const controls = createInput({
   joystick: $('#joystick'),
   isPlaying: () => mode !== 'menu',
   onPause: () => togglePause(),
-  onSpecial: () => useSpecial()
+  onSpecial: () => useSpecial(),
+  onDash: () => useDash()
 });
 
 const menu = createMenu({
@@ -99,7 +101,12 @@ function feedback(me) {
     else if (event.kind === 'bossDown') { audio.play('bossDown'); hud.announce(`${phase.bossName} caiu!`, 'gold'); }
     else if (event.kind === 'elite') { audio.play('elite'); hud.announce('Uma elite surgiu — derrote-a para ganhar um baú', 'gold'); }
     else if (event.kind === 'ring') { audio.play('warning'); hud.announce('Enxame! Abra caminho', 'danger'); }
-    else if (event.kind === 'chest' && event.player === me.id) { audio.play('chest'); hud.toast('Baú aberto: escolha uma recompensa'); }
+    else if (event.kind === 'chest') { audio.play('chest'); hud.toast('Baú compartilhado: todos recebem um poder'); }
+    else if (event.kind === 'altar') { audio.play('elite'); hud.announce('Altar opcional: defenda por 15s para ganhar um poder', 'gold'); }
+    else if (event.kind === 'altarComplete') { audio.play('chest'); hud.announce('Altar purificado! Poder e moedas para todos', 'gold'); }
+    else if (event.kind === 'altarExpired') hud.toast('O altar se apagou. A campanha continua.');
+    else if (event.kind === 'combo' && near) audio.play('chain');
+    else if (event.kind === 'evade' && near) audio.play('shoot');
     else if (event.kind === 'magnet' && near) audio.play('magnet');
     else if (event.kind === 'boom' && near) audio.play('boom');
     else if (event.kind === 'chain' && near) audio.play('chain');
@@ -257,11 +264,11 @@ function showGame(label, room = '') {
 
 function startOffline() {
   if (session) return;
-  game = createGameState();
+  game = createGameState(menu.campaign);
   game.offline = true;
   game.players.me = createPlayer('me', playerName(), menu.character, wallet.upgrades);
   mode = 'offline';
-  showGame('SOZINHO');
+  showGame(`SOLO · ${CAMPAIGNS[game.campaign].name}`);
 }
 
 function endGame() {
@@ -300,12 +307,20 @@ function useSpecial() {
   else session?.send({ type: 'special' });
 }
 
+function useDash() {
+  const me = view?.players[meId];
+  if (mode === 'menu' || paused || view?.over || !me?.alive || me.pendingPowers) return;
+  const input = controls.read();
+  if (mode === 'offline') activateDash(game, 'me', input);
+  else session?.send({ type: 'dash', ...input });
+}
+
 function connect(action, code = '', visibility = 'closed', resume = null) {
   if (session || mode !== 'menu') return;
   let lobbyPlayers = [];
   let lobbyRunning = false;
-  const entry = { action, code, visibility, name: playerName(), color: menu.character, meta: wallet.upgrades, resume };
-  const requestEntry = color => current.send({ type: action, room: code, name: playerName(), visibility, color, meta: wallet.upgrades });
+  const entry = { action, code, visibility, name: playerName(), color: menu.character, meta: wallet.upgrades, campaign: menu.campaign, resume };
+  const requestEntry = color => current.send({ type: action, room: code, name: playerName(), visibility, color, meta: wallet.upgrades, campaign: menu.campaign });
   const renderLobbyCharacters = (disabled = false) => {
     renderCharacterPicker($('#lobbyCharacters'), current.playerId ? current.color : menu.character, lobbyPlayers, current.playerId, color => {
       if (session !== current) return;
@@ -324,6 +339,7 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
     onLobby(message) {
       if (session !== current) return;
       $('#lobbyStatus').textContent = `${message.count} jogador(es) no ritual`;
+      $('#lobbyCampaign').textContent = `${CAMPAIGNS[message.campaign || 'classic'].name} · todas as 6 fases`;
       lobbyPlayers = message.players || [];
       lobbyRunning = Boolean(message.running);
       const mine = lobbyPlayers.find(p => p.id === current.playerId);
@@ -380,6 +396,7 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
 }
 
 $('#specialBtn').onclick = useSpecial;
+$('#dashBtn').onclick = useDash;
 $('#startBtn').onclick = () => session?.send({ type: 'start' });
 $('#roomCode').onclick = async () => {
   if (!session?.room) return;

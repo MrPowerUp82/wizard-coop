@@ -1,13 +1,12 @@
 import { ENEMIES, PHASES } from './phases.js';
 import { BOSS, LIMITS } from './balance.js';
 import { nextId, pushEvent, spawnEnemy } from './combat.js';
-import { estimateDps } from './weapons.js';
+import { campaignOf } from './campaign.js';
 
 export function summonBoss(s, alive) {
   const type = PHASES[s.phase].boss;
-  const base = ENEMIES[type].hp * (1 + (alive.length - 1) * BOSS.extraPlayerHp);
-  const groupDps = alive.reduce((sum, p) => sum + estimateDps(p), 0) * BOSS.dpsEfficiency;
-  const hp = Math.max(base, groupDps * BOSS.timeToKill[s.phase]);
+  const hp = BOSS.health[s.phase] * campaignOf(s).bossHp * (1 + (alive.length - 1) * BOSS.extraPlayerHp);
+  s.altar = null;
   s.enemies = [{ id: nextId(s), type, boss: true, hp, maxHp: hp, age: 0, stage: 1,
     x: alive[0].x + 330, y: alive[0].y - 180, attackCooldown: 2.5, rangedCooldown: 1.5 }];
   s.shots = [];

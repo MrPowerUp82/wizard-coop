@@ -50,7 +50,7 @@ test('snapshot compacto preserva o que o cliente desenha e omite o que está lon
   assert.equal(decoded.players.p.color, 1);
   assert.deepEqual(decoded.enemies.map(e => e.id), [1, 3], 'inimigo distante some, chefe permanece');
   assert.deepEqual({ ...decoded.enemies[0], x: 0, y: 0, hp: 0 }, { id: 1, type: 'scorpion', x: 0, y: 0, hp: 0, maxHp: 55, boss: undefined, elite: true,
-    slowFor: 1, windup: 0, fuse: 0, dashWarn: 0, stage: undefined, dashAngle: undefined });
+    slowFor: 1, windup: 0, fuse: 0, dashWarn: 0, stage: undefined, dashAngle: undefined, rootFor: 0, freezeFor: 0, burningFor: 0 });
   assert.equal(decoded.enemies[1].stage, 2);
   assert.equal(decoded.shots[0].special, true);
   assert.equal(decoded.shots[0].hitIds, undefined);
@@ -122,8 +122,8 @@ test('trocar poderes e entrar atrasado funcionam pelo servidor', { timeout: 1500
   host.send({ type: 'start' });
   const state = decodeState((await host.receive('start')).state);
   const me = state.players[created.playerId];
-  assert.equal(me.rerolls, 1);
-  assert.equal(me.maxHp, 150);
+  assert.equal(me.rerolls, 2);
+  assert.equal(me.maxHp, 130);
   const late = await connect();
   late.send({ type: 'join', room: created.room, color: 3 });
   const joined = await late.receive('joined');
@@ -134,5 +134,5 @@ test('trocar poderes e entrar atrasado funcionam pelo servidor', { timeout: 1500
   assert.ok(Math.hypot(newcomer.x - anchor.x, newcomer.y - anchor.y) < 120);
   host.send({ type: 'reroll' });
   const after = decodeState((await host.receive('state')).state);
-  assert.equal(after.players[created.playerId].rerolls, 1, 'sem escolha pendente a troca não é gasta');
+  assert.equal(after.players[created.playerId].rerolls, 2, 'sem escolha pendente a troca não é gasta');
 });

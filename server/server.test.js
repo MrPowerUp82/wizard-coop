@@ -75,7 +75,7 @@ test('lista apenas salas abertas e disponíveis', { timeout: 10000 }, async t =>
   const browser = await connect();
   browser.send(JSON.stringify({ type: 'listRooms' }));
   const listing = await next(browser, 'rooms');
-  assert.deepEqual(listing.rooms, [{ code: openRoom.room, count: 1, running: false, host: 'Merlin' }]);
+  assert.deepEqual(listing.rooms, [{ code: openRoom.room, count: 1, running: false, host: 'Merlin', campaign: 'quick' }]);
 
   openHost.send(JSON.stringify({ type: 'start' }));
   await next(openHost, 'start');

@@ -45,7 +45,7 @@ export const ENEMIES = Object.freeze({
 
 export const BEHAVIORS = Object.freeze({
   charger: { range: 320, every: 3.4, windup: 0.5, dash: 0.45, speed: 3.2 },
-  shooter: { keepAway: 260, every: 2.8, shotSpeed: 190, sprite: 'bolt' },
+  shooter: { keepAway: 260, every: 3.5, shotSpeed: 170, sprite: 'bolt' },
   bomber: { fuseRange: 60, fuse: 0.6, radius: 70, damage: 2.2 },
   splitter: { children: 2, type: 'slimelet' }
 });

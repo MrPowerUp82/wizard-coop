@@ -98,10 +98,10 @@ test('drops dão XP, cura limitada, carga limitada e moedas uma única vez', () 
   ].map(drop => ({ ...drop, x: 0, y: 0, ttl: DROP_TTL }));
   updateGame(s, 0.01);
   assert.equal(p.hp, 100); assert.equal(p.specialCharge, 100);
-  assert.equal(p.coins, 1); assert.equal(p.xp, 2);
+  assert.equal(p.coins, 0); assert.equal(p.coinFrac, 0.4); assert.equal(p.xp, 1);
   assert.equal(s.gems.length, 0);
   updateGame(s, 0.01);
-  assert.equal(p.coins, 1); assert.equal(p.xp, 2);
+  assert.equal(p.coins, 0); assert.equal(p.coinFrac, 0.4); assert.equal(p.xp, 1);
 });
 
 test('coração e cristal ficam para quem precisa; derrotados não coletam', () => {
@@ -119,7 +119,7 @@ test('coração e cristal ficam para quem precisa; derrotados não coletam', () 
 });
 
 test('mortes geram todos os drops e respeitam limite mesmo antes da limpeza', () => {
-  for (const [roll, type] of [[0, 'heart'], [0.0499, 'heart'], [0.05, 'greenGem'], [0.2499, 'greenGem'], [0.25, 'coin'], [0.4499, 'coin'], [0.45, null], [0.9, null]]) {
+  for (const [roll, type] of [[0, 'heart'], [0.0499, 'heart'], [0.05, 'greenGem'], [0.2499, 'greenGem'], [0.25, 'coin'], [0.2799, 'coin'], [0.28, null], [0.9, null]]) {
     const { s } = fixture();
     s.enemies = [enemy('a', 200, 0, 1)];
     s.shots = [{ x: 200, y: 0, vx: 0, vy: 0, ttl: 1, damage: 10, color: 0 }];
@@ -135,7 +135,7 @@ test('mortes geram todos os drops e respeitam limite mesmo antes da limpeza', ()
   assert.equal(s.gems.length, LIMITS.drops);
 });
 
-test('especial exige carga e jogador ativo; dispara anel da própria cor e consome só uma vez', () => {
+test('especiais exigem carga e jogador ativo; respeitam capacidade e consomem só uma vez', () => {
   for (let color = 0; color < 4; color++) {
     const { s, p } = fixture(color);
     assert.equal(activateSpecial(s, 'p'), false);
@@ -149,20 +149,26 @@ test('especial exige carga e jogador ativo; dispara anel da própria cor e conso
     s.phaseStatus = 'horde'; s.over = true;
     assert.equal(activateSpecial(s, 'p'), false);
     s.over = false;
-    s.shots = Array.from({ length: LIMITS.shots }, () => ({}));
-    assert.equal(activateSpecial(s, 'p'), false);
-    assert.equal(p.specialCharge, SPECIAL.max);
+    if (color === 3) {
+      s.shots = Array.from({ length: LIMITS.shots }, () => ({}));
+      assert.equal(activateSpecial(s, 'p'), false);
+      assert.equal(p.specialCharge, SPECIAL.max);
+    } else if (color > 0) {
+      s.zones = Array.from({ length: LIMITS.zones }, () => ({}));
+      assert.equal(activateSpecial(s, 'p'), false);
+      assert.equal(p.specialCharge, SPECIAL.max);
+      s.zones = [];
+    }
     s.shots = [];
     assert.equal(activateSpecial(s, 'p'), true);
     assert.equal(p.specialCharge, 0);
-    assert.equal(s.shots.length, SPECIAL.shots);
+    assert.equal(s.shots.length, color === 3 ? 8 : 0);
     assert.ok(s.shots.every(shot => shot.color === color && shot.special && shot.damage === p.damage * 3));
     assert.equal(activateSpecial(s, 'p'), false);
     assert.equal(activateSpecial(s, 'missing'), false);
     const snapshot = JSON.parse(JSON.stringify(publicState(s)));
     assert.equal(snapshot.players.p.specialCharge, 0);
-    assert.equal(snapshot.shots[0].color, color);
-    assert.equal(snapshot.shots[0].hitIds, undefined);
+    if (color === 3) { assert.equal(snapshot.shots[0].color, color); assert.equal(snapshot.shots[0].hitIds, undefined); }
   }
 });
 
