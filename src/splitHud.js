@@ -15,13 +15,13 @@ function bar(ctx, x, y, width, height, ratio, color) {
 
 /**
  * Per-player status for split screen, drawn at the bottom of that player's viewport:
- * name, level, health, experience, special charge, dash and owned powers.
+ * name, level, health, experience, special charge, dash and owned powers. `keys` labels the controls
+ * (keyboard by default; the Switch build passes controller labels).
  */
-export function drawPlayerPanel(ctx, player, { slot, ox, W, H, dpr, blocked }) {
+export function drawPlayerPanel(ctx, player, { slot, ox, W, H, dpr, blocked, keys = SPLIT_KEYS[slot] }) {
   const tint = SPELLS[player.color ?? 0].tint;
   const width = Math.min(340, W - 32), height = 78;
   const x = ox + (W - width) / 2, y = H - height - 16;
-  const keys = SPLIT_KEYS[slot];
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.globalAlpha = 1;
