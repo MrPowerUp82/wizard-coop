@@ -12,6 +12,8 @@ LIBS     = -lvita2d \
            -lSceAudio_stub \
            -lScePower_stub \
            -lSceRtc_stub \
+           -lSceAppMgr_stub \
+           -lSceCommonDialog_stub \
            -lSceSysmodule_stub \
            -lm \
            -lc

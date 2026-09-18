@@ -17,6 +17,7 @@
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/clib.h>
 #include <psp2/audioout.h>
+#include <vita2d.h>
 
 #define SCREEN_WIDTH  960
 #define SCREEN_HEIGHT 544
@@ -65,10 +66,8 @@ int main(int argc, char *argv[]) {
     (void)argv;
 
     vita_init_hardware();
-
-    // In a full VitaSDK build, QuickJS runtime is initialized here,
-    // JS bindings for Canvas 2D (via vita2d), Audio, and SceCtrl are registered,
-    // and "app0:/assets/main.js" is evaluated.
+    vita2d_init();
+    vita2d_set_clear_color(RGBA8(7, 17, 23, 255)); // #071117
 
     SceCtrlData ctrl;
     while (g_running) {
@@ -79,10 +78,20 @@ int main(int argc, char *argv[]) {
             g_running = 0;
         }
 
-        // Wait for vertical blanking to synchronize at 60Hz
-        sceDisplayWaitVblankStart();
+        vita2d_start_drawing();
+        vita2d_clear_screen();
+
+        // Draw stylized Arcana Survivors card panel
+        vita2d_draw_rectangle(SCREEN_WIDTH / 2 - 220, SCREEN_HEIGHT / 2 - 80, 440, 160, RGBA8(11, 21, 28, 240));
+        vita2d_draw_rectangle(SCREEN_WIDTH / 2 - 200, SCREEN_HEIGHT / 2 + 40, 400, 6, RGBA8(131, 217, 191, 255));
+        vita2d_draw_rectangle(SCREEN_WIDTH / 2 - 200, SCREEN_HEIGHT / 2 + 52, 200, 3, RGBA8(240, 194, 75, 255));
+
+        vita2d_end_drawing();
+        vita2d_wait_rendering_done();
+        vita2d_swap_buffers();
     }
 
+    vita2d_fini();
     vita_shutdown_hardware();
     sceKernelExitProcess(0);
     return 0;
