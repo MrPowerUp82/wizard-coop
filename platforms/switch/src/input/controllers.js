@@ -142,9 +142,10 @@ export function createControllers({ onSpecial, onDash, onPause, isPlaying, getGa
     missing(slot) { return coop && !bound(slot); },
     /** A connected controller that no slot uses, e.g. to claim a slot whose controller dropped. */
     isFree: pad => !bindings.includes(pad.id),
-    /** Button captions for the split HUD panel of a slot. */
+    /** Button captions for the split HUD panel of a slot (a dropped controller keeps its captions). */
     labels(slot) {
-      const pad = coop ? bound(slot) : pads.filter(p => p.connected).sort((a, b) => b.lastUsed - a.lastUsed)[0];
+      const pad = coop ? bound(slot) || pads.find(p => bindings[slot] && p.id === bindings[slot])
+        : pads.filter(p => p.connected).sort((a, b) => b.lastUsed - a.lastUsed)[0];
       return labelsFor(pad?.kind);
     },
     get connectedCount() { return pads.filter(p => p.connected).length; }
