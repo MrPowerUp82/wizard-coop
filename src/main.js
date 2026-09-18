@@ -20,7 +20,7 @@ import { moodFor } from './music.js';
 import { createAnimator } from './animation.js';
 import { createAudio } from './audio.js';
 import { createHud, format } from './hud.js';
-import { createInput } from './input.js';
+import { bindActionButton, createInput } from './input.js';
 import { createMenu, playerName, renderCharacterPicker, saveDailyRecord, serverUrl } from './menu.js';
 import { createSession, savedSession } from './net.js';
 import { DAMAGE_SOURCES, POWER_INFO } from './powerInfo.js';
@@ -515,8 +515,8 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
   renderLobbyCharacters(true);
 }
 
-$('#specialBtn').onclick = useSpecial;
-$('#dashBtn').onclick = useDash;
+bindActionButton($('#specialBtn'), useSpecial);
+bindActionButton($('#dashBtn'), useDash);
 $('#startBtn').onclick = () => session?.send({ type: 'start' });
 $('#roomCode').onclick = async () => {
   if (!session?.room) return;

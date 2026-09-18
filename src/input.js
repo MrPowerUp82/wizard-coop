@@ -1,3 +1,16 @@
+// Pointer actions also accept secondary fingers while the joystick is held.
+export function bindActionButton(button, action) {
+  button.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || button.disabled) return;
+    event.preventDefault();
+    action();
+  });
+  button.addEventListener('click', event => {
+    // Pointer input already fired on press; keep keyboard/assistive activation.
+    if (event.detail === 0 && !button.disabled) action();
+  });
+}
+
 // Keyboard and virtual joystick merged into one normalized movement vector.
 export function createInput({ joystick, onPause, onSpecial, onDash, isPlaying }) {
   const knob = joystick.querySelector('i');

@@ -1,6 +1,8 @@
 /* The desktop keeps its existing anchors; mobile panels participate in layout. */
 .hud-layout, .hud-top, .hud-tools, .hud-events { display: contents; }
 
+#dashBtn, #specialBtn { touch-action: none; user-select: none; -webkit-user-select: none; }
+
 @media (max-width: 800px), (pointer: coarse) and (max-width: 1400px), (max-height: 500px) and (orientation: landscape) {
   :root {
     --hud-top: max(8px, env(safe-area-inset-top));
