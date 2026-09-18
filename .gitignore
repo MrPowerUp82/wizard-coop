@@ -13,7 +13,6 @@ platforms/vita/node_modules/
 *.vpk
 platforms/vita/runtime/*.velf
 platforms/vita/runtime/*.elf
-platforms/vita/runtime/eboot.bin
 platforms/vita/runtime/param.sfo
 platforms/vita/runtime/src/*.o
 
