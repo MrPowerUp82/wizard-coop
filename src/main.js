@@ -1,5 +1,13 @@
 import './style.css';
 import './enhancements.css';
+import '@fontsource/cinzel/latin-600.css';
+import '@fontsource/cinzel/latin-700.css';
+import '@fontsource/inter/latin-400.css';
+import '@fontsource/inter/latin-500.css';
+import '@fontsource/inter/latin-600.css';
+import '@fontsource/inter/latin-700.css';
+import '@fontsource/inter/latin-800.css';
+import { setupPwa } from './pwa.js';
 import { activateDash, activateSpecial, applyPower, createGameState, createPlayer, rerollPowers, updateGame } from '../server/game.js';
 import { CAMPAIGNS } from '../server/campaign.js';
 import { PHASES } from '../server/phases.js';
@@ -422,6 +430,7 @@ function useDash() {
 }
 
 function connect(action, code = '', visibility = 'closed', resume = null) {
+  if (!navigator.onLine) { hud.toast('O co-op precisa de internet. Use Jogar offline.'); return; }
   if (session || mode !== 'menu') return;
   let lobbyPlayers = [];
   let lobbyRunning = false;
@@ -522,7 +531,8 @@ $('#muteBtn').onclick = () => { $('#muteBtn').textContent = audio.toggleMute() ?
 addEventListener('pointerdown', () => audio.unlock(), { once: true });
 
 const pendingResume = savedSession();
-if (pendingResume) connect('join', pendingResume.room, 'closed', pendingResume);
+if (pendingResume && navigator.onLine) connect('join', pendingResume.room, 'closed', pendingResume);
+setupPwa({ isIdle: () => mode === 'menu' && !session });
 
 if (import.meta.env?.DEV) {
   // Debug hook: the in-app browser pane does not run requestAnimationFrame, so frames can be pumped by hand.

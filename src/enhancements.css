@@ -427,3 +427,7 @@ body, .menu-shell { min-height: 100dvh; }
 }
 .shop-item.unlock { border-color: #8a6fd0; background: linear-gradient(145deg, #1d1a33, #0f111e); }
 .shop-item.unlock b { color: #d9c7ff; }
+.pwa-panel { margin-top: 16px; padding: 12px; border: 1px solid #354451; border-radius: 8px; }
+.pwa-panel p { margin: 0 0 8px; font-size: 12px; color: #b9e4d4; }
+.pwa-panel small { display: block; margin-top: 8px; font-size: 11px; line-height: 1.5; color: #9aa9b8; }
+.pwa-panel .hidden { display: none; }

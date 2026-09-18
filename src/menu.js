@@ -171,6 +171,7 @@ export function createMenu({ wallet, codex, toast, onOffline, onDaily, onCreate,
   function fetchOpenRooms() {
     cancelRoomRequest();
     $('#roomCapacity').textContent = '';
+    if (!navigator.onLine) { listMessage('Sem internet. Você pode jogar offline ou iniciar o desafio diário.'); return; }
     let listSocket;
     try { listSocket = new WebSocket(serverUrl()); } catch { listMessage('Endereço do servidor inválido.'); return; }
     const timeout = setTimeout(() => { listMessage('O servidor demorou para responder.'); cancelRoomRequest(); }, 5000);
@@ -276,6 +277,8 @@ export function createMenu({ wallet, codex, toast, onOffline, onDaily, onCreate,
 
   const refresh = () => { if (!document.hidden && isIdle()) fetchOpenRooms(); };
   refresh();
+  addEventListener('online', refresh);
+  addEventListener('offline', refresh);
   setInterval(refresh, 10000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 

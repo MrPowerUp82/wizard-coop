@@ -26,6 +26,16 @@ Para conectar ao backend local, abra `http://localhost:5173/?server=ws://localho
 
 O workflow do GitHub Pages executa lint, checagem de tipos e testes antes de publicar.
 
+## Instalar e jogar sem internet (PWA)
+
+Abra a versão publicada em HTTPS (ou `localhost`) uma vez com internet e aguarde **Pronto para jogar sem internet** no menu. Os arquivos do jogo, fontes e imagens dos seis reinos ficam salvos no navegador. Depois, é possível fechar e reabrir o jogo sem conexão, pelo mesmo endereço ou pelo aplicativo instalado.
+
+Use **Instalar jogo** quando disponível, a opção de instalação do navegador ou, no iPhone/iPad, **Compartilhar → Adicionar à Tela de Início**. Jogar solo, desafio diário, Grimório e Códex funcionam offline; salas cooperativas precisam do servidor e de internet. O progresso permanente continua salvo neste navegador; partidas em andamento não são salvas ao fechar o aplicativo. Limpar os dados do site também remove o cache e o progresso.
+
+Novas versões exibem **Atualizar jogo** no menu e só recarregam após esse clique. Termine a partida antes de atualizar. Para testar localmente, execute `npm run build` e `npm run preview`, visite o endereço informado, aguarde a preparação e recarregue com a rede desativada. O service worker fica desabilitado em `npm run dev`.
+
+O precache é gerado pelo [vite-plugin-pwa](https://github.com/vite-pwa/vite-plugin-pwa), com caminhos relativos para publicação em subdiretórios do GitHub Pages.
+
 ## Controles
 
 - **WASD / setas**: movimento; ataques são automáticos. No celular, use o controle virtual.
