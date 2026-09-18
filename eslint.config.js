@@ -14,7 +14,7 @@ export default [
   },
   {
     // Nintendo Switch shell: nx.js provides web-like globals plus its own.
-    files: ['platforms/switch/src/**/*.js'],
+    files: ['platforms/switch/src/**/*.js', 'platforms/switch/dev/**/*.js'],
     languageOptions: { globals: { ...globals.browser, Switch: 'readonly', fonts: 'readonly', DEBUG_CONTROLLERS: 'readonly' } }
   },
   {
