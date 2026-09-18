@@ -69,6 +69,8 @@ int main(int argc, char *argv[]) {
     vita2d_init();
     vita2d_set_clear_color(RGBA8(7, 17, 23, 255)); // #071117
 
+    vita2d_pgf *pgf = vita2d_load_default_pgf();
+
     SceCtrlData ctrl;
     while (g_running) {
         vita_read_pad(0, &ctrl);
@@ -82,15 +84,24 @@ int main(int argc, char *argv[]) {
         vita2d_clear_screen();
 
         // Draw stylized Arcana Survivors card panel
-        vita2d_draw_rectangle(SCREEN_WIDTH / 2 - 220, SCREEN_HEIGHT / 2 - 80, 440, 160, RGBA8(11, 21, 28, 240));
-        vita2d_draw_rectangle(SCREEN_WIDTH / 2 - 200, SCREEN_HEIGHT / 2 + 40, 400, 6, RGBA8(131, 217, 191, 255));
-        vita2d_draw_rectangle(SCREEN_WIDTH / 2 - 200, SCREEN_HEIGHT / 2 + 52, 200, 3, RGBA8(240, 194, 75, 255));
+        vita2d_draw_rectangle(SCREEN_WIDTH / 2 - 240, SCREEN_HEIGHT / 2 - 120, 480, 240, RGBA8(11, 21, 28, 245));
+        vita2d_draw_rectangle(SCREEN_WIDTH / 2 - 240, SCREEN_HEIGHT / 2 - 120, 480, 3, RGBA8(240, 194, 75, 255));
+
+        if (pgf) {
+            vita2d_pgf_draw_text(pgf, SCREEN_WIDTH / 2 - 170, SCREEN_HEIGHT / 2 - 50, RGBA8(240, 194, 75, 255), 1.6f, "ARCANA SURVIVORS");
+            vita2d_pgf_draw_text(pgf, SCREEN_WIDTH / 2 - 130, SCREEN_HEIGHT / 2 - 10, RGBA8(200, 220, 230, 255), 1.0f, "Edicao PlayStation Vita");
+            vita2d_pgf_draw_text(pgf, SCREEN_WIDTH / 2 - 180, SCREEN_HEIGHT / 2 + 40, RGBA8(131, 217, 191, 255), 1.0f, "Solo & Co-op Local (Tela Dividida)");
+            vita2d_pgf_draw_text(pgf, SCREEN_WIDTH / 2 - 120, SCREEN_HEIGHT / 2 + 85, RGBA8(120, 145, 160, 255), 0.9f, "START + SELECT: Sair");
+        }
+
+        vita2d_draw_rectangle(SCREEN_WIDTH / 2 - 210, SCREEN_HEIGHT / 2 + 15, 420, 2, RGBA8(32, 78, 66, 255));
 
         vita2d_end_drawing();
         vita2d_wait_rendering_done();
         vita2d_swap_buffers();
     }
 
+    if (pgf) vita2d_free_pgf(pgf);
     vita2d_fini();
     vita_shutdown_hardware();
     sceKernelExitProcess(0);

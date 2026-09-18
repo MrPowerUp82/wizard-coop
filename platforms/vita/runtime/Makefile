@@ -14,6 +14,7 @@ LIBS     = -lvita2d \
            -lSceRtc_stub \
            -lSceAppMgr_stub \
            -lSceCommonDialog_stub \
+           -lScePgf_stub \
            -lSceSysmodule_stub \
            -lm \
            -lc
