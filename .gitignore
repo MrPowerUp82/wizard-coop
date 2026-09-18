@@ -3,3 +3,6 @@ dist/
 .env
 npm-debug.log*
 graphify-out/
+# Nintendo Switch build output (platforms/switch)
+platforms/switch/romfs/
+*.nro

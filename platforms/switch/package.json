@@ -1,0 +1,29 @@
+{
+  "name": "ArcanaSurvivors",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Arcana Survivors para Nintendo Switch (homebrew nx.js): solo e co-op local em tela dividida",
+  "author": "MrPowerUp82",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:debug": "node build.mjs --debug",
+    "nro": "nxjs-nro --fat",
+    "nro:slim": "nxjs-nro",
+    "typecheck": "tsc -p jsconfig.json",
+    "test": "node build.mjs --debug && node test/audio-compat.mjs && node test/smoke.mjs",
+    "check": "npm run typecheck && npm test"
+  },
+  "nacp": {
+    "title": "Arcana Survivors"
+  },
+  "dependencies": {
+    "@nx.js/constants": "0.4.1"
+  },
+  "devDependencies": {
+    "@nx.js/nro": "1.0.0-beta.6",
+    "@nx.js/runtime": "1.0.0-beta.6",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}
