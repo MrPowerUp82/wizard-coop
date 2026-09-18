@@ -25,12 +25,17 @@ npm run switch:install
 npm run switch:nro
 ```
 
-O arquivo sai em **`platforms/switch/ArcanaSurvivors.nro`** (~58 MB: o runtime nx.js vai embutido, “fat”, e o jogo roda
-sem instalar mais nada). Para uma build com o painel de depuração de controles:
+O arquivo sai em **`platforms/switch/ArcanaSurvivors.nro`** (~59 MB: o runtime nx.js vai embutido, “fat”, e o jogo roda
+sem instalar mais nada). Ele usa o renderer padrão do nx.js (GPU no modo aplicação), pensado para o console.
+
+**Emuladores (Sudachi/yuzu):** use o NRO com renderer de CPU, veja [Renderer](#renderer):
 
 ```bash
-npm run switch:nro:debug
+npm run switch:nro:emu
 ```
+
+Sai em `platforms/switch/ArcanaSurvivors-emu.nro`. Builds com o painel de depuração de controles:
+`npm run switch:nro:debug` (console) e `npm run switch:nro:debug:emu` (emulador).
 
 Outros comandos (dentro de `platforms/switch`): `npm run build` só gera `romfs/`; `npm run nro:slim` gera um NRO
 pequeno que baixa/usa o runtime compartilhado em `sdmc:/nx.js/`; `npm run check` roda typecheck + testes.
@@ -39,8 +44,10 @@ O que o build faz (`build.mjs`):
 
 1. esbuild empacota `src/main.js` em `romfs/main.js`, trocando `src/platform.js` (web) por `platforms/switch/src/platform.js`;
 2. copia `public/assets/*.webp` (os mesmos atlas da web) para `romfs/assets/`;
-3. converte Inter e Cinzel de `@fontsource` (WOFF, as fontes da web) para TTF em `romfs/fonts/`;
-4. `nxjs-nro` junta `romfs/`, `icon.jpg` e o `package.json` (título “Arcana Survivors”, versão, autor) no `.nro`.
+3. converte Inter e Cinzel de `@fontsource` (WOFF, as fontes da web) para TTF em `romfs/fonts/`, copia a DejaVu Sans
+   (símbolos que a Inter não tem) e as licenças das três fontes;
+4. grava `romfs/nxjs.ini` com o renderer (`--renderer=auto|gpu|cpu`, padrão `auto`);
+5. `nxjs-nro` junta `romfs/`, `icon.jpg` e o `package.json` (título “Arcana Survivors”, versão, autor) no `.nro`.
 
 ## Instalar e abrir
 
@@ -117,12 +124,17 @@ Específico do Switch (`platforms/switch/src/`):
   associação slot ↔ controle por `Gamepad.id`, conexão/desconexão;
 - `ui/` — menus, HUD, escolha de poder, pausa e resultados em canvas (a web usa DOM); as regras vêm dos módulos
   existentes (personagens, campanhas, Grimório, desafio diário, mesmas chaves de preferência);
-- `fonts.js` — no nx.js um `ctx.font` com família não registrada é ignorado; as fontes da web são registradas e cada
-  `font` é normalizado para uma face registrada;
+- `fonts.js` — no nx.js um `ctx.font` com família não registrada é ignorado e cada texto usa uma única fonte (sem
+  fallback por glifo); as fontes da web são registradas, cada `font` é normalizado para uma face registrada e textos
+  com símbolos que a Inter não tem (ícones de poderes, ◀ ▶ ● ✓) são desenhados com DejaVu Sans;
 - `audio-compat.js` — o nx.js 1.0.0-beta.6 declara `createOscillator()`/`createBiquadFilter()`, mas eles lançam
   “Method not implemented”. Osciladores e filtros viram *buffers* renderizados em JS (com cache) tocados por
-  `AudioBufferSourceNode` pelos mesmos `GainNode`s: `audio.js`/`music.js` rodam sem mudança;
-- `debug/` — painel de controles e profiler (só em build debug).
+  `AudioBufferSourceNode` pelos mesmos `GainNode`s: `audio.js`/`music.js` rodam sem mudança. Cada nota é
+  desconectada ao terminar: o grafo nativo do nx.js mantém (e mixa) nós conectados para sempre, o que deixava o jogo
+  mais lento a cada segundo;
+- `canvas-compat.js` — no nx.js, `fill()` de um path com gradiente radial não desenha nada (CPU e GPU); os brilhos
+  do jogo usam isso, então esse `fill()` vira `clip()` + `fillRect()` (mesmos pixels);
+- `debug/` — painel de controles, profiler e *autoplay* de medição (só em build debug).
 
 O co-op online (servidor, protocolo, mensagens, WebSocket) não mudou e continua na web; ele não foi portado para o Switch.
 
@@ -143,6 +155,30 @@ No PC: `npm run switch:check` (typecheck contra os tipos do nx.js, teste da cama
 real com Joy-Cons simulados) e, com `npm run dev` rodando, `http://localhost:5173/platforms/switch/dev/index.html`
 abre o bundle do Switch no navegador em 1280×720 com Joy-Cons simulados pelo teclado (veja a página). Depois de
 `npm run switch:build:debug`, reinicie o `npm run dev` (ele não observa `platforms/`).
+
+## Renderer
+
+O nx.js tem dois renderers de canvas (`romfs/nxjs.ini`, `[renderer] mode`): GPU (Skia na GPU, padrão no modo
+aplicação) e CPU (raster).
+
+Medido no Sudachi 1.0.15 (Vulkan, GPU Intel), com o autoplay da build debug:
+
+| | GPU | CPU |
+| --- | --- | --- |
+| Solo | ~60 FPS (render ~5 ms) | ~50–60 FPS (render ~11–16 ms) |
+| Co-op (2 viewports) | ~55 FPS (render ~9–14 ms) | ~30–40 FPS (render ~20–30 ms) |
+| Imagem | **incorreta**: traços somem (juntas arredondadas, traços com alpha, polígonos fechados), aparecem cunhas e linhas partindo de (0,0) | correta |
+
+Um diagnóstico com cada primitivo do renderer mostrou que, no Sudachi, só o caminho de GPU falha. O mesmo código em
+CPU e no navegador sai certo. Por isso `ArcanaSurvivors.nro` usa o padrão (`auto`), pensado para o console, e
+`ArcanaSurvivors-emu.nro` usa CPU. Se o console real mostrar os mesmos defeitos, gere com
+`npm run switch:build -- --renderer=cpu` antes do `nro` (veja *Validação em hardware*).
+
+**Autoplay (build debug):** crie `sdmc:/arcana-autoplay.json`, por exemplo
+`{"steps":[{"mode":"coop","seconds":20},{"mode":"solo","seconds":20}]}`, e abra a build debug. Cada etapa joga sem
+controle, grava FPS, tempos de update/render, inimigos e memória por segundo em `sdmc:/arcana-autoplay.log`, salva
+`sdmc:/arcana-autoplay-<n>.png` e o app fecha no fim. `"disable": ["terrain" | "gradients" | "text" | "shadow" |
+"lighter" | "roundfont"]` desliga um recurso naquela etapa, para medir o custo dele.
 
 ## Alterar o mapping
 
@@ -190,12 +226,18 @@ um Switch real**. Os itens abaixo dependem de como o console reporta os controle
   pedir) mostra “reconectado” com o **mesmo** `id` e o Jogador 2 volta a responder a ele, sem perder nada.
 - Se o `id` mudar (firmware < 5.0.0 usa `switch-gamepad-<índice>`), pressione SL+SR/A no controle religado.
 
+**HARDWARE VALIDATION REQUIRED — renderer de GPU**
+- Arquivo: `romfs/nxjs.ini` (gerado por `build.mjs`, `--renderer`).
+- Esperado: no console, `ArcanaSurvivors.nro` (GPU) desenha igual ao navegador: anéis e sigilos, raios em
+  zigue-zague, luas crescentes e o rastro do meteoro, sem polígonos brancos nem linhas saindo do canto da tela.
+- Se aparecerem os mesmos defeitos do Sudachi, use o renderer de CPU (seção *Renderer*).
+
 **HARDWARE VALIDATION REQUIRED — desempenho, áudio e fontes**
 - Profiler da build debug: FPS e `render` em solo e em tela dividida, em modo aplicação (R + jogo) e pelo Álbum.
 - Áudio (`audio-compat.js`): efeitos e trilha devem soar como na web; a primeira nota de cada tipo é renderizada em JS
   (pode haver engasgo no início, sobretudo sem JIT).
-- Fontes (`fonts.js`): textos com acentos em Inter/Cinzel. Ícones (✦ ⚡ ♥ …) usam a fonte do sistema (`system-ui`),
-  que pode não ter todos os símbolos.
+- Fontes (`fonts.js`): textos com acentos em Inter/Cinzel; ícones e símbolos em DejaVu Sans. Três glifos que nenhuma
+  fonte embutida tem são trocados: ᛭ → ✱, ᛉ → Ψ, ⛨ → ✠.
 
 ## Limitações conhecidas
 
@@ -208,4 +250,5 @@ um Switch real**. Os itens abaixo dependem de como o console reporta os controle
 - Co-op **online** não está no Switch (a web continua com online completo).
 - No Switch: sem seleção de maldições, arma inicial ou especial alternativo, e sem tela do Códex (as descobertas
   continuam sendo registradas). O co-op local tem 2 jogadores, como a tela dividida existente.
-- Símbolos fora do alfabeto latino dependem da fonte do sistema.
+- No Sudachi, o renderer de GPU desenha errado (seção *Renderer*); o NRO de emulador usa CPU e fica mais lento no co-op
+  (~30–40 FPS medidos). A escolha de poder e a pausa sobre a tela dividida custam mais (~20 FPS no emulador em CPU).
