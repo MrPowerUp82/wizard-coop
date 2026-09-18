@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
-  { ignores: ['dist/', 'node_modules/', 'platforms/switch/romfs/'] },
+  { ignores: ['dist/', 'node_modules/', 'platforms/switch/romfs/', 'platforms/vita/build/'] },
   js.configs.recommended,
   {
     files: ['src/**/*.js'],
@@ -19,6 +19,15 @@ export default [
   },
   {
     files: ['platforms/switch/*.mjs', 'platforms/switch/test/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node } }
+  },
+  {
+    // PlayStation Vita shell: QuickJS + NanoVG/SceCtrl runtime globals.
+    files: ['platforms/vita/src/**/*.js'],
+    languageOptions: { globals: { ...globals.browser, Vita: 'readonly', Screen: 'readonly', Pads: 'readonly', Font: 'readonly', Audio: 'readonly', fonts: 'readonly', DEBUG_CONTROLLERS: 'readonly', INTER_SYMBOLS: 'readonly' } }
+  },
+  {
+    files: ['platforms/vita/*.mjs', 'platforms/vita/scripts/**/*.mjs', 'platforms/vita/test/**/*.mjs'],
     languageOptions: { globals: { ...globals.node } }
   },
   {

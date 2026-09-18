@@ -20,7 +20,13 @@
     "switch:nro:debug": "npm --prefix platforms/switch run build:debug && npm --prefix platforms/switch run nro",
     "switch:check": "npm --prefix platforms/switch run check",
     "switch:nro:emu": "npm --prefix platforms/switch run build -- --renderer=cpu && npm --prefix platforms/switch run nro:emu",
-    "switch:nro:debug:emu": "npm --prefix platforms/switch run build:debug -- --renderer=cpu && npm --prefix platforms/switch run nro:emu"
+    "switch:nro:debug:emu": "npm --prefix platforms/switch run build:debug -- --renderer=cpu && npm --prefix platforms/switch run nro:emu",
+    "vita:install": "npm --prefix platforms/vita install",
+    "vita:build": "npm --prefix platforms/vita run build",
+    "vita:build:debug": "npm --prefix platforms/vita run build:debug",
+    "vita:vpk": "npm --prefix platforms/vita run vpk",
+    "vita:vpk:debug": "npm --prefix platforms/vita run vpk:debug",
+    "vita:check": "npm --prefix platforms/vita run check"
   },
   "dependencies": {
     "@fontsource/cinzel": "^5.3.0",

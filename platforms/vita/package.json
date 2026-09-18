@@ -1,0 +1,22 @@
+{
+  "name": "ArcanaSurvivors-Vita",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Arcana Survivors para PlayStation Vita (homebrew .vpk): solo e co-op local em tela dividida",
+  "author": "MrPowerUp82",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:debug": "node build.mjs --debug",
+    "vpk": "node build.mjs --vpk",
+    "vpk:debug": "node build.mjs --debug --vpk",
+    "typecheck": "tsc -p jsconfig.json",
+    "test": "node build.mjs --debug && node test/audio-compat.mjs && node test/smoke.mjs",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "dejavu-fonts-ttf": "^2.37.3",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}
