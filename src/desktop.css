@@ -88,3 +88,17 @@
   .power-row { max-height: 58px; }
   .modal-card { padding: 20px; }
 }
+
+/* Split screen: two players need a keyboard, so the mode only appears on desktop layouts. */
+.desktop-only { display: none; }
+@media (min-width: 801px) and (min-height: 501px) and (pointer: fine), (min-width: 1401px) and (min-height: 501px) {
+  #splitBtn.desktop-only, #splitBox.desktop-only:not(.hidden) { display: block; }
+}
+.split-picker { margin-bottom: 10px; }
+.split-keys { display: grid; gap: 4px; margin: 0 0 10px; }
+.split-keys p { display: flex; justify-content: space-between; gap: 10px; margin: 0; font-size: 11px; color: #8fa7a5; }
+.split-keys b { color: #a7ead0; font-family: Cinzel, serif; letter-spacing: .04em; }
+
+/* Each half draws its own status panel on the canvas, so the single-player DOM widgets step aside. */
+#hud.split .status-card { visibility: hidden; }
+#hud.split .special-panel, #hud.split .signal-bar, #hud.split .revive-hint, #hud.split .controls-hint { display: none !important; }

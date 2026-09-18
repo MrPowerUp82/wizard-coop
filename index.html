@@ -47,6 +47,7 @@
             <button id="offlineBtn" class="primary"><span class="button-icon">◆</span><b>Jogar offline</b><small>Sobreviva no seu ritmo</small></button>
             <button id="createBtn"><span class="button-icon">✦</span><b>Criar sala co-op</b><small>Abra um ritual para amigos</small></button>
             <button id="joinToggle"><span class="button-icon">⌁</span><b>Entrar em uma sala</b><small>Use o código do anfitrião</small></button>
+            <button id="splitBtn" class="desktop-only"><span class="button-icon">◫</span><b>Tela dividida</b><small>Dois arcanistas no mesmo teclado</small></button>
             <button id="dailyBtn"><span class="button-icon">☼</span><b>Desafio diário</b><small id="dailyInfo">Mesma semente e maldições para todos hoje</small></button>
             <button id="shopBtn"><span class="button-icon">❖</span><b>Grimório</b><small id="shopBtnCoins">Melhorias permanentes com moedas</small></button>
             <button id="codexBtn"><span class="button-icon">✎</span><b>Códex</b><small id="codexInfo">Poderes, combos e criaturas descobertos</small></button>
@@ -57,6 +58,15 @@
             <button id="updateBtn" class="compact hidden">Atualizar jogo</button>
             <small id="installHint">Para instalar, use “Instalar aplicativo” no navegador ou “Compartilhar → Adicionar à Tela de Início” no iPhone/iPad.</small>
           </section>
+          <div id="splitBox" class="room-setup split-setup desktop-only hidden">
+            <span class="setup-label">PERSONAGEM DO JOGADOR 2</span>
+            <div id="splitPicker" class="character-grid split-picker" aria-label="Personagem do jogador 2"></div>
+            <div class="split-keys">
+              <p><b>Jogador 1</b><span>WASD mover · ESPAÇO especial · SHIFT esq. esquiva</span></p>
+              <p><b>Jogador 2</b><span>SETAS mover · ENTER especial · SHIFT dir. esquiva</span></p>
+            </div>
+            <button id="confirmSplitBtn" class="compact create-confirm">Começar tela dividida</button>
+          </div>
           <div id="createBox" class="room-setup hidden">
             <span class="setup-label">TIPO DA SALA</span>
             <div class="visibility-choice" role="radiogroup" aria-label="Tipo da sala">
@@ -127,7 +137,7 @@
 
       <section id="powerModal" class="modal hidden">
         <div class="modal-card power-card">
-          <span class="rune">✦</span><h2>Novo poder</h2><p>Escolha como o ritual deve evoluir</p>
+          <span class="rune">✦</span><h2 id="powerTitle">Novo poder</h2><p>Escolha como o ritual deve evoluir</p>
           <div id="powerTimer" class="bar power-timer hidden"><i></i></div>
           <div id="powerChoices" class="power-choices"></div>
           <button id="rerollBtn" class="text-btn reroll-btn hidden">↻ Trocar opções</button>

@@ -25,6 +25,7 @@ import { createMenu, playerName, renderCharacterPicker, saveDailyRecord, serverU
 import { createSession, savedSession } from './net.js';
 import { DAMAGE_SOURCES, POWER_INFO } from './powerInfo.js';
 import { renderWorld } from './render.js';
+import { drawDivider, drawPlayerPanel } from './splitHud.js';
 import { createWallet } from './wallet.js';
 
 const $ = selector => document.querySelector(selector);
@@ -58,18 +59,26 @@ let last = performance.now();
 let round = null;
 let accumulator = 0;
 let camera = { x: 0, y: 0 };
+let local = ['me']; // offline player ids driven from this keyboard, in slot order (split screen has two)
+const isSplit = () => mode === 'offline' && local.length > 1;
+/** The players this machine controls: both halves in split screen, otherwise just this player. */
+const localPlayers = () => (mode === 'offline' ? local.map(id => view?.players[id]) : [view?.players[meId]]).filter(Boolean);
+/** Whoever owes a power choice right now; split screen resolves one player at a time. */
+const chooser = () => localPlayers().find(p => p.alive !== false && p.pendingPowers?.length) || view?.players[meId];
 
 const controls = createInput({
   joystick: $('#joystick'),
   isPlaying: () => mode !== 'menu',
+  isSplit,
   onPause: () => togglePause(),
-  onSpecial: () => useSpecial(),
-  onDash: () => useDash()
+  onSpecial: slot => useSpecial(slot),
+  onDash: slot => useDash(slot)
 });
 
 const menu = createMenu({
   wallet, codex, audio, toast: hud.toast,
   onOffline: () => startOffline(),
+  onSplit: () => startOffline(null, true),
   onDaily: challenge => startOffline(challenge),
   onCreate: visibility => connect('create', '', visibility),
   onJoin: code => connect('join', code),
@@ -109,15 +118,14 @@ function backdrop(time) {
 }
 
 function newRound() {
-  return { defeatShown: false, gameOverShown: false, deposited: false, lastMe: null, lastEventId: null, hazards: 0, low: false };
+  return { defeatShown: false, gameOverShown: false, deposited: false, last: {}, lastEventId: null, hazards: 0, low: false };
 }
 
-function feedback(me) {
-  const previous = round.lastMe;
-  round.lastMe = { hp: me.hp, level: me.level, xp: me.xp, coins: me.coins, charge: me.specialCharge, cast: me.castCount, alive: me.alive };
+function feedback(mine) {
   const events = view.events || [];
   if (round.lastEventId === null) round.lastEventId = events.reduce((max, event) => Math.max(max, event.id), 0);
-  const focus = me.alive === false ? Object.values(view.players).find(p => p.alive !== false) || me : me;
+  const focus = mine.find(p => p.alive !== false) || Object.values(view.players).find(p => p.alive !== false) || mine[0];
+  const isMine = id => mine.some(p => p.id === id);
   for (const event of events) {
     if (event.id <= round.lastEventId) continue;
     round.lastEventId = event.id;
@@ -136,9 +144,9 @@ function feedback(me) {
     else if (event.kind === 'combo' && event.team) { audio.play('teamCombo'); if (near) hud.toast('Combo em equipe! Especiais carregados'); }
     else if (event.kind === 'combo' && near) audio.play('chain');
     else if (event.kind === 'convergence') { audio.play('convergence'); hud.announce('Convergência!', 'gold'); }
-    else if (event.kind === 'signal') { audio.play('signal'); if (event.player !== meId) hud.toast(`${event.name}: ${SIGNAL_TEXT[event.signal] || 'sinal'}`); }
+    else if (event.kind === 'signal') { audio.play('signal'); if (!isMine(event.player)) hud.toast(`${event.name}: ${SIGNAL_TEXT[event.signal] || 'sinal'}`); }
     else if (event.kind === 'encounter') { audio.play('encounter'); hud.announce(ENCOUNTER_TEXT[event.encounter] || 'Um encontro surgiu', 'gold'); }
-    else if (event.kind === 'merchantSale') { audio.play('chest'); if (event.player === meId) hud.toast('Negócio fechado: escolha um poder'); }
+    else if (event.kind === 'merchantSale') { audio.play('chest'); if (isMine(event.player)) hud.toast('Negócio fechado: escolha um poder'); }
     else if (event.kind === 'shrineAccepted') { audio.play('stage'); hud.announce('Pacto aceito! Poder para todos — inimigos mais fortes neste reino', 'danger'); }
     else if (event.kind === 'thiefDown') { audio.play('chest'); hud.announce('Ladrão derrubado! O tesouro é seu', 'gold'); }
     else if (event.kind === 'thiefEscaped') hud.toast('O ladrão escapou com o tesouro.');
@@ -155,16 +163,23 @@ function feedback(me) {
   const hazards = view.hazards?.length || 0;
   if (hazards > round.hazards) audio.play('warning');
   round.hazards = hazards;
-  const low = me.alive !== false && me.hp / me.maxHp < 0.3;
+  const low = mine.some(p => p.alive !== false && p.hp / p.maxHp < 0.3);
   if (low !== round.low) { round.low = low; $('#damageVignette').classList.toggle('low', low); }
-  if (!previous) return;
-  if (me.hp < previous.hp - 0.5 && me.alive) { audio.play('hurt'); hud.flashDamage(); animator.shake(4); }
-  if (me.level > previous.level) audio.play('level');
-  else if (me.xp > previous.xp) audio.play('gem');
-  if (me.hp > previous.hp + 10 && me.level === previous.level) audio.play('heart');
-  if (me.coins > previous.coins) audio.play('coin');
-  if (me.specialCharge > previous.charge && me.specialCharge - previous.charge >= 20) audio.play('crystal');
-  if (me.castCount > previous.cast) audio.play('shoot');
+  // Split-screen players share XP and coins, so each sound plays once per frame instead of doubling.
+  const sounds = new Set();
+  for (const p of mine) {
+    const previous = round.last[p.id];
+    round.last[p.id] = { hp: p.hp, level: p.level, xp: p.xp, coins: p.coins, charge: p.specialCharge, cast: p.castCount };
+    if (!previous) continue;
+    if (p.hp < previous.hp - 0.5 && p.alive) { sounds.add('hurt'); hud.flashDamage(); animator.shake(4); }
+    if (p.level > previous.level) sounds.add('level');
+    else if (p.xp > previous.xp) sounds.add('gem');
+    if (p.hp > previous.hp + 10 && p.level === previous.level) sounds.add('heart');
+    if (p.coins > previous.coins) sounds.add('coin');
+    if (p.specialCharge > previous.charge && p.specialCharge - previous.charge >= 20) sounds.add('crystal');
+    if (p.castCount > previous.cast) sounds.add('shoot');
+  }
+  for (const sound of sounds) audio.play(sound);
 }
 
 const SIGNAL_TEXT = { here: 'venham aqui!', help: 'preciso de ajuda!', danger: 'cuidado!', look: 'olhem ali!' };
@@ -256,31 +271,32 @@ function syncOverlays(me) {
     controls.reset();
     hud.toast('Você foi ressuscitado!');
   }
-  if (me.alive === false && !round.defeatShown) showDefeat(view.over);
+  // In split screen the partner can still revive a fallen player, so only the end of the run shows results.
+  if (me.alive === false && !round.defeatShown && !isSplit()) showDefeat(view.over);
   if (view.over && !round.gameOverShown) showDefeat(true);
 }
 
 function choosePower(id) {
-  const me = view?.players[meId];
+  const me = chooser();
   if (!me?.pendingPowers?.includes(id)) return;
   hud.hidePowers(me.pendingPowers.join(','));
-  if (mode === 'offline') applyPower(game.players.me, id);
+  if (mode === 'offline') applyPower(game.players[me.id], id);
   else session?.send({ type: 'choosePower', power: id });
   audio.play('power');
   hud.toast(`${POWER_INFO[id][1]} adquirido`);
 }
 
 function reroll() {
-  const me = view?.players[meId];
+  const me = chooser();
   if (!me?.pendingPowers || !(me.rerolls > 0)) return;
-  if (mode === 'offline') rerollPowers(game.players.me, game.random, { coop: false });
+  if (mode === 'offline') rerollPowers(game.players[me.id], game.random, { coop: isSplit() });
   else session?.send({ type: 'reroll' });
   audio.play('click');
 }
 
 addEventListener('keydown', event => {
   if (mode === 'menu' || $('#powerModal').classList.contains('hidden') || event.repeat) return;
-  const choices = view?.players[meId]?.pendingPowers;
+  const choices = chooser()?.pendingPowers;
   const index = ['1', '2', '3'].indexOf(event.key);
   if (index >= 0 && choices?.[index]) choosePower(choices[index]);
   if (event.key.toLowerCase() === 'r') reroll();
@@ -303,11 +319,12 @@ for (const button of /** @type {NodeListOf<HTMLButtonElement>} */ (document.quer
 
 function step(now, dt) {
   if (mode === 'menu') { backdrop(now); audio.music('menu'); return; }
-  const input = paused ? { x: 0, y: 0 } : controls.read();
+  const still = { x: 0, y: 0 };
   if (mode === 'offline') {
-    const me = game.players.me;
-    me.input = me.alive && !me.pendingPowers ? input : { x: 0, y: 0 };
-    if (!paused && !me.pendingPowers?.length) {
+    const mine = local.map(id => game.players[id]);
+    mine.forEach((p, slot) => { p.input = !paused && p.alive && !p.pendingPowers ? controls.read(slot) : still; });
+    // Offline time stops while anyone at this keyboard picks a power.
+    if (!paused && !mine.some(p => p.pendingPowers?.length)) {
       if (game.daily) {
         // The daily ritual runs on a fixed step so its seeded randomness replays the same way on every machine.
         accumulator = Math.min(accumulator + dt, FIXED_STEP * 4);
@@ -317,22 +334,39 @@ function step(now, dt) {
     view = game;
     meId = 'me';
   } else {
-    const next = session?.frame(now, dt, input);
+    const next = session?.frame(now, dt, paused ? still : controls.read());
     if (!next) return;
     view = next;
     meId = session.playerId;
   }
   const me = view.players[meId];
   if (!me) return;
-  const choosing = hud.syncPowers(me, { offline: mode === 'offline', onChoose: choosePower, onReroll: reroll });
+  const split = isSplit();
+  const mine = localPlayers();
+  const picker = chooser();
+  const choosing = hud.syncPowers(picker, { offline: mode === 'offline', onChoose: choosePower, onReroll: reroll,
+    title: split ? `Novo poder · Jogador ${local.indexOf(picker.id) + 1}` : undefined });
   syncOverlays(me);
   animator.update(view, dt, { paused: paused || (mode === 'offline' && choosing), reduced: reducedMotion.matches });
-  feedback(me);
+  feedback(mine);
   codex.observe(view, me, now);
   audio.music(paused ? 'menu' : moodFor(view, mode), view.phase || 0);
-  const focus = me.alive === false ? Object.values(view.players).find(p => p.alive !== false) || me : me;
-  camera = { x: focus.x - W / 2, y: focus.y - H / 2 };
-  renderWorld(ctx, view, { me, focus, animator, W, H, dpr, reduced: reducedMotion.matches, offline: mode === 'offline' });
+  const reduced = reducedMotion.matches;
+  if (split) {
+    // Each local player gets half of the canvas and a camera of its own; a fallen player keeps watching their revive circle.
+    const half = Math.floor(W / 2);
+    const blocked = paused || choosing || view.over || view.phaseStatus === 'transition';
+    mine.forEach((p, slot) => {
+      const ox = slot ? half : 0, width = slot ? W - half : half;
+      renderWorld(ctx, view, { me: p, focus: p, animator, W: width, H, dpr, reduced, offline: false, ox });
+      drawPlayerPanel(ctx, p, { slot, ox, W: width, H, dpr, blocked });
+    });
+    drawDivider(ctx, half, H, dpr);
+  } else {
+    const focus = me.alive === false ? Object.values(view.players).find(p => p.alive !== false) || me : me;
+    camera = { x: focus.x - W / 2, y: focus.y - H / 2 };
+    renderWorld(ctx, view, { me, focus, animator, W, H, dpr, reduced, offline: mode === 'offline' });
+  }
   hud.update(view, me, { paused, offline: mode === 'offline' });
 }
 
@@ -363,14 +397,19 @@ function showGame(label, room = '') {
   $('.avatar').style.backgroundPosition = `${(mode === 'offline' ? menu.character : session?.color ?? 0) * 100 / 3}% 0`;
   $('#pauseBtn').classList.toggle('hidden', mode !== 'offline');
   $('#hud').classList.toggle('coop', mode === 'online');
+  $('#hud').classList.toggle('split', isSplit());
   $('#codexModal').classList.add('hidden');
   accumulator = 0;
   $('#muteBtn').textContent = audio.muted ? '♪̸' : '♪';
 }
 
-/** Solo run; a daily challenge fixes the seed, curses and character, and ignores permanent upgrades so scores compare. */
-function startOffline(challenge = null) {
+/**
+ * Solo run; a daily challenge fixes the seed, curses and character, and ignores permanent upgrades so scores compare.
+ * Split screen adds a second player on the same keyboard, sharing this browser's Grimório upgrades.
+ */
+function startOffline(challenge = null, split = false) {
   if (session) return;
+  local = split && !challenge ? ['me', 'p2'] : ['me'];
   if (challenge) {
     game = createGameState('quick', { curses: challenge.curses, daily: challenge.key });
     game.random = seededRandom(challenge.seed);
@@ -380,11 +419,13 @@ function startOffline(challenge = null) {
     game = createGameState(menu.campaign, { curses: menu.curses });
     game.random = Math.random;
     game.players.me = createPlayer('me', playerName(), menu.character, wallet.upgrades, menu.loadout);
+    if (local.length > 1) game.players.p2 = createPlayer('p2', 'Jogador 2', menu.secondCharacter, wallet.upgrades);
   }
   game.offline = true;
   mode = 'offline';
   const curses = game.curses.map(id => CURSES[id].title).join(' + ');
-  showGame(challenge ? `DESAFIO DIÁRIO · ${curses}` : `SOLO · ${CAMPAIGNS[game.campaign].name}${curses ? ` · ${curses}` : ''}`);
+  showGame(challenge ? `DESAFIO DIÁRIO · ${curses}`
+    : `${isSplit() ? 'TELA DIVIDIDA' : 'SOLO'} · ${CAMPAIGNS[game.campaign].name}${curses ? ` · ${curses}` : ''}`);
 }
 
 function endGame() {
@@ -416,18 +457,28 @@ function togglePause(force) {
 addEventListener('blur', () => { controls.reset(); togglePause(true); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { controls.reset(); togglePause(true); } });
 
-function useSpecial() {
-  const me = view?.players[meId];
-  if (mode === 'menu' || paused || view?.over || !me?.alive || me.pendingPowers) return;
-  if (mode === 'offline') activateSpecial(game, 'me', game.random);
+/** The player a keyboard slot acts for, or null when that player cannot act right now. */
+function actor(slot) {
+  const id = mode === 'offline' ? local[slot] : slot ? null : meId;
+  const me = id ? view?.players[id] : null;
+  if (mode === 'menu' || paused || view?.over || !me?.alive || me.pendingPowers) return null;
+  // Offline time is frozen while a split-screen partner picks a power.
+  if (mode === 'offline' && localPlayers().some(p => p.pendingPowers?.length)) return null;
+  return me;
+}
+
+function useSpecial(slot = 0) {
+  const me = actor(slot);
+  if (!me) return;
+  if (mode === 'offline') activateSpecial(game, me.id, game.random);
   else session?.send({ type: 'special' });
 }
 
-function useDash() {
-  const me = view?.players[meId];
-  if (mode === 'menu' || paused || view?.over || !me?.alive || me.pendingPowers) return;
-  const input = controls.read();
-  if (mode === 'offline') activateDash(game, 'me', input);
+function useDash(slot = 0) {
+  const me = actor(slot);
+  if (!me) return;
+  const input = controls.read(slot);
+  if (mode === 'offline') activateDash(game, me.id, input);
   else session?.send({ type: 'dash', ...input });
 }
 
@@ -515,8 +566,8 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
   renderLobbyCharacters(true);
 }
 
-bindActionButton($('#specialBtn'), useSpecial);
-bindActionButton($('#dashBtn'), useDash);
+bindActionButton($('#specialBtn'), () => useSpecial());
+bindActionButton($('#dashBtn'), () => useDash());
 $('#startBtn').onclick = () => session?.send({ type: 'start' });
 $('#roomCode').onclick = async () => {
   if (!session?.room) return;

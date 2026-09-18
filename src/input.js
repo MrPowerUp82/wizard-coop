@@ -11,8 +11,15 @@ export function bindActionButton(button, action) {
   });
 }
 
-// Keyboard and virtual joystick merged into one normalized movement vector.
-export function createInput({ joystick, onPause, onSpecial, onDash, isPlaying }) {
+// Movement keys per local player. Solo play accepts both sets; split screen gives each player their own.
+const MOVE_KEYS = [
+  { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' },
+  { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' }
+];
+
+// Keyboard and virtual joystick merged into one normalized movement vector per local player.
+// onSpecial/onDash receive the player slot (0 or 1) that pressed the key.
+export function createInput({ joystick, onPause, onSpecial, onDash, isPlaying, isSplit = () => false }) {
   const knob = joystick.querySelector('i');
   const keys = new Set();
   let touch = null;
@@ -21,13 +28,15 @@ export function createInput({ joystick, onPause, onSpecial, onDash, isPlaying })
   addEventListener('keydown', event => {
     if (event.target instanceof HTMLInputElement) return;
     const key = event.key.toLowerCase();
-    if (isPlaying() && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) event.preventDefault();
+    const split = isSplit();
+    if (isPlaying() && (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key) || (split && key === 'enter'))) event.preventDefault();
     if (key === 'escape' && !event.repeat) onPause();
-    if (key === ' ' && !event.repeat) onSpecial();
-    if (key === 'shift' && !event.repeat) { event.preventDefault(); onDash?.(); }
-    keys.add(key);
+    if (key === ' ' && !event.repeat) onSpecial(0);
+    if (split && key === 'enter' && !event.repeat) onSpecial(1);
+    if (key === 'shift' && !event.repeat) { event.preventDefault(); onDash?.(split && event.code === 'ShiftRight' ? 1 : 0); }
+    keys.add(event.code || key);
   });
-  addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
+  addEventListener('keyup', event => keys.delete(event.code || event.key.toLowerCase()));
 
   function touchMove(event) {
     if (!touch || event.pointerId !== activePointer) return;
@@ -55,12 +64,17 @@ export function createInput({ joystick, onPause, onSpecial, onDash, isPlaying })
   addEventListener('resize', release);
   addEventListener('blur', () => { keys.clear(); release(); });
 
+  function axes(slot) {
+    const k = MOVE_KEYS[slot];
+    return [(keys.has(k.right) ? 1 : 0) - (keys.has(k.left) ? 1 : 0), (keys.has(k.down) ? 1 : 0) - (keys.has(k.up) ? 1 : 0)];
+  }
+
   return {
-    read() {
-      const x = (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
-      const y = (keys.has('s') || keys.has('arrowdown') ? 1 : 0) - (keys.has('w') || keys.has('arrowup') ? 1 : 0);
+    read(slot = 0) {
+      let [x, y] = axes(slot);
+      if (slot === 0 && !isSplit() && !x && !y) [x, y] = axes(1);
       if (x || y) { const length = Math.hypot(x, y); return { x: x / length, y: y / length }; }
-      return touch ? { ...touch } : { x: 0, y: 0 };
+      return slot === 0 && touch ? { ...touch } : { x: 0, y: 0 };
     },
     reset() { keys.clear(); release(); }
   };

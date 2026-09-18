@@ -230,14 +230,23 @@ function drawEdgeArrow(ctx, W, H, from, target, color, label) {
   ctx.fillText(`${label} • ${Math.round(Math.hypot(dx, dy) / 10)}m`, x, y + 22);
 }
 
-export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced, offline }) {
+/**
+ * Draws the world centred on `focus` into a W×H viewport whose top-left corner sits at (ox, oy) on screen,
+ * so split screen can render each local player into its own half of the canvas.
+ */
+export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced, offline, ox = 0, oy = 0 }) {
   const time = animator.time;
   const shake = animator.shakeOffset;
-  Object.assign(view, { dpr, camX: focus.x - W / 2, camY: focus.y - H / 2, shakeX: shake.x, shakeY: shake.y });
-  const { camX, camY } = view;
+  const camX = focus.x - W / 2, camY = focus.y - H / 2;
+  // The sprite camera folds in the viewport offset so world-space draws land inside this viewport.
+  Object.assign(view, { dpr, camX: camX - ox, camY: camY - oy, shakeX: shake.x, shakeY: shake.y });
   const visible = (x, y, margin = 110) => x >= camX - margin && x <= camX + W + margin && y >= camY - margin && y <= camY + H + margin;
+  const screenTransform = () => ctx.setTransform(dpr, 0, 0, dpr, ox * dpr, oy * dpr);
 
+  ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.beginPath(); ctx.rect(ox, oy, W, H); ctx.clip();
+  screenTransform();
   drawTerrain(ctx, game.phase || 0, camX - shake.x, camY - shake.y, W, H);
   worldTransform(ctx);
   drawAtmosphere(ctx, game.phase || 0, camX, camY, W, H, time, reduced);
@@ -464,7 +473,7 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
   }, (x, y) => visible(x, y));
   drawNumbers(ctx, animator, (x, y) => visible(x, y), reduced);
 
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  screenTransform();
   const flash = animator.flash;
   if (flash && flash.alpha > 0.01) {
     ctx.globalAlpha = flash.alpha; ctx.fillStyle = flash.color; ctx.fillRect(0, 0, W, H);
@@ -491,4 +500,5 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
     if (!inView(mark)) drawEdgeArrow(ctx, W, H, focus, mark, mark.color, `${mark.icon} ${mark.name}`);
   }
   if (altar && ['waiting', 'active'].includes(altar.status) && !inView(altar)) drawEdgeArrow(ctx, W, H, focus, altar, '#ffd36b', 'ALTAR');
+  ctx.restore();
 }

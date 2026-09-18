@@ -38,7 +38,7 @@ export function createHud() {
     'phaseName', 'phasePanel', 'phaseTime', 'phaseProgress', 'bossPanel', 'bossName', 'bossHp', 'bossHealth', 'bossHint', 'phaseTransition',
     'transitionText', 'players', 'powerRow', 'announce', 'reconnectBanner', 'powerModal', 'powerChoices', 'powerTimer', 'rerollBtn',
     'damageVignette', 'toast', 'dashBtn', 'specialHint', 'objectivePanel', 'objectiveText', 'cursesRow', 'encounterPanel',
-    'encounterTitle', 'encounterText', 'encounterHint', 'signalBar'].map(id => [id, $(`#${id}`)]));
+    'encounterTitle', 'encounterText', 'encounterHint', 'signalBar', 'powerTitle'].map(id => [id, $(`#${id}`)]));
   const powerTimerFill = el.powerTimer.querySelector('i');
   let announceTimer = null;
   let shownPowers = '';
@@ -170,8 +170,9 @@ export function createHud() {
   return {
     toast, announce, flashDamage,
     resetCaches() { shownPowers = ''; playersSignature = ''; rowSignature = ''; curseSignature = ''; },
-    syncPowers(me, { offline, onChoose, onReroll }) {
+    syncPowers(me, { offline, onChoose, onReroll, title = 'Novo poder' }) {
       if (me?.alive !== false && me?.pendingPowers?.length) {
+        set(el.powerTitle, 'text', title);
         const key = me.pendingPowers.join(',');
         if (key !== shownPowers) { shownPowers = key; showPowerChoices(me, me.pendingPowers, onChoose); }
         set(el.rerollBtn, 'hidden', !(me.rerolls > 0));

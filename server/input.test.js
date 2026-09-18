@@ -69,3 +69,47 @@ test('ações preservam teclado e mouse e respeitam botão desabilitado', () => 
   fire(button, 'click');
   assert.equal(count, 2);
 });
+
+test('tela dividida separa WASD e setas por jogador e direciona especial e esquiva', t => {
+  const window = new EventTarget();
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'addEventListener');
+  globalThis.addEventListener = window.addEventListener.bind(window);
+  t.after(() => {
+    if (descriptor) Object.defineProperty(globalThis, 'addEventListener', descriptor);
+    else delete globalThis.addEventListener;
+  });
+  if (!('HTMLInputElement' in globalThis)) {
+    globalThis.HTMLInputElement = class {};
+    t.after(() => { delete globalThis.HTMLInputElement; });
+  }
+  const joystick = new Control();
+  joystick.knob = new Control();
+  let split = false;
+  const specials = [], dashes = [];
+  const input = createInput({ joystick, isPlaying: () => true, isSplit: () => split, onPause() {},
+    onSpecial: slot => specials.push(slot), onDash: slot => dashes.push(slot) });
+  const key = (type, key, code) => fire(window, type, { key, code });
+
+  key('keydown', 'ArrowRight', 'ArrowRight');
+  assert.deepEqual(input.read(0), { x: 1, y: 0 }, 'sozinho, as setas também movem o jogador 1');
+  split = true;
+  assert.deepEqual(input.read(0), { x: 0, y: 0 });
+  assert.deepEqual(input.read(1), { x: 1, y: 0 });
+  key('keydown', 'w', 'KeyW');
+  assert.deepEqual(input.read(0), { x: 0, y: -1 });
+  assert.deepEqual(input.read(1), { x: 1, y: 0 });
+  key('keyup', 'ArrowRight', 'ArrowRight');
+  assert.deepEqual(input.read(1), { x: 0, y: 0 });
+
+  key('keydown', ' ', 'Space');
+  key('keydown', 'Enter', 'Enter');
+  key('keydown', 'Shift', 'ShiftLeft');
+  key('keydown', 'Shift', 'ShiftRight');
+  assert.deepEqual(specials, [0, 1]);
+  assert.deepEqual(dashes, [0, 1]);
+  split = false;
+  key('keydown', 'Enter', 'Enter');
+  key('keydown', 'Shift', 'ShiftRight');
+  assert.deepEqual(specials, [0, 1], 'fora da tela dividida, Enter não aciona o especial');
+  assert.deepEqual(dashes, [0, 1, 0]);
+});

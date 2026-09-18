@@ -65,7 +65,7 @@ export function saveDailyRecord(key, result) {
   return { improved, best: improved ? { key, ...result } : best };
 }
 
-export function createMenu({ wallet, codex, toast, onOffline, onDaily, onCreate, onJoin, isIdle, audio }) {
+export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, onCreate, onJoin, isIdle, audio }) {
   const saved = Number(storage.get('arcana-character') ?? 0);
   let selected = Number.isInteger(saved) && saved >= 0 && saved < 4 ? saved : 0;
   let visibility = 'open';
@@ -73,6 +73,8 @@ export function createMenu({ wallet, codex, toast, onOffline, onDaily, onCreate,
   let curses = sanitizeCurses(readJson('arcana-curses', []));
   let weapon = storage.get('arcana-weapon') || '';
   let variant = storage.get('arcana-variant') === '1' ? 1 : 0;
+  const savedSecond = Number(storage.get('arcana-character-p2') ?? 1);
+  let second = Number.isInteger(savedSecond) && savedSecond >= 0 && savedSecond < 4 ? savedSecond : 1;
   let codexTab = 'powers';
   let cancelRoomRequest = () => {};
 
@@ -81,7 +83,20 @@ export function createMenu({ wallet, codex, toast, onOffline, onDaily, onCreate,
     storage.set('arcana-character', String(color));
     renderCharacterPicker($('#characterPicker'), color, [], null, selectCharacter);
     $('.sprite-preview').style.backgroundPosition = `${color * 100 / 3}% 0`;
+    renderSplit();
     renderOptions();
+  }
+
+  /** Split screen: player 2 picks any character player 1 is not using. */
+  function selectSecond(color) {
+    second = color;
+    storage.set('arcana-character-p2', String(color));
+    renderSplit();
+  }
+
+  function renderSplit() {
+    if (second === selected) second = (selected + 1) % SPELLS.length;
+    renderCharacterPicker($('#splitPicker'), second, [{ id: 'p1', color: selected, name: 'Jogador 1' }], null, selectSecond);
   }
 
   const unlocked = id => (wallet.upgrades[id] || 0) > 0;
@@ -237,13 +252,23 @@ export function createMenu({ wallet, codex, toast, onOffline, onDaily, onCreate,
   $('#offlineBtn').onclick = () => onOffline();
   $('#shopBtn').onclick = () => { renderShop(); $('#shopModal').classList.remove('hidden'); };
   $('#shopClose').onclick = () => $('#shopModal').classList.add('hidden');
+  $('#splitBtn').onclick = () => {
+    $('#joinBox').classList.add('hidden');
+    $('#createBox').classList.add('hidden');
+    const box = $('#splitBox');
+    box.classList.toggle('hidden');
+    if (!box.classList.contains('hidden')) requestAnimationFrame(() => box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  };
+  $('#confirmSplitBtn').onclick = () => onSplit();
   $('#createBtn').onclick = () => {
+    $('#splitBox').classList.add('hidden');
     $('#joinBox').classList.add('hidden');
     const box = $('#createBox');
     box.classList.toggle('hidden');
     if (!box.classList.contains('hidden')) requestAnimationFrame(() => box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
   };
   $('#joinToggle').onclick = () => {
+    $('#splitBox').classList.add('hidden');
     $('#createBox').classList.add('hidden');
     const box = $('#joinBox');
     box.classList.toggle('hidden');
@@ -284,6 +309,7 @@ export function createMenu({ wallet, codex, toast, onOffline, onDaily, onCreate,
 
   return {
     get character() { return selected; },
+    get secondCharacter() { return second; },
     get campaign() { return campaign; },
     get curses() { return [...curses]; },
     get loadout() { return { weapon: weapon || null, special: variant }; },
