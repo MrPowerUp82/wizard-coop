@@ -1,0 +1,150 @@
+/* The desktop keeps its existing anchors; mobile panels participate in layout. */
+.hud-layout, .hud-top, .hud-tools, .hud-events { display: contents; }
+
+@media (max-width: 800px), (pointer: coarse) and (max-width: 1400px), (max-height: 500px) and (orientation: landscape) {
+  :root {
+    --hud-top: max(8px, env(safe-area-inset-top));
+    --hud-left: max(12px, env(safe-area-inset-left));
+    --hud-right: max(12px, env(safe-area-inset-right));
+    --hud-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  #app { height: 100dvh; min-height: 0; }
+  button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .menu-shell { display: block; padding: var(--hud-top) var(--hud-right) 28px var(--hud-left); }
+  .hero-panel { width: min(100%, 560px); max-width: none; margin: auto; }
+  .preview-card { display: none; }
+  .menu-actions button:hover, .power-choice:hover { transform: none; }
+  .menu-shell input, .menu-shell select { font-size: 16px; }
+  .text-btn, .codex-tab, .open-rooms-header button { min-height: 44px; }
+  .loadout, .visibility-choice { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .loadout label { min-width: 0; }
+
+  .hud-layout {
+    position: fixed; z-index: 5;
+    top: var(--hud-top); left: var(--hud-left); right: var(--hud-right);
+    display: grid; gap: 8px; pointer-events: none;
+  }
+  .hud-top {
+    display: grid; grid-template-columns: minmax(0, 1fr) 140px;
+    grid-template-areas: 'status tools' 'phase timer' 'players room' 'curses curses';
+    align-items: start; gap: 6px 8px; pointer-events: none;
+  }
+  .hud-top > :not(.hud-tools) { position: static; transform: none; width: auto; max-width: none; min-width: 0; margin: 0; }
+  .status-card { grid-area: status; grid-template-columns: 30px minmax(0, 1fr); padding: 6px; gap: 6px; }
+  .status-card > div:last-child { min-width: 0; }
+  .avatar { height: 34px; }
+  .hud-row { gap: 4px; letter-spacing: 0; font-size: 9px; }
+  #playerName { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #level { flex-shrink: 0; }
+  .status-card .bar { margin-top: 5px; }
+  .power-row { flex-wrap: nowrap; max-width: none; overflow-x: auto; overflow-y: hidden; padding: 2px 3px 5px; margin-top: 4px; scrollbar-width: none; pointer-events: auto; }
+  .power-row:empty { display: none; }
+  .power-chip { flex: 0 0 20px; height: 20px; font-size: 11px; }
+  .hud-tools { grid-area: tools; display: flex; justify-content: flex-end; gap: 4px; pointer-events: auto; }
+  .hud-tools .exit { position: static; width: 44px; height: 44px; flex: 0 0 44px; font-size: 22px; }
+  .timer { grid-area: timer; text-align: right; padding-right: 4px; }
+  .timer b { font-size: 22px; line-height: 1.1; }
+  .timer span { display: block; font-size: 8px; letter-spacing: .04em; max-height: 24px; overflow: hidden; }
+  .phase-panel { grid-area: phase; padding: 6px 8px; text-align: left; }
+  .phase-panel b { display: block; font-size: 10px; }
+  .phase-panel span { font-size: 8px; margin-top: 3px; letter-spacing: .04em; }
+  .phase-panel .bar { margin-top: 4px; }
+  .players { grid-area: players; gap: 4px; }
+  .player-dot { width: 24px; height: 24px; border-radius: 6px; }
+  .room-pill { grid-area: room; justify-self: end; padding: 5px 8px; font-size: 8px; }
+
+  .hud-events {
+    display: grid; gap: 5px; pointer-events: none;
+  }
+  .hud-events > * { position: static; transform: none; width: auto; max-width: none; margin: 0; min-width: 0; }
+  .boss-panel { padding: 7px 9px; }
+  .boss-panel b { font-size: 11px; }
+  .boss-panel span { font-size: 9px; white-space: nowrap; }
+  .boss-panel > div:first-child { gap: 8px; }
+  .boss-panel small { display: none; }
+  .boss-panel .bar { margin-top: 5px; height: 5px; }
+  .curses-row { grid-area: curses; justify-content: center; flex-wrap: wrap; gap: 3px; }
+  .curses-row span { min-width: 20px; height: 20px; font-size: 10px; }
+  .objective-panel { padding: 6px 8px; gap: 3px; font-size: 10px; }
+  .objective-panel small { display: none; }
+
+  #joystick {
+    display: block; position: fixed; z-index: 4; left: var(--hud-left); bottom: var(--hud-bottom);
+    width: 104px; height: 104px; user-select: none;
+    border: 1px solid #74ddbe66; border-radius: 50%; background: #10212780;
+  }
+  #joystick i { position: absolute; width: 40px; height: 40px; border-radius: 50%; background: #6fdbbb73; left: calc(50% - 20px); top: calc(50% - 20px); }
+  .special-panel {
+    left: auto; right: var(--hud-right); bottom: var(--hud-bottom);
+    width: min(180px, calc(100vw - var(--hud-left) - var(--hud-right) - 148px));
+    max-width: none; padding: 7px; gap: 5px; border-radius: 14px;
+  }
+  .special-panel b { display: none; }
+  .special-panel small { display: none; }
+  #coinCount { font-size: 10px; text-align: right; }
+  .special-panel .compact { min-height: 48px !important; padding: 8px 6px !important; font-size: 11px; line-height: 1.25; }
+  #dashBtn { margin-top: 0; }
+  .signal-bar { left: var(--hud-left); right: auto; bottom: calc(var(--hud-bottom) + 118px); flex-direction: row; gap: 4px; }
+  .signal-bar button { width: 44px; height: 44px; }
+  .signal-bar button small, .controls-hint { display: none; }
+  .revive-hint { bottom: calc(var(--hud-bottom) + 176px); width: min(400px, calc(100vw - 32px)); font-size: 11px; margin: 0; }
+  .announce { top: 45%; max-width: calc(100vw - 32px); width: max-content; padding: 8px 12px; font-size: 12px; }
+  .hud-top > #announce { position: fixed; width: max-content; max-width: calc(100vw - 32px); transform: translate(-50%, -10px); }
+  .hud-top > #announce.show { transform: translate(-50%, 0); }
+  .toast { bottom: calc(var(--hud-bottom) + 202px); max-width: calc(100vw - 32px); width: max-content; text-align: center; box-sizing: border-box; }
+  .reconnect-banner { top: 38%; width: max-content; max-width: calc(100vw - 32px); text-align: center; font-size: 11px; }
+  .phase-transition { top: 40%; padding: 16px; width: min(440px, calc(100vw - 32px)); }
+  .phase-transition strong { font-size: 20px; margin: 8px 0; }
+
+  .modal { padding: var(--hud-top) var(--hud-right) var(--hud-bottom) var(--hud-left); align-items: start; }
+  .modal-card, #lobby .modal-card { box-sizing: border-box; width: min(100%, 680px); margin: auto; padding: 20px 16px; min-width: 0; }
+  .modal-card .compact { min-height: 44px !important; }
+  .power-choices { gap: 8px; margin-top: 12px; grid-template-columns: 1fr; }
+  .power-choice { min-height: 96px; padding: 12px 12px 12px 60px; }
+  .power-choice i { position: absolute; left: 12px; top: 14px; margin: 0; }
+  .power-choice em { position: static; display: inline-block; margin-bottom: 5px; }
+  .power-choice b { font-size: 12px; }
+  .power-choice small { font-size: 12px; }
+  .codex-card { max-height: calc(100dvh - var(--hud-top) - var(--hud-bottom)); }
+  .codex-list { grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+  .damage-row { grid-template-columns: 18px minmax(70px, 1fr) minmax(30px, 1fr) 48px; gap: 5px; font-size: 10px; }
+}
+
+@media (orientation: landscape) and (max-height: 500px), (orientation: landscape) and (pointer: coarse) and (max-width: 1400px) {
+  .hero-panel { width: min(100%, 860px); }
+  .menu-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .character-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .curse-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hud-top {
+    grid-template-columns: minmax(150px, 200px) minmax(0, 1fr) 140px;
+    grid-template-areas: 'status phase tools' 'players room timer' '. curses .';
+    column-gap: 12px;
+  }
+  .phase-panel { justify-self: center; width: min(100%, 260px) !important; box-sizing: border-box; text-align: center; }
+  .timer b { font-size: 18px; }
+  .timer span { max-width: 140px; max-height: 20px; }
+  .room-pill { justify-self: center; }
+  .hud-events { margin-left: 140px; margin-right: 180px; gap: 4px; }
+  .hud-events .objective-panel { font-size: 9px; padding: 4px 7px; }
+  .curses-row span { height: 18px; font-size: 9px; }
+  .special-panel { width: 160px; }
+  #joystick { width: 96px; height: 96px; }
+  .signal-bar { bottom: calc(var(--hud-bottom) + 110px); }
+  .signal-bar button { width: 44px; height: 44px; }
+  .signal-bar { gap: 2px; }
+  .revive-hint { bottom: calc(var(--hud-bottom) + 6px); width: calc(100vw - var(--hud-left) - var(--hud-right) - 310px); font-size: 10px; }
+  .announce { top: auto; bottom: calc(var(--hud-bottom) + 38px); max-width: calc(100vw - 330px); font-size: 11px; }
+  .hud-top > #announce { max-width: calc(100vw - 330px); }
+  .toast { bottom: calc(var(--hud-bottom) + 70px); max-width: calc(100vw - 330px); font-size: 11px; }
+  .phase-transition { top: 32%; padding: 12px; width: min(400px, 65vw); }
+  .phase-transition strong { font-size: 18px; }
+  .modal-card { padding: 14px 18px; }
+  .modal-card > .rune { display: none; }
+  .modal-card h2 { font-size: 20px; margin: 4px 0 8px; }
+  .modal-card p { margin: 8px 0; }
+  .power-choices { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .power-choice { padding: 10px; min-height: 130px; }
+  .power-choice i { display: none; }
+  .power-choice small { font-size: 11px; }
+  .reroll-btn { margin-top: 8px; }
+}

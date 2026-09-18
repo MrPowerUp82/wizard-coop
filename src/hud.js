@@ -33,6 +33,7 @@ function cached() {
 
 export function createHud() {
   const set = cached();
+  const touchControls = matchMedia('(pointer: coarse)');
   const el = Object.fromEntries(['hpBar', 'xpBar', 'level', 'timer', 'spellName', 'specialFill', 'specialBtn', 'coinCount', 'reviveHint',
     'phaseName', 'phasePanel', 'phaseTime', 'phaseProgress', 'bossPanel', 'bossName', 'bossHp', 'bossHealth', 'bossHint', 'phaseTransition',
     'transitionText', 'players', 'powerRow', 'announce', 'reconnectBanner', 'powerModal', 'powerChoices', 'powerTimer', 'rerollBtn',
@@ -199,10 +200,10 @@ export function createHud() {
       set(el.specialFill, 'width', `${charge}%`);
       set(el.specialBtn, 'disabled', charge < SPECIAL.max || blocked || me.specialCooldown > 0);
       set(el.specialBtn, 'text', me.specialCooldown > 0 ? `${special.name} · ${Math.ceil(me.specialCooldown)}s`
-        : charge >= SPECIAL.max ? `${special.name} · ESPAÇO` : `${special.name} ${charge}%`);
+        : charge >= SPECIAL.max ? `${special.name}${touchControls.matches ? ' · Pronto' : ' · ESPAÇO'}` : `${special.name} ${charge}%`);
       set(el.specialHint, 'text', special.description);
       set(el.dashBtn, 'disabled', blocked || me.dashCooldown > 0);
-      set(el.dashBtn, 'text', me.dashCooldown > 0 ? `Esquiva · ${Math.ceil(me.dashCooldown)}s` : '➤ Esquiva · SHIFT');
+      set(el.dashBtn, 'text', me.dashCooldown > 0 ? `Esquiva · ${Math.ceil(me.dashCooldown)}s` : `➤ Esquiva${touchControls.matches ? '' : ' · SHIFT'}`);
       const altar = view.altar;
       set(el.objectivePanel, 'hidden', !altar || view.phaseStatus !== 'horde' || view.over);
       if (altar) set(el.objectiveText, 'text', altar.status === 'complete' ? 'Purificado! Recompensa compartilhada.'

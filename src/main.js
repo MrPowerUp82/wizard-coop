@@ -1,5 +1,7 @@
 import './style.css';
 import './enhancements.css';
+import './mobile.css';
+import './desktop.css';
 import '@fontsource/cinzel/latin-600.css';
 import '@fontsource/cinzel/latin-700.css';
 import '@fontsource/inter/latin-400.css';

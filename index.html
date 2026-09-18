@@ -16,6 +16,7 @@
 
       <main id="menu" class="menu-shell">
         <section class="hero-panel">
+          <div class="menu-build">
           <div class="eyebrow"><i></i> RITUAL COOPERATIVO <i></i></div>
           <h1>ARCANA<br /><span>SURVIVORS</span></h1>
           <p class="tagline">A noite não termina. Sua magia também não.</p>
@@ -40,6 +41,8 @@
               <label id="variantLabel" class="hidden"><span class="setup-label">ESPECIAL</span><select id="variantSelect"></select></label>
             </div>
           </section>
+          </div>
+          <div class="menu-play">
           <div class="menu-actions">
             <button id="offlineBtn" class="primary"><span class="button-icon">◆</span><b>Jogar offline</b><small>Sobreviva no seu ritmo</small></button>
             <button id="createBtn"><span class="button-icon">✦</span><b>Criar sala co-op</b><small>Abra um ritual para amigos</small></button>
@@ -77,6 +80,7 @@
           <div id="settings" class="settings hidden">
             <label>Servidor WebSocket <input id="serverUrl" placeholder="wss://jogo.seudominio.com/ws" /></label>
             <button id="saveServer" class="compact">Salvar</button>
+          </div>
           </div>
         </section>
         <aside class="preview-card">
@@ -155,12 +159,27 @@
       </section>
 
       <section id="hud" class="hidden">
+        <div class="hud-layout">
+        <div class="hud-top">
         <div class="status-card"><div class="avatar"></div><div><div class="hud-row"><b id="playerName">ARCANISTA</b><span id="level">NÍVEL 1</span></div><div class="bar hp"><i id="hpBar"></i></div><div class="bar xp"><i id="xpBar"></i></div><div id="powerRow" class="power-row" aria-label="Poderes adquiridos"></div></div></div>
         <div class="timer"><b id="timer">00:00</b><span id="modeLabel">SOZINHO</span></div>
         <div class="room-pill hidden" id="roomPill">SALA <b>------</b></div>
         <div class="players" id="players"></div>
         <div id="phasePanel" class="phase-panel"><b id="phaseName"></b><span id="phaseTime"></span><div class="bar"><i id="phaseProgress"></i></div></div>
-        <div id="bossPanel" class="boss-panel hidden"><div><b id="bossName"></b><span id="bossHealth"></span></div><div class="bar boss-bar"><i id="bossHp"></i><em style="left:66%"></em><em style="left:33%"></em></div><small id="bossHint">Desvie dos projéteis vermelhos e saia dos círculos</small></div>
+          <div id="cursesRow" class="curses-row hidden" aria-label="Maldições ativas"></div>
+          <div id="announce" class="announce" role="status" aria-live="polite"></div>
+          <div class="hud-tools" role="group" aria-label="Opções da partida">
+            <button id="muteBtn" class="exit mute" aria-label="Ativar ou silenciar sons" title="Som">♪</button>
+            <button id="pauseBtn" class="exit pause" aria-label="Pausar partida" title="Pausar (Esc)">Ⅱ</button>
+            <button id="exitBtn" class="exit" aria-label="Voltar ao menu">×</button>
+          </div>
+        </div>
+        <div class="hud-events">
+          <div id="bossPanel" class="boss-panel hidden"><div><b id="bossName"></b><span id="bossHealth"></span></div><div class="bar boss-bar"><i id="bossHp"></i><em style="left:66%"></em><em style="left:33%"></em></div><small id="bossHint">Desvie dos projéteis vermelhos e saia dos círculos</small></div>
+          <div id="objectivePanel" class="objective-panel hidden" role="status"><b>◇ ALTAR OPCIONAL</b><span id="objectiveText"></span><small>Poder + 20 moedas para todos · sair do círculo preserva o progresso</small></div>
+          <div id="encounterPanel" class="objective-panel encounter-panel hidden" role="status"><b id="encounterTitle"></b><span id="encounterText"></span><small id="encounterHint"></small></div>
+        </div>
+        </div>
         <div class="special-panel">
           <b id="spellName">Raio glacial</b><span id="coinCount">Moedas: 0</span>
           <div class="bar special-bar"><i id="specialFill"></i></div>
@@ -168,22 +187,15 @@
           <small id="specialHint">Cristais verdes carregam o especial</small>
           <button id="dashBtn" class="compact">➤ Esquiva · SHIFT</button>
         </div>
-        <div id="cursesRow" class="curses-row hidden" aria-label="Maldições ativas"></div>
-        <div id="encounterPanel" class="objective-panel encounter-panel hidden" role="status"><b id="encounterTitle"></b><span id="encounterText"></span><small id="encounterHint"></small></div>
         <div id="signalBar" class="signal-bar hidden" role="group" aria-label="Sinalizar aliados">
           <button type="button" data-signal="here" title="Venham aqui (Q)">⚑<small>Q</small></button>
           <button type="button" data-signal="help" title="Preciso de ajuda (E)">✚<small>E</small></button>
           <button type="button" data-signal="danger" title="Cuidado (X)">⚠<small>X</small></button>
         </div>
-        <div id="objectivePanel" class="objective-panel hidden" role="status"><b>◇ ALTAR OPCIONAL</b><span id="objectiveText"></span><small>Poder + 20 moedas para todos · sair do círculo preserva o progresso</small></div>
         <p id="reviveHint" class="revive-hint" role="status"></p>
-        <div id="announce" class="announce" role="status" aria-live="polite"></div>
         <div id="reconnectBanner" class="reconnect-banner hidden" role="status">Conexão perdida — reconectando…</div>
         <div id="phaseTransition" class="phase-transition hidden"><small>PASSAGEM ABERTA</small><strong id="transitionText"></strong><span>Os sobreviventes recuperam 35% da vida e ganham um poder</span></div>
         <div class="controls-hint">WASD / SETAS: MOVER <span>•</span> SHIFT: ESQUIVA <span>•</span> ESPAÇO: ESPECIAL <span>•</span> GELO + FOGO / RAÍZES + RAIO / BRASAS + LUA: COMBOS<span class="coop-hint"> • Q E X / CLIQUE: SINALIZAR</span></div>
-        <button id="muteBtn" class="exit mute" aria-label="Ativar ou silenciar sons" title="Som">♪</button>
-        <button id="pauseBtn" class="exit pause" aria-label="Pausar partida" title="Pausar (Esc)">Ⅱ</button>
-        <button id="exitBtn" class="exit" aria-label="Voltar ao menu">×</button>
         <div id="joystick"><i></i></div>
       </section>
 

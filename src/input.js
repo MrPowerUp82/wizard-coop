@@ -3,6 +3,7 @@ export function createInput({ joystick, onPause, onSpecial, onDash, isPlaying })
   const knob = joystick.querySelector('i');
   const keys = new Set();
   let touch = null;
+  let activePointer = null;
 
   addEventListener('keydown', event => {
     if (event.target instanceof HTMLInputElement) return;
@@ -16,19 +17,30 @@ export function createInput({ joystick, onPause, onSpecial, onDash, isPlaying })
   addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
 
   function touchMove(event) {
-    if (!touch) return;
+    if (!touch || event.pointerId !== activePointer) return;
     const rect = joystick.getBoundingClientRect();
     const dx = event.clientX - (rect.left + rect.width / 2), dy = event.clientY - (rect.top + rect.height / 2);
-    const length = Math.hypot(dx, dy), movement = Math.min(35, length);
+    const length = Math.hypot(dx, dy), movement = Math.min((rect.width - knob.offsetWidth) / 2, length);
     const x = length ? dx / length : 0, y = length ? dy / length : 0;
     knob.style.transform = `translate(${x * movement}px,${y * movement}px)`;
     // A small dead zone keeps a resting thumb from drifting the character.
     touch = length < 8 ? { x: 0, y: 0 } : { x, y };
   }
-  joystick.addEventListener('pointerdown', event => { touch = { x: 0, y: 0 }; joystick.setPointerCapture(event.pointerId); touchMove(event); });
+  joystick.addEventListener('pointerdown', event => {
+    if (activePointer !== null || !isPlaying()) return;
+    activePointer = event.pointerId;
+    touch = { x: 0, y: 0 };
+    joystick.setPointerCapture(event.pointerId);
+    touchMove(event);
+  });
   joystick.addEventListener('pointermove', touchMove);
-  const release = () => { touch = null; knob.style.transform = ''; };
-  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) joystick.addEventListener(type, release);
+  const release = () => { activePointer = null; touch = null; knob.style.transform = ''; };
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    joystick.addEventListener(type, event => { if (event.pointerId === activePointer) release(); });
+  }
+  // Rotation or a backgrounded app must never leave movement held down.
+  addEventListener('resize', release);
+  addEventListener('blur', () => { keys.clear(); release(); });
 
   return {
     read() {
