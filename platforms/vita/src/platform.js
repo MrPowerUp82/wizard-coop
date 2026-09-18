@@ -18,4 +18,4 @@ export function createCanvas(width, height) {
 }
 
 /** public/ assets are copied into the VPK's assets/ directory by build.mjs. */
-export const assetUrl = path => `app0:/assets/${path}`;
+export const assetUrl = path => `app0:/${path.replace(/^\.?\//, '')}`;

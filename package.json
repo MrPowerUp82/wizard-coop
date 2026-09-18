@@ -22,6 +22,7 @@
     "switch:nro:emu": "npm --prefix platforms/switch run build -- --renderer=cpu && npm --prefix platforms/switch run nro:emu",
     "switch:nro:debug:emu": "npm --prefix platforms/switch run build:debug -- --renderer=cpu && npm --prefix platforms/switch run nro:emu",
     "vita:install": "npm --prefix platforms/vita install",
+    "vita:runtime": "npm --prefix platforms/vita run runtime",
     "vita:build": "npm --prefix platforms/vita run build",
     "vita:build:debug": "npm --prefix platforms/vita run build:debug",
     "vita:vpk": "npm --prefix platforms/vita run vpk",

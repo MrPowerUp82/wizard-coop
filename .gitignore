@@ -15,4 +15,6 @@ platforms/vita/runtime/*.velf
 platforms/vita/runtime/*.elf
 platforms/vita/runtime/param.sfo
 platforms/vita/runtime/src/*.o
+platforms/vita/runtime/upstream/
+platforms/vita/runtime/build/
 

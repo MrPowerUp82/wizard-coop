@@ -57,7 +57,7 @@ export function createControllers({
       for (let port = 0; port < 6; port++) {
         try {
           const sample = globalPads.read(port);
-          if (sample) list.push(sample);
+          if (sample) list[port] = sample;
         } catch { /* disconnected or invalid port */ }
       }
     }
@@ -121,7 +121,11 @@ export function createControllers({
       lx, ly, rx, ry
     });
 
-    pad.move = normalizeAnalogAxes(lx, ly);
+    const map = ACTIONS[pad.kind] || ACTIONS.standard;
+    const dx = Number(Boolean(pad.raw & map.right)) - Number(Boolean(pad.raw & map.left));
+    const dy = Number(Boolean(pad.raw & map.down)) - Number(Boolean(pad.raw & map.up));
+    const length = Math.hypot(dx, dy);
+    pad.move = length ? { x: dx / length, y: dy / length } : normalizeAnalogAxes(lx, ly);
     if (!wasConnected) {
       pad.previous = pad.raw;
       changes.push({ type: 'connected', pad: { ...pad } });

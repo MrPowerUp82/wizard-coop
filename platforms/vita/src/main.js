@@ -1,4 +1,5 @@
 // @ts-check
+import './native-runtime.js';
 import { activateDash, activateSpecial, applyPower, rerollPowers } from '../../../server/game.js';
 import { CAMPAIGNS } from '../../../server/campaign.js';
 import { PHASES } from '../../../server/phases.js';
@@ -39,7 +40,7 @@ const ctx = typeof screenObj.getContext === 'function' ? screenObj.getContext('2
 
 if (ctx) {
   installFontCompat(ctx);
-  installCanvasCompat(ctx);
+  if (!global.ArcanaNative) installCanvasCompat(ctx);
 }
 
 const W = screenObj.width || 960;
@@ -55,7 +56,8 @@ if (ctx) {
   ctx.fillText('Arcana Survivors · PlayStation Vita…', W / 2, H / 2);
 }
 
-await loadFonts();
+// The native bridge loads TTFs directly. Browser/headless harnesses load FontFace.
+if (!global.ArcanaNative) await loadFonts();
 
 const audio = createAudio();
 const wallet = createWallet();

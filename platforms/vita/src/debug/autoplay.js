@@ -10,7 +10,7 @@ export function createAutoplay({ startRun, endGame: _endGame, controllers, perf,
   let plan = null;
   try {
     if (global.Vita?.readFile) {
-      const data = global.Vita.readFile('ux0:/data/arcana-autoplay.json');
+      const data = global.Vita.readFile('ux0:data/ArcanaSurvivors/autoplay.json');
       if (data) plan = JSON.parse(typeof data === 'string' ? data : new TextDecoder().decode(data));
     }
   } catch {
@@ -27,6 +27,7 @@ export function createAutoplay({ startRun, endGame: _endGame, controllers, perf,
   };
 
   function next() {
+    if (global.Vita?.capture) global.Vita.capture(index);
     index++;
     if (index >= plan.steps.length) {
       log('done');

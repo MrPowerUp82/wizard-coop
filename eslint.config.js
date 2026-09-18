@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
-  { ignores: ['dist/', 'node_modules/', 'platforms/switch/romfs/', 'platforms/vita/build/'] },
+  { ignores: ['dist/', 'node_modules/', 'platforms/switch/romfs/', 'platforms/vita/build/', 'platforms/vita/runtime/upstream/', 'platforms/vita/runtime/build/'] },
   js.configs.recommended,
   {
     files: ['src/**/*.js'],
@@ -20,6 +20,11 @@ export default [
   {
     files: ['platforms/switch/*.mjs', 'platforms/switch/test/**/*.mjs'],
     languageOptions: { globals: { ...globals.node } }
+  },
+  {
+    // VitaJS examples kept for reference, separate from the game entrypoint.
+    files: ['assets/*.js', 'platforms/vita/assets/*.js'],
+    languageOptions: { globals: { Audio: 'readonly', Font: 'readonly', Pads: 'readonly', Screen: 'readonly', Power: 'readonly', Dialog: 'readonly', App: 'readonly', os: 'readonly' } }
   },
   {
     // PlayStation Vita shell: QuickJS + NanoVG/SceCtrl runtime globals.

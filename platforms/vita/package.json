@@ -6,17 +6,22 @@
   "author": "MrPowerUp82",
   "type": "module",
   "scripts": {
+    "runtime": "node scripts/build-runtime.mjs",
     "build": "node build.mjs",
     "build:debug": "node build.mjs --debug",
     "vpk": "node build.mjs --vpk",
     "vpk:debug": "node build.mjs --debug --vpk",
     "typecheck": "tsc -p jsconfig.json",
-    "test": "node build.mjs --debug && node test/audio-compat.mjs && node test/smoke.mjs",
+    "test": "node build.mjs --debug && node test/audio-compat.mjs && node test/smoke.mjs && node test/native-smoke.mjs",
     "check": "npm run typecheck && npm test"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "1.0.9",
     "dejavu-fonts-ttf": "^2.37.3",
     "esbuild": "0.28.2",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "earcut": "3.2.3"
   }
 }

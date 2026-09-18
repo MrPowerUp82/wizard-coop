@@ -15,6 +15,8 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateRawSync, inflateSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
+import { bakeAssets } from './scripts/bake-assets.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -256,6 +258,7 @@ export function createVpkZip(sourceDir, outputFile) {
 // Main Build Execution
 // -------------------------------------------------------------------------------------------------
 
+if (resolve(buildDir) !== join(here, 'build')) throw new Error('Unsafe build output path');
 rmSync(buildDir, { recursive: true, force: true });
 mkdirSync(join(buildDir, 'assets', 'fonts'), { recursive: true });
 mkdirSync(join(buildDir, 'sce_sys', 'livearea', 'contents'), { recursive: true });
@@ -305,9 +308,16 @@ const interSymbols = [...fontCodePoints(readFileSync(join(buildDir, 'assets', 'f
 
 // 4. Bundle JS with esbuild
 const webPlatform = join(root, 'src', 'platform.js');
+const bakedSprites = await bakeAssets(root, join(buildDir, 'assets'));
 const platformPlugin = {
   name: 'vita-platform',
   setup(builder) {
+    builder.onLoad({ filter: /[\\/]src[\\/]sprites\.js$/ }, args => args.path === join(root, 'src', 'sprites.js') ? { contents: bakedSprites, resolveDir: join(root, 'src') } : undefined);
+    builder.onLoad({ filter: /[\\/]src[\\/]terrain\.js$/ }, args => {
+      if (args.path !== join(root, 'src', 'terrain.js')) return;
+      const source = readFileSync(args.path, 'utf8');
+      return { contents: `import { assetUrl } from './platform.js';\nconst tiles = Array.from({length: 6}, (_, i) => { const image = new Image(); image.src = assetUrl('assets/baked/terrain-' + i + '.png'); return image; });\n` + source.slice(source.indexOf('export function drawTerrain')), resolveDir: join(root, 'src') };
+    });
     builder.onResolve({ filter: /platform\.js$/ }, args => {
       const target = resolve(args.resolveDir, args.path);
       return target === webPlatform ? { path: join(here, 'src', 'platform.js') } : undefined;
@@ -355,15 +365,17 @@ const sfoData = generateParamSfo({
 });
 writeFileSync(join(buildDir, 'sce_sys', 'param.sfo'), sfoData);
 
-// 5. Executable stub / base eboot.bin
-// If precompiled eboot.bin exists in runtime/, copy it into build root
+// 5. Only ship a runtime that actually implements the native bridge.
 const runtimeEboot = join(here, 'runtime', 'eboot.bin');
-if (existsSync(runtimeEboot)) {
+const runtimeManifest = join(here, 'runtime', 'runtime.json');
+if (existsSync(runtimeEboot) && existsSync(runtimeManifest)) {
+  const manifest = JSON.parse(readFileSync(runtimeManifest, 'utf8'));
+  const hash = file => createHash('sha256').update(readFileSync(file)).digest('hex');
+  if (manifest.abi !== 1 || manifest.sha256 !== hash(runtimeEboot) || manifest.sourceSha256 !== hash(join(here, 'runtime', 'src', 'main.c'))) {
+    throw new Error('Runtime ausente, alterado ou desatualizado. Execute npm run vita:runtime.');
+  }
   copyFileSync(runtimeEboot, join(buildDir, 'eboot.bin'));
-} else {
-  // Create a minimal placeholder stub so VPK structure is intact
-  writeFileSync(join(buildDir, 'eboot.bin'), Buffer.from('SCE_EXEC_PLACEHOLDER'));
-}
+} else if (makeVpk) throw new Error('O VPK exige o runtime QuickJS real. Execute npm run vita:runtime; um executável de apresentação não serve.');
 
 console.log(`Build PS Vita concluído em ${buildDir} (debug: ${debug})`);
 
