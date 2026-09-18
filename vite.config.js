@@ -4,6 +4,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   // Caminhos relativos funcionam no GitHub Pages em qualquer subdiretório do repositório.
   base: './',
+  // Console ports build into platforms/*; rewriting those files must not restart or crash the web dev server.
+  server: { watch: { ignored: ['**/platforms/**'] } },
   plugins: [VitePWA({
     registerType: 'prompt',
     manifest: {
