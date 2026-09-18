@@ -8,8 +8,8 @@ import { renderCodex } from './codex.js';
 
 const $ = selector => document.querySelector(selector);
 const DEFAULT_SERVER = 'wss://vps65228.publiccloud.com.br/ws';
-const characterNames = ['Azul', 'Vermelho', 'Verde', 'Roxo'];
-const characterEffects = ['Desacelera inimigos', 'Explode em área', 'Atravessa 3 inimigos', 'Lâmina larga, até 2 alvos'];
+export const characterNames = ['Azul', 'Vermelho', 'Verde', 'Roxo'];
+export const characterEffects = ['Desacelera inimigos', 'Explode em área', 'Atravessa 3 inimigos', 'Lâmina larga, até 2 alvos'];
 
 const storage = {
   get(key) { try { return localStorage.getItem(key); } catch { return null; } },

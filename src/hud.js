@@ -189,6 +189,7 @@ export function createHud() {
     /** Hides the modal; passing the current choices keeps it closed until the server confirms the pick. */
     hidePowers(key = '') { shownPowers = key; el.powerModal.classList.add('hidden'); },
     setReconnecting(active) { set(el.reconnectBanner, 'hidden', !active); },
+    setLowHealth(low) { el.damageVignette.classList.toggle('low', low); },
     update(view, me, { paused, offline }) {
       set(el.hpBar, 'width', `${Math.max(0, me.hp / me.maxHp) * 100}%`);
       set(el.xpBar, 'width', `${Math.min(1, me.xp / xpNeeded(me.level)) * 100}%`);
