@@ -26,6 +26,9 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      # The Nintendo Switch port shares the simulation, renderer and co-op code: keep it building.
+      - run: npm --prefix platforms/switch ci
+      - run: npm run switch:check
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
