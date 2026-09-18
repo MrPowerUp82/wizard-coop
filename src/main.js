@@ -19,6 +19,7 @@ import { createCodex } from './codex.js';
 import { moodFor } from './music.js';
 import { createAnimator } from './animation.js';
 import { createAudio } from './audio.js';
+import { drawBackdrop } from './backdrop.js';
 import { createFeedback, newRound } from './feedback.js';
 import { createHud, format } from './hud.js';
 import { bindActionButton, createInput } from './input.js';
@@ -96,26 +97,6 @@ function resize() {
 }
 addEventListener('resize', resize);
 resize();
-
-function backdrop(time) {
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#071117';
-  ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = 'rgba(101,181,157,.055)';
-  for (let x = (W / 2) % 64; x < W; x += 64) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-  for (let y = (H / 2) % 64; y < H; y += 64) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-  for (let i = 0; i < 35; i++) {
-    const x = (i * 197 + time * 0.004 * (i % 3 + 1)) % (W + 100) - 50;
-    const y = (i * 113) % (H + 60) - 30;
-    ctx.fillStyle = `rgba(94,208,170,${0.025 + (i % 4) * 0.009})`;
-    ctx.beginPath(); ctx.arc(x, y, 2 + i % 3, 0, 7); ctx.fill();
-  }
-  const cx = W * 0.72, cy = H * 0.52;
-  ctx.strokeStyle = 'rgba(95,214,179,.08)';
-  for (let radius = 140; radius < 350; radius += 48) {
-    ctx.beginPath(); ctx.arc(cx, cy, radius + Math.sin(time / 1800 + radius) * 5, 0, Math.PI * 2); ctx.stroke();
-  }
-}
 
 /** Bars for how much each weapon, spell and combo contributed, so the build that worked is visible. */
 function renderDamageBreakdown(player) {
@@ -246,7 +227,7 @@ for (const button of /** @type {NodeListOf<HTMLButtonElement>} */ (document.quer
 }
 
 function step(now, dt) {
-  if (mode === 'menu') { backdrop(now); audio.music('menu'); return; }
+  if (mode === 'menu') { drawBackdrop(ctx, W, H, dpr, now); audio.music('menu'); return; }
   const still = { x: 0, y: 0 };
   if (mode === 'offline') {
     advanceOfflineRun(run, dt, { paused, read: slot => controls.read(slot) });
