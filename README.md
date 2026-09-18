@@ -23,8 +23,27 @@ Para conectar ao backend local, abra `http://localhost:5173/?server=ws://localho
 | `npm test` | Simulação, protocolo, rede e animações (`node --test`) |
 | `npm run sim -- 12 1` | Bots jogam campanhas completas e mostram vitórias, duração dos chefes e pico de inimigos (12 partidas, 1 jogador) |
 | `npm run build` | Gera o frontend de produção em `dist` |
+| `npm run switch:check` | Typecheck do port Switch contra o nx.js e testes do bundle Switch |
+| `npm run switch:nro` | Gera `platforms/switch/ArcanaSurvivors.nro` |
 
 O workflow do GitHub Pages executa lint, checagem de tipos e testes antes de publicar.
+
+## Nintendo Switch (homebrew)
+
+O mesmo jogo roda no Switch como `ArcanaSurvivors.nro` (nx.js 1.0.0-beta.6): solo, desafio diário e o co-op local em
+tela dividida, com Joy-Con L como Jogador 1 e Joy-Con R como Jogador 2, cada um na horizontal.
+
+```bash
+npm run switch:install
+```
+
+```bash
+npm run switch:nro
+```
+
+O `.nro` sai em `platforms/switch/ArcanaSurvivors.nro`. Instalação, controles, depuração de Joy-Cons e limitações estão
+em [platforms/switch/README.md](platforms/switch/README.md). A simulação, o renderer e o co-op local são os mesmos da web
+(`src/localCoop.js`); só entrada, menus/HUD, fontes e o backend de áudio são específicos do Switch.
 
 ## Instalar e jogar sem internet (PWA)
 

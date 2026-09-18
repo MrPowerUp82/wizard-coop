@@ -21,7 +21,7 @@ const savedCharacter = (key, fallback) => {
   const value = Number(prefs.get(key) ?? fallback);
   return Number.isInteger(value) && value >= 0 && value < SPELLS.length ? value : fallback;
 };
-const SEPARATE_JOYCONS = 'HOME › Controles › Mudar empunhadura/ordem: segure cada Joy-Con na horizontal e pressione SL + SR.';
+const SEPARATE_JOYCONS = 'HOME › Controles › Mudar empunhadura/ordem (Change Grip/Order): segure cada Joy-Con na horizontal e pressione SL + SR.';
 
 /**
  * @param {{ controllers: any, wallet: any, audio: any, debugControllers: boolean,
