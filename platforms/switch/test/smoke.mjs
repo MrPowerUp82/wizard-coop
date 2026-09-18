@@ -103,8 +103,8 @@ assert.ok(app, 'debug hook missing: run the debug build');
 // Boot and fonts
 tick(2);
 assert.equal(app.mode, 'menu');
-for (const face of ['400 Inter', '700 Inter', '800 Inter', '700 Cinzel']) assert.ok(registered.includes(face), `font ${face} not registered`);
-const known = /^(\d{3} [\d.]+px (Inter|Cinzel)|[\d.]+px system-ui)$/;
+for (const face of ['400 Inter', '700 Inter', '800 Inter', '700 Cinzel', '400 DejaVu Sans', '700 DejaVu Sans']) assert.ok(registered.includes(face), `font ${face} not registered`);
+const known = /^(\d{3} [\d.]+px (Inter|Cinzel|DejaVu Sans)|[\d.]+px system-ui)$/;
 const unknown = [...log.fonts].filter(f => !known.test(f) && f !== '10px sans-serif' && f !== '24px system-ui');
 assert.deepEqual(unknown, [], 'font strings reaching nx.js must be registered families');
 

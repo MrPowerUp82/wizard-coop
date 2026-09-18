@@ -12,7 +12,8 @@
     "nro:slim": "nxjs-nro",
     "typecheck": "tsc -p jsconfig.json",
     "test": "node build.mjs --debug && node test/audio-compat.mjs && node test/smoke.mjs",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "nro:emu": "nxjs-nro --fat && node -e \"require('node:fs').renameSync('ArcanaSurvivors.nro', 'ArcanaSurvivors-emu.nro')\""
   },
   "nacp": {
     "title": "Arcana Survivors"
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@nx.js/nro": "1.0.0-beta.6",
     "@nx.js/runtime": "1.0.0-beta.6",
+    "dejavu-fonts-ttf": "^2.37.3",
     "esbuild": "0.28.2",
     "typescript": "5.9.3"
   }

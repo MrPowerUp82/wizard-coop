@@ -1,7 +1,8 @@
 // Builds the Nintendo Switch RomFS for nx.js:
 //   romfs/main.js      the game bundled by esbuild (src/platform.js swapped for the Switch one)
 //   romfs/assets/      the same sprite atlases as the web (public/assets, copied, not duplicated in git)
-//   romfs/fonts/       Inter and Cinzel as TrueType, converted from the web's @fontsource WOFF files
+//   romfs/fonts/       Inter and Cinzel as TrueType (converted from the web's @fontsource WOFF files) and
+//                      DejaVu Sans for symbols, with their licenses
 // Then `npm run nro` (nxjs-nro) packs romfs/ + package.json + icon.jpg into ArcanaSurvivors.nro.
 //
 // Flags: --debug (or DEBUG_CONTROLLERS=true) enables the controller debug panel and the profiler.
@@ -17,6 +18,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
 const romfs = join(here, 'romfs');
 const debug = process.argv.includes('--debug') || process.env.DEBUG_CONTROLLERS === 'true';
+// nx.js canvas renderer written to romfs/nxjs.ini: cpu | gpu | auto (see README, "Renderer").
+const renderer = (process.argv.find(arg => arg.startsWith('--renderer='))?.split('=')[1] || process.env.NXJS_RENDERER || 'auto').toLowerCase();
+if (!['cpu', 'gpu', 'auto'].includes(renderer)) throw new Error(`--renderer must be cpu, gpu or auto (got ${renderer})`);
 
 /** Converts a WOFF 1.0 font (zlib-compressed tables) back into the SFNT (TTF/OTF) FreeType loads. */
 export function woffToSfnt(woff) {
@@ -56,6 +60,29 @@ export function woffToSfnt(woff) {
   return Buffer.concat(chunks);
 }
 
+/** Unicode code points a TrueType/OpenType font maps (cmap formats 4 and 12). */
+export function fontCodePoints(font) {
+  let cmap = 0;
+  for (let i = 0; i < font.readUInt16BE(4); i++) if (font.toString('ascii', 12 + i * 16, 16 + i * 16) === 'cmap') cmap = font.readUInt32BE(12 + i * 16 + 8);
+  const points = new Set();
+  for (let i = 0; i < font.readUInt16BE(cmap + 2); i++) {
+    const table = cmap + font.readUInt32BE(cmap + 8 + i * 8);
+    const format = font.readUInt16BE(table);
+    if (format === 4) {
+      const segments = font.readUInt16BE(table + 6) / 2;
+      for (let s = 0; s < segments; s++) {
+        const end = font.readUInt16BE(table + 14 + s * 2), start = font.readUInt16BE(table + 16 + segments * 2 + s * 2);
+        for (let c = start; c <= end && c !== 0xffff; c++) points.add(c);
+      }
+    } else if (format === 12) {
+      for (let g = 0; g < font.readUInt32BE(table + 12); g++) {
+        for (let c = font.readUInt32BE(table + 16 + g * 12); c <= font.readUInt32BE(table + 20 + g * 12); c++) points.add(c);
+      }
+    }
+  }
+  return points;
+}
+
 /** esbuild plugin: every import of src/platform.js resolves to the Switch implementation. */
 const switchPlatform = {
   name: 'switch-platform',
@@ -73,6 +100,27 @@ async function main() {
   mkdirSync(join(romfs, 'assets'), { recursive: true });
   mkdirSync(join(romfs, 'fonts'), { recursive: true });
 
+  const requireFromRoot = createRequire(join(root, 'package.json'));
+  const fonts = [['inter', [400, 500, 600, 700, 800]], ['cinzel', [600, 700]]];
+  for (const [family, weights] of fonts) {
+    const dir = dirname(requireFromRoot.resolve(`@fontsource/${family}/package.json`));
+    for (const weight of weights) {
+      const woff = readFileSync(join(dir, 'files', `${family}-latin-${weight}-normal.woff`));
+      writeFileSync(join(romfs, 'fonts', `${family}-${weight}.ttf`), woffToSfnt(woff));
+    }
+  }
+  // Symbols (power icons, ◀ ▶ ● ✓ …) that Inter lacks come from DejaVu Sans (free license, see LICENSE files).
+  const dejavu = join(here, 'node_modules', 'dejavu-fonts-ttf');
+  copyFileSync(join(dejavu, 'ttf', 'DejaVuSans.ttf'), join(romfs, 'fonts', 'dejavu-400.ttf'));
+  copyFileSync(join(dejavu, 'ttf', 'DejaVuSans-Bold.ttf'), join(romfs, 'fonts', 'dejavu-700.ttf'));
+  copyFileSync(join(dejavu, 'LICENSE'), join(romfs, 'fonts', 'LICENSE-DejaVu.txt'));
+  for (const family of ['inter', 'cinzel']) {
+    copyFileSync(join(dirname(requireFromRoot.resolve(`@fontsource/${family}/package.json`)), 'LICENSE'), join(romfs, 'fonts', `LICENSE-${family}.txt`));
+  }
+  // Characters beyond Latin that Inter itself can draw; anything else is drawn with DejaVu Sans.
+  const interSymbols = [...fontCodePoints(readFileSync(join(romfs, 'fonts', 'inter-400.ttf')))]
+    .filter(point => point >= 0x250).map(point => String.fromCodePoint(point)).join('');
+
   await build({
     entryPoints: [join(here, 'src', 'main.js')],
     outfile: join(romfs, 'main.js'),
@@ -85,7 +133,7 @@ async function main() {
     minifySyntax: true, // folds `if (false)` so release builds carry no debug code
     sourcesContent: false,
     legalComments: 'none',
-    define: { DEBUG_CONTROLLERS: String(debug) },
+    define: { DEBUG_CONTROLLERS: String(debug), INTER_SYMBOLS: JSON.stringify(interSymbols) },
     plugins: [switchPlatform],
     logLevel: 'warning'
   });
@@ -94,16 +142,11 @@ async function main() {
     if (file.endsWith('.webp')) copyFileSync(join(root, 'public', 'assets', file), join(romfs, 'assets', file));
   }
 
-  const requireFromRoot = createRequire(join(root, 'package.json'));
-  const fonts = [['inter', [400, 500, 600, 700, 800]], ['cinzel', [600, 700]]];
-  for (const [family, weights] of fonts) {
-    const dir = dirname(requireFromRoot.resolve(`@fontsource/${family}/package.json`));
-    for (const weight of weights) {
-      const woff = readFileSync(join(dir, 'files', `${family}-latin-${weight}-normal.woff`));
-      writeFileSync(join(romfs, 'fonts', `${family}-${weight}.ttf`), woffToSfnt(woff));
-    }
-  }
-  console.log(`RomFS pronto em ${romfs} (${debug ? 'debug: DEBUG_CONTROLLERS ativo' : 'release'})`);
+  writeFileSync(join(romfs, 'nxjs.ini'), `[renderer]
+; cpu | gpu | auto — chosen by build.mjs --renderer
+mode = ${renderer}
+`);
+  console.log(`RomFS pronto em ${romfs} (${debug ? 'debug: DEBUG_CONTROLLERS ativo' : 'release'}, renderer ${renderer})`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

@@ -18,7 +18,9 @@
     "switch:build:debug": "npm --prefix platforms/switch run build:debug",
     "switch:nro": "npm --prefix platforms/switch run build && npm --prefix platforms/switch run nro",
     "switch:nro:debug": "npm --prefix platforms/switch run build:debug && npm --prefix platforms/switch run nro",
-    "switch:check": "npm --prefix platforms/switch run check"
+    "switch:check": "npm --prefix platforms/switch run check",
+    "switch:nro:emu": "npm --prefix platforms/switch run build -- --renderer=cpu && npm --prefix platforms/switch run nro:emu",
+    "switch:nro:debug:emu": "npm --prefix platforms/switch run build:debug -- --renderer=cpu && npm --prefix platforms/switch run nro:emu"
   },
   "dependencies": {
     "@fontsource/cinzel": "^5.3.0",
