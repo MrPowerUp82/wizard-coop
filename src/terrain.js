@@ -1,3 +1,5 @@
+import { createCanvas } from './platform.js';
+
 // Small cached tiles: the floor is drawn locally and never sent over WebSocket.
 const palettes = [
   ['#101f1a', '#172b20', '#213b29', '#395439'],
@@ -8,8 +10,7 @@ const palettes = [
   ['#171020', '#281d37', '#382849', '#8c51b6']
 ];
 const tiles = palettes.map((colors, phase) => {
-  const tile = document.createElement('canvas');
-  tile.width = tile.height = 256;
+  const tile = createCanvas(256, 256);
   const c = tile.getContext('2d');
   c.fillStyle = colors[0]; c.fillRect(0, 0, 256, 256);
   let seed = 391 + phase;

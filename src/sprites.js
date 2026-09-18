@@ -1,3 +1,5 @@
+import { assetUrl, createCanvas } from './platform.js';
+
 // Sprites are cut from the atlases once into small canvases, with recolored and flash variants baked in
 // ahead of time. Drawing never uses ctx.filter (slow in Chrome, missing in Safari).
 const CELL = 313.5;
@@ -39,11 +41,11 @@ export const ENEMY_SPRITES = { slimelet: 'slime', bat: 'batEmber', brute: 'brute
 export const SHOT_SPRITES = ['bolt', 'fire', 'thorn', 'bladePurple'];
 
 const atlas = new Image();
-atlas.src = './assets/sprites.webp';
+atlas.src = assetUrl('assets/sprites.webp');
 const phaseAtlas = new Image();
-phaseAtlas.src = './assets/phases.webp';
+phaseAtlas.src = assetUrl('assets/phases.webp');
 const phase2Atlas = new Image();
-phase2Atlas.src = './assets/phases2.webp';
+phase2Atlas.src = assetUrl('assets/phases2.webp');
 const cache = new Map();
 
 function rgbToHsl(r, g, b) {
@@ -85,13 +87,11 @@ function bake(name) {
   if (!source.complete || !source.naturalWidth) return null;
   const bounds = phase2 || phase || [ATLAS_CELLS[base][0] * CELL, ATLAS_CELLS[base][1] * CELL, CELL, CELL];
   const resolution = (phase || phase2) ? 256 : 128;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = resolution;
+  const canvas = createCanvas(resolution, resolution);
   const [sx, sy, sw, sh] = bounds;
   canvas.getContext('2d').drawImage(source, sx, sy, sw, sh, 0, 0, resolution, resolution);
   if (variant) recolor(canvas, variant);
-  const flash = document.createElement('canvas');
-  flash.width = flash.height = resolution;
+  const flash = createCanvas(resolution, resolution);
   const f = flash.getContext('2d');
   f.drawImage(canvas, 0, 0);
   f.globalCompositeOperation = 'source-atop';
