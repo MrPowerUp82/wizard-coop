@@ -17,6 +17,7 @@ import { POWER_INFO } from '../../../src/powerInfo.js';
 import { drawPlayerPanel } from '../../../src/splitHud.js';
 import { createWallet } from '../../../src/wallet.js';
 import { installAudioCompat } from './audio-compat.js';
+import { installCanvasCompat } from './canvas-compat.js';
 import { installFontCompat, loadFonts } from './fonts.js';
 import { createControllers } from './input/controllers.js';
 import { COLORS, menuList, roundPanel, text, veil } from './ui/draw.js';
@@ -24,6 +25,7 @@ import { createSwitchHud } from './ui/hud.js';
 import { createSwitchMenu } from './ui/menu.js';
 import { drawControllerDebug } from './debug/controller-debug.js';
 import { createPerf } from './debug/perf.js';
+import { createAutoplay } from './debug/autoplay.js';
 
 // Nintendo Switch shell (nx.js). The web shell is src/main.js; both drive the same offline run and
 // split screen from src/localCoop.js, the same simulation (server/game.js), renderer and feedback.
@@ -38,6 +40,7 @@ addEventListener('beforeunload', event => event.preventDefault());
 installAudioCompat();
 const ctx = screen.getContext('2d');
 installFontCompat(ctx);
+installCanvasCompat(ctx);
 const W = screen.width, H = screen.height, dpr = 1;
 ctx.fillStyle = '#071117'; ctx.fillRect(0, 0, W, H);
 ctx.font = '24px system-ui'; ctx.fillStyle = '#83d9bf'; ctx.textAlign = 'center';
@@ -82,6 +85,8 @@ const menu = createSwitchMenu({
   onDaily: () => startRun({ challenge: dailyChallenge() }),
   onExit: () => Switch.exit()
 });
+
+const autoplay = DEBUG_CONTROLLERS ? createAutoplay({ startRun, endGame, controllers, perf, getView: () => view }) : null;
 
 function startRun({ challenge = null, split = false, character = 0, secondCharacter = 1 }) {
   run = createOfflineRun({ challenge, split, campaign: menu.campaign, curses: [], name: split ? 'Jogador 1' : 'Arcanista',
@@ -296,7 +301,7 @@ function frame(now) {
   last = now;
   perf?.frame(dt);
   controllers.poll(dt);
-  if (DEBUG_CONTROLLERS) debugToggle();
+  if (DEBUG_CONTROLLERS) { debugToggle(); autoplay?.frame(dt); }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';

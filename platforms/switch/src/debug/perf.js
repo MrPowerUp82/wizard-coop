@@ -9,6 +9,7 @@ export function createPerf() {
     frame(dt) { if (dt > 0) { fps = smooth(fps, 1 / dt); frame = smooth(frame, dt * 1000); } },
     update(ms) { update = smooth(update, ms); },
     render(ms) { render = smooth(render, ms); },
+    get stats() { return { fps, frame, update, render }; },
     draw(ctx, view, controllers, { split }) {
       const lines = [
         `FPS ${fps.toFixed(0)} · frame ${frame.toFixed(1)}ms`,
