@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { patchAudioContext } from '../src/audio-compat.js';
 
 const played = [];
-class Node { constructor() { this.connections = []; } connect(node) { this.connections.push(node); return node; } }
+class Node { constructor() { this.connections = []; this.disconnected = false; } connect(node) { this.connections.push(node); return node; } disconnect() { this.disconnected = true; } }
 const context = patchAudioContext({
   sampleRate: 48000, currentTime: 0, destination: new Node(),
   createGain() { const node = new Node(); node.gain = { value: 1, setValueAtTime() { return this; }, exponentialRampToValueAtTime() { return this; } }; return node; },
@@ -77,5 +77,19 @@ first.connect(voiceAmp);
 first.start(5); first.stop(5.5);
 again.start(9); again.stop(9.5);
 assert.equal(played.at(-1).node.buffer, played.at(-2).node.buffer, 'cached note buffer');
+
+// Finished notes leave the native graph: the source and its own gain disconnect, shared gains stay.
+const noteGain = context.createGain();
+noteGain.connect(master);
+const note = context.createOscillator();
+note.connect(noteGain);
+note.start(20); note.stop(20.1);
+const finished = played.at(-1).node;
+finished.onended();
+assert.ok(finished.disconnected, 'finished source disconnected');
+assert.ok(noteGain.disconnected, 'note gain disconnected');
+assert.ok(!master.disconnected, 'master gain kept');
+voiceAmp.connections.length && played.find(p => p.node.connections[0] === voiceAmp)?.node.onended();
+assert.ok(!bus.disconnected, 'music bus kept');
 
 console.log('audio-compat ok');

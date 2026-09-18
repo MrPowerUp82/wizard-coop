@@ -52,7 +52,7 @@ class VirtualSource {
     this.frequency = new VirtualParam(440);
     this.buffer = null; this.next = null; this.startAt = null;
   }
-  connect(node) { this.next = node; return node; }
+  connect(node) { this.next = node; if (typeof node?.feeds === 'number') node.feeds++; return node; }
   disconnect() { this.next = null; }
   start(when = 0) { this.startAt = when; }
   stop(when = 0) { if (this.startAt !== null) this.shim.play(this, this.startAt, when); }
@@ -108,8 +108,10 @@ export function patchAudioContext(context) {
 
   function patchConnect(node) {
     const connect = node.connect.bind(node);
+    node.feeds = 0;
     node.connect = (target, ...rest) => {
       node.next = target;
+      if (typeof target?.feeds === 'number') target.feeds++;
       if (target instanceof VirtualFilter) {
         target.inputs.push(node);
         if (target.next) node.connect(target.next);
@@ -172,6 +174,13 @@ export function patchAudioContext(context) {
       const player = createBufferSource();
       player.buffer = bufferFor(source, filters, start, length);
       player.connect(target);
+      // nx.js keeps connected nodes in its native graph (and mixes them) until they are disconnected:
+      // without this, every note ever played stays alive and the audio thread gets slower each second.
+      // A gain fed only by this note is the note's own envelope; shared gains (master, music bus) stay.
+      player.onended = () => {
+        player.disconnect();
+        if (target.feeds === 1) target.disconnect();
+      };
       player.start(Math.max(0, start));
     }
   };
