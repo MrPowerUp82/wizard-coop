@@ -1,5 +1,10 @@
 # Teste de hordas no Sudachi — 19/09/2026
 
+**Histórico de uma tentativa revertida.** Após o usuário relatar queda de FPS justamente quando a resolução
+diminuía, o canvas intermediário e a resolução adaptativa foram removidos. O port voltou a desenhar diretamente
+em 720p. Os números abaixo documentam o experimento em CPU no emulador, não o desempenho da build atual
+nem uma melhora comprovada no Switch real. O smoke atual verifica desenho direto nos antigos limites de horda.
+
 Sudachi 1.0.15 indicado pelo usuário, renderer nx.js CPU, build debug, 180 inimigos (90 cogumelos + 90 besouros),
 seed 12345, personagens parados e HP elevado. Sem redução no número de entidades. Foram executados solo e co-op.
 

@@ -206,22 +206,25 @@ assert.equal(app.paused, false, 'Minus on Joy-Con L resumes');
 // Audio went through the compat layer (oscillators rendered into buffers).
 assert.ok(audioLog.started > 0, 'sounds played via AudioBufferSourceNode');
 
-// Heavy crowds change only world resolution; the two player panels still draw at native size.
-for (const player of Object.values(app.game.players)) { player.pendingPowers = null; player.invulnerableFor = 100; }
-app.game.enemies.length = 0;
-for (let n = 0; n < 180; n++) spawnEnemy(app.game, 'mushroom', 300 + n, 300, 10000);
-tick(2);
-assert.deepEqual(log.worldSize, [640, 360]);
-app.game.enemies.length = 110;
-tick();
-assert.deepEqual(log.worldSize, [640, 360], 'hysteresis retains the surface near the boundary');
-app.game.enemies.length = 80;
-tick();
-assert.deepEqual(log.worldSize, [960, 540]);
-app.game.enemies.length = 20;
-log.worldSize = null;
-tick();
-assert.equal(log.worldSize, null, 'small crowds return to native rendering');
+// Crossing the former resolution thresholds must keep drawing directly to the native screen.
+for (const split of [false, true]) {
+  app.startRun({ split, character: 0, secondCharacter: 1 });
+  for (const player of Object.values(app.game.players)) player.invulnerableFor = 100;
+  app.game.spawn = 1e9;
+  app.game.scheduleCursor = 1e9;
+  for (const count of [20, 60, 120, 180, 110, 80, 20]) {
+    app.game.enemies.length = 0;
+    for (let n = 0; n < count; n++) spawnEnemy(app.game, 'mushroom', 300 + n, 300, 10000);
+    log.worldSize = null;
+    log.clips.length = 0;
+    tick();
+    assert.equal(app.paused, false);
+    assert.equal(log.worldSize, null, `${count} enemies: no intermediate fullscreen blit`);
+    assert.ok(log.clips.some(rect => rect.join(',') === (split ? '0,0,640,720' : '0,0,1280,720')),
+      `${count} enemies: world still renders on the native screen`);
+    if (split) assert.ok(log.clips.some(rect => rect.join(',') === '640,0,640,720'));
+  }
+}
 
 // Game over follows the existing rules and returns to the menu.
 app.game.over = true;

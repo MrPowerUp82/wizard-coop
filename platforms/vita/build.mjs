@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { deflateRawSync, inflateSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { bakeAssets } from './scripts/bake-assets.mjs';
+import { validateLiveArea } from './scripts/validate-livearea.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -354,6 +355,7 @@ await build({
 
 // 4. LiveArea and param.sfo
 const sceSys = join(here, 'sce_sys');
+await validateLiveArea(sceSys);
 if (existsSync(join(sceSys, 'icon0.png'))) copyFileSync(join(sceSys, 'icon0.png'), join(buildDir, 'sce_sys', 'icon0.png'));
 if (existsSync(join(sceSys, 'livearea', 'contents', 'bg.png'))) {
   copyFileSync(join(sceSys, 'livearea', 'contents', 'bg.png'), join(buildDir, 'sce_sys', 'livearea', 'contents', 'bg.png'));
@@ -362,7 +364,8 @@ if (existsSync(join(sceSys, 'livearea', 'contents', 'startup.png'))) {
   copyFileSync(join(sceSys, 'livearea', 'contents', 'startup.png'), join(buildDir, 'sce_sys', 'livearea', 'contents', 'startup.png'));
 }
 if (existsSync(join(sceSys, 'livearea', 'contents', 'template.xml'))) {
-  copyFileSync(join(sceSys, 'livearea', 'contents', 'template.xml'), join(buildDir, 'sce_sys', 'livearea', 'contents', 'template.xml'));
+  const xml = readFileSync(join(sceSys, 'livearea', 'contents', 'template.xml'), 'utf8');
+  writeFileSync(join(buildDir, 'sce_sys', 'livearea', 'contents', 'template.xml'), xml.replace(/\r?\n/g, '\r\n'));
 }
 
 const sfoPath = join(buildDir, 'sce_sys', 'param.sfo');

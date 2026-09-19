@@ -57,7 +57,7 @@ O empacotador verifica o hash do source e recusa um `eboot.bin` antigo.
 - dificuldade;
 - dano/HP;
 - quantidade de jogadores;
-- resolução nativa da interface (o Switch agora reduz a resolução interna do cenário em hordas grandes; ver abaixo);
+- resolução nativa (720p no Switch, inclusive em hordas grandes);
 - bosses ou fases;
 - simulação/tick rate.
 
@@ -99,9 +99,10 @@ Se o GPU forçado não puder ser inicializado, use novamente a build `auto`. Par
 
 ## Nintendo Switch — resolução do cenário em hordas
 
-O Switch reduz apenas a resolução interna do mundo para 540p/360p quando há 60/120 inimigos, com margem na volta
-para evitar oscilações. A interface permanece nativa, e web/Vita mantêm seu caminho anterior. Não reduz entidades,
-animações, simulação nem a área visível das câmeras. Existe perda de nitidez do cenário durante as hordas.
+A tentativa de reduzir o mundo para 540p/360p foi revertida após relato de regressão de FPS ao ativar a redução.
+O Switch voltou ao desenho direto em 720p: não aloca uma superfície de mundo ao atingir 60/120 inimigos e não
+faz a cópia ampliada dessa superfície por frame. A medição CPU no emulador não justifica manter esse caminho
+diante da regressão relatada. Os testes cobrem os antigos limites em solo e co-op.
 
 O profiler foi corrigido para medir o tempo real, sem o limite de 50 ms aplicado ao passo da simulação.
 O autoplay agora permite uma horda reproduzível com `enemies` e `seed`, funciona sem controle e não deposita moedas.

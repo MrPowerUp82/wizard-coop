@@ -9,7 +9,7 @@ solo e desafio diário, renderizado nativamente em tela cheia a **960×544** (re
 | Resolução | 960 × 544 (16:9 nativo) |
 | Pacote gerado | `platforms/vita/ArcanaSurvivors.vpk` |
 | Title ID | `ARCS00001` |
-| LiveArea | `icon0.png` (128×128), `bg.png` (848×560), `startup.png` (280×158), `template.xml` |
+| LiveArea | PNG-8 indexado: `icon0.png` (128×128), `bg.png` (840×500), `startup.png` (280×158), `template.xml` |
 | Bundle JS | `platforms/vita/build/assets/main.js` (esbuild, IIFE ES2022) |
 | Toolchain nativo (opcional) | VitaSDK (`arm-vita-eabi-gcc`, `vita-mksfoex`, `vita-pack-vpk`) |
 
@@ -28,7 +28,7 @@ npm run vita:install
 ```bash
 npm run vita:vpk
 ```
-O arquivo final é gravado em **`platforms/vita/ArcanaSurvivors.vpk`** (~4.0 MB). O build empacota:
+O arquivo final é gravado em **`platforms/vita/ArcanaSurvivors.vpk`** (~8.2 MB). O build empacota:
 1. `param.sfo` compatível com hardware real (`TITLE_ID=ARCS00001`, `CATEGORY=gd`, `APP_VER=01.00`, `CONTENT_ID=EP9000-ARCS00001_00-0000000000000000`);
 2. LiveArea completa (`sce_sys/icon0.png`, `sce_sys/livearea/contents/bg.png`, `startup.png`, `template.xml`);
 3. Fontes TTF convertidas (`Inter`, `Cinzel`, `DejaVu Sans`);
@@ -61,6 +61,20 @@ Executa verificação de tipos (`tsc -p jsconfig.json`), teste unitário da cama
 1. Baixe e abra o [Vita3K](https://vita3k.org/);
 2. Arraste e solte o arquivo `ArcanaSurvivors.vpk` diretamente na janela do emulador (ou use o menu `File` › `Install .pkg / .vpk`);
 3. Inicie o jogo na grade de aplicativos do Vita3K.
+
+### Erro `0x8010113D` no VitaShell
+
+O pacote anterior continha imagens LiveArea RGBA (tipo PNG 6), apesar de o VitaSDK orientar o uso de PNGs
+indexados. O XML também usava `startup` em vez de `startup-image`. A versão corrigida usa PNG-8 indexado
+(tipo 3), fundo 840×500 e o XML com `format-ver`, `content-rev` e `startup-image`.
+
+Transfira o VPK recém-gerado novamente e instale-o no VitaShell. Não é necessário apagar saves para testar esta correção.
+A instalação no Vita3K não comprova a promoção do aplicativo pelo sistema do Vita real.
+
+`build.mjs` agora rejeita imagens LiveArea com formato/dimensões incorretos ou referências de XML inválidas.
+`npm run vita:check` inclui regressões para PNG RGBA e a tag antiga. Para regenerar a arte simples incluída,
+execute `node platforms/vita/scripts/gen-livearea.mjs` na raiz; o gerador preserva as cores em uma paleta indexada.
+Consulte as [orientações do VitaSDK](https://github.com/vitasdk/samples#notes-on-images).
 
 ---
 

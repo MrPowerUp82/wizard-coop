@@ -1,5 +1,22 @@
 # PS Vita hardware fixes
 
+## VitaShell `0x8010113D` — LiveArea correction (2026-09-19)
+
+The previous VPK passed ZIP CRC checks and already contained SDK-generated SFO metadata with the expected
+title/category/content IDs. Its three LiveArea PNGs were nevertheless RGBA (color type 6), and its template used
+`<startup>` instead of `<startup-image>`. Updating SFO fields alone did not address these defects.
+
+The generator now emits indexed PNG-8 (color type 3) with the same two colors, and the background is 840×500.
+The template declares `format-ver="01.00"`, `content-rev="1"` and the correct startup element; packaging writes CRLF.
+Build validation checks the actual source assets before copying, and regression tests reject the old PNG/XML forms.
+
+References: [VitaSDK image/XML guidance](https://github.com/vitasdk/samples#notes-on-images),
+[LiveArea template in gtasa_vita](https://github.com/TheOfficialFloW/gtasa_vita/blob/master/sce_sys/livearea/contents/template.xml).
+The installer uses the console's [ScePromoterUtility path](https://github.com/TheOfficialFloW/VitaShell/blob/master/package_installer.c);
+Vita3K installation alone cannot prove acceptance by this service. Real VitaShell installation must still be confirmed.
+
+## Earlier fixes
+
 This revision targets two differences that were hidden by Vita3K:
 
 - **White/glitched glow effects:** radial gradients on the Vita backend no longer use overlapping filled circles under additive blending. They are rendered as non-overlapping colored triangle rings, preserving the gradient instead of saturating to white. Inner radial-gradient radii are also respected.

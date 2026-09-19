@@ -259,10 +259,10 @@ um Switch real**. Os itens abaixo dependem de como o console reporta os controle
 
 ## Performance em hordas / split-screen
 
-O cenário agora usa resolução interna adaptativa: 1280×720 normalmente, 960×540 a partir de 60 inimigos e
-640×360 a partir de 120. Ao diminuir a horda, volta a 540p abaixo de 100 e a 720p abaixo de 40; essa margem evita
-trocas repetidas e realocações perto dos limites. HUD, painéis dos jogadores, divisória, menus e escolhas de poder
-continuam em 720p. A imagem do cenário fica menos nítida nas hordas grandes; todas as animações e regras continuam presentes.
+O jogo desenha diretamente em 1280×720, inclusive durante hordas grandes. A resolução adaptativa foi removida
+após relato de queda de FPS ao ativá-la: ela acrescentava um canvas intermediário e uma cópia ampliada por frame.
+O ganho observado no renderer CPU do Sudachi não garantiu melhora no uso real. O teste do bundle agora verifica
+que solo e co-op mantêm o desenho direto ao atravessar os antigos limites de 60/120 inimigos.
 
 Para reproduzir o teste de estresse na build debug, grave em `sdmc:/arcana-autoplay.json`:
 
