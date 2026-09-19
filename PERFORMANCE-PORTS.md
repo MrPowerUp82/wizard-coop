@@ -96,3 +96,8 @@ npm run switch:nro:gpu
 ```
 
 Se o GPU forçado não puder ser inicializado, use novamente a build `auto`. Para comparar corretamente, use a build debug e observe `update ms` versus `render ms` durante a mesma fase/horda.
+
+
+## Nintendo Switch — revisão conservadora
+
+Esta revisão parte novamente da build enviada pelo usuário. Não reduz resolução, não limita partículas/números e não altera HUD, spawn, dano, HP ou tick. As mudanças são somente de custo computacional invisível: comparação de movimento por distância ao quadrado no animator, caminho sem trigonometria para sprites sem rotação, cache de geometria de projéteis no Switch e seleção nearest-N do familiar sem ordenar todos os candidatos.

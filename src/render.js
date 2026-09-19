@@ -10,14 +10,31 @@ import { drawSoftGlow } from './glow.js';
 
 const TAU = Math.PI * 2;
 const PLAYER_COLORS = SPELLS.map(spell => spell.tint);
+const projectileMotionCache = new WeakMap();
+const projectileMotionScratch = { vx: 0, vy: 0, speed: 1, nx: 0, ny: 0, angle: 0 };
 
 function circle(ctx, x, y, radius) { ctx.beginPath(); ctx.arc(x, y, radius, 0, TAU); }
 
-function drawTrail(ctx, shot, color, reduced) {
+function projectileMotion(shot) {
+  const vx = shot.vx || 0, vy = shot.vy || 0;
+  if (RENDER_TUNING.cacheProjectileMotion) {
+    const cached = projectileMotionCache.get(shot);
+    if (cached && cached.vx === vx && cached.vy === vy) return cached;
+    const speed = Math.hypot(vx, vy) || 1;
+    const next = { vx, vy, speed, nx: vx / speed, ny: vy / speed, angle: Math.atan2(vy, vx) };
+    projectileMotionCache.set(shot, next);
+    return next;
+  }
+  const speed = Math.hypot(vx, vy) || 1;
+  projectileMotionScratch.vx = vx; projectileMotionScratch.vy = vy; projectileMotionScratch.speed = speed;
+  projectileMotionScratch.nx = vx / speed; projectileMotionScratch.ny = vy / speed; projectileMotionScratch.angle = Math.atan2(vy, vx);
+  return projectileMotionScratch;
+}
+
+function drawTrail(ctx, shot, color, reduced, motion) {
   if (reduced) return;
-  const speed = Math.hypot(shot.vx, shot.vy) || 1;
-  const length = Math.min(shot.special ? 95 : shot.shard ? 25 : 58, speed * 0.14);
-  const tx = shot.x - shot.vx / speed * length, ty = shot.y - shot.vy / speed * length;
+  const length = Math.min(shot.special ? 95 : shot.shard ? 25 : 58, motion.speed * 0.14);
+  const tx = shot.x - motion.nx * length, ty = shot.y - motion.ny * length;
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
   ctx.strokeStyle = color;
   if (RENDER_TUNING.fastTrails) {
@@ -351,17 +368,19 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
 
   for (const shot of game.shots || []) if (visible(shot.x, shot.y)) {
     const spell = SPELLS[shot.color ?? 0];
-    drawTrail(ctx, shot, spell.tint, reduced);
+    const motion = projectileMotion(shot);
+    drawTrail(ctx, shot, spell.tint, reduced, motion);
     const spin = spell.sprite === 'blade' && !reduced ? time * 9 : 0;
     const pulse = reduced ? 1 : 1 + Math.sin(time * 15 + shot.x * 0.05) * 0.06;
     const size = (shot.special ? 65 : shot.shard ? 24 : spell.sprite === 'blade' ? 52 : 38) * (shot.fullmoon && shot.returning ? WEAPONS.evolutions.fullmoon.size : 1);
-    drawSprite(ctx, SHOT_SPRITES[shot.color ?? 0], shot.x, shot.y, size * pulse, Math.atan2(shot.vy, shot.vx) + spin);
+    drawSprite(ctx, SHOT_SPRITES[shot.color ?? 0], shot.x, shot.y, size * pulse, motion.angle + spin);
   }
   for (const shot of game.enemyShots || []) if (visible(shot.x, shot.y)) {
-    drawTrail(ctx, shot, '#ff7777', reduced);
+    const motion = projectileMotion(shot);
+    drawTrail(ctx, shot, '#ff7777', reduced, motion);
     ctx.strokeStyle = '#ff6666'; ctx.lineWidth = 2;
     circle(ctx, shot.x, shot.y, 19); ctx.stroke();
-    drawSprite(ctx, shot.sprite, shot.x, shot.y, 38, Math.atan2(shot.vy, shot.vx));
+    drawSprite(ctx, shot.sprite, shot.x, shot.y, 38, motion.angle);
   }
 
   // Afterimages share the effect budget but sit below creatures, names and attack warnings.
