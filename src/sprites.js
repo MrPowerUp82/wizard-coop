@@ -112,9 +112,34 @@ export function worldTransform(ctx) {
   ctx.globalAlpha = 1;
 }
 
+function createFlipped(source) {
+  const c = createCanvas(source.width, source.height);
+  const ctx = c.getContext('2d');
+  ctx.translate(source.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(source, 0, 0);
+  return c;
+}
+
 export function drawSprite(ctx, name, x, y, size, rotation = 0, alpha = 1, sx = 1, sy = 1, flash = 0) {
   const sprite = spriteFor(name);
   if (!sprite || alpha <= 0) return;
+
+  // Axis-aligned blit fast-path: skips two setTransform calls and avoids Skia batch flushes
+  if (rotation === 0 && (sx === 1 || sx === -1) && sy === 1) {
+    const img = sx === 1 ? sprite.canvas : (sprite.flipCanvas || (sprite.flipCanvas = createFlipped(sprite.canvas)));
+    if (alpha !== 1) ctx.globalAlpha = alpha;
+    const half = size / 2;
+    ctx.drawImage(img, x - half, y - half, size, size);
+    if (flash > 0) {
+      const fimg = sx === 1 ? sprite.flash : (sprite.flipFlash || (sprite.flipFlash = createFlipped(sprite.flash)));
+      ctx.globalAlpha = alpha * Math.min(1, flash) * 0.6;
+      ctx.drawImage(fimg, x - half, y - half, size, size);
+    }
+    if (alpha !== 1 || flash > 0) ctx.globalAlpha = 1;
+    return;
+  }
+
   const { dpr } = view;
   const cos = Math.cos(rotation), sin = Math.sin(rotation);
   ctx.setTransform(dpr * cos * sx, dpr * sin * sx, -dpr * sin * sy, dpr * cos * sy,

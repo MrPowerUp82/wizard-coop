@@ -40,7 +40,7 @@ export function createAutoplay({ startRun, endGame, controllers, perf, getView, 
   let plan = null;
   try {
     const data = Switch.readFileSync('sdmc:/arcana-autoplay.json');
-    if (data) plan = JSON.parse(new TextDecoder().decode(data));
+    if (data) plan = JSON.parse(new TextDecoder().decode(data).replace(/^\uFEFF/, ''));
   } catch { plan = null; }
   if (!plan?.steps?.length) return null;
   Switch.writeFileSync(LOG, `autoplay ${new Date().toISOString()}\n`);
@@ -51,7 +51,7 @@ export function createAutoplay({ startRun, endGame, controllers, perf, getView, 
 
   function next() {
     index++;
-    if (index >= plan.steps.length) { log('done'); Switch.writeFileSync('sdmc:/arcana-autoplay.done', 'ok'); Switch.exit(); }
+    if (index >= plan.steps.length) { log('done'); Switch.writeFileSync('sdmc:/arcana-autoplay.done', 'ok'); Switch.exit(); return; }
     const step = plan.steps[index];
     elapsed = 0; second = 0;
     undo = (step.disable || []).flatMap(name => EXPERIMENTS[name]?.(proto) || []);

@@ -184,23 +184,34 @@ export function updateEnemies(ctx) {
   separate(s, grid);
 }
 
+let curEnemy = null;
+let curRadius = 0;
+let sepPx = 0, sepPy = 0;
+
+function accumulateSeparation(other, d2) {
+  if (other === curEnemy || other.boss || d2 === 0) return;
+  const d = Math.sqrt(d2);
+  const push = (curRadius - d) / curRadius;
+  sepPx += (curEnemy.x - other.x) / d * push;
+  sepPy += (curEnemy.y - other.y) / d * push;
+}
+
 /** Soft push between overlapping enemies so hordes spread into a crowd instead of one stacked line. */
 function separate(s, grid) {
   grid.clear();
   for (const enemy of s.enemies) if (enemy.hp > 0) grid.insert(enemy);
   const { radius, strength } = SEPARATION;
+  curRadius = radius;
   for (const enemy of s.enemies) {
     if (enemy.hp <= 0 || enemy.boss || ENEMIES[enemy.type].behavior === 'flier') continue;
-    let px = 0, py = 0;
-    grid.query(enemy.x, enemy.y, radius, (other, d2) => {
-      if (other === enemy || other.boss || d2 === 0) return;
-      const d = Math.sqrt(d2);
-      const push = (radius - d) / radius;
-      px += (enemy.x - other.x) / d * push; py += (enemy.y - other.y) / d * push;
-    });
-    enemy.x += px * radius * strength * 0.5;
-    enemy.y += py * radius * strength * 0.5;
+    curEnemy = enemy;
+    sepPx = 0;
+    sepPy = 0;
+    grid.query(enemy.x, enemy.y, radius, accumulateSeparation);
+    enemy.x += sepPx * radius * strength * 0.5;
+    enemy.y += sepPy * radius * strength * 0.5;
   }
+  curEnemy = null;
 }
 
 export function updateEnemyShots({ s, dt, alive }) {

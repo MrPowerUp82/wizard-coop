@@ -21,4 +21,4 @@ export function createCanvas(width, height) {
 export const assetUrl = path => `app0:/${path.replace(/^\.?\//, '')}`;
 
 /** Vita keeps gameplay and signature effects, while trimming the least visible per-frame decoration. */
-export const RENDER_TUNING = Object.freeze({ fastTrails: true, atmosphere: false, simpleShadows: true, cachedGlows: false, crowdShadows: true, enemyHealthBars: 'all', terrainMacro: 1 });
+export const RENDER_TUNING = Object.freeze({ fastTrails: true, atmosphere: false, simpleShadows: true, cachedGlows: false, crowdShadows: true, enemyHealthBars: 'all', terrainMacro: 1, fastCrowdSprites: true });

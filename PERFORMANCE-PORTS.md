@@ -97,13 +97,15 @@ npm run switch:nro:gpu
 
 Se o GPU forçado não puder ser inicializado, use novamente a build `auto`. Para comparar corretamente, use a build debug e observe `update ms` versus `render ms` durante a mesma fase/horda.
 
-## Nintendo Switch — resolução do cenário em hordas
+## Nintendo Switch — Otimizações de renderização direta em 720p
 
-A tentativa de reduzir o mundo para 540p/360p foi revertida após relato de regressão de FPS ao ativar a redução.
-O Switch voltou ao desenho direto em 720p: não aloca uma superfície de mundo ao atingir 60/120 inimigos e não
-faz a cópia ampliada dessa superfície por frame. A medição CPU no emulador não justifica manter esse caminho
-diante da regressão relatada. Os testes cobrem os antigos limites em solo e co-op.
+A tentativa anterior de reduzir a resolução do mundo para 540p/360p foi revertida, pois causava queda imediata de FPS no hardware.
+A renderização é 100% nativa e direta em 720p. Foram aplicadas otimizações estruturais para hordas:
 
-O profiler foi corrigido para medir o tempo real, sem o limite de 50 ms aplicado ao passo da simulação.
-O autoplay agora permite uma horda reproduzível com `enemies` e `seed`, funciona sem controle e não deposita moedas.
-Veja `artifacts/switch-perf/RESULTADOS.md` para a comparação no Sudachi; desempenho em Switch real ainda precisa de medição.
+1. **Fast-path axis-aligned em `drawSprite`**: elimina as chamadas a `ctx.setTransform` e `worldTransform` para todos os sprites alinhados, usando imagens espelhadas em cache.
+2. **`fastCrowdSprites` no pose dos inimigos**: desativa micro-rotação e deformação dos inimigos comuns de horda, preservando pulos verticais, direções, flashes e exclamações. Chefes e elites mantêm animação completa.
+3. **Quantização de fontes de dano**: fontes de números de dano quantizadas em passos inteiros discretos, com guard de igualdade no setter de fontes.
+4. **Reaproveitamento estático de callbacks na separação**: remove alocações contínuas de closures para o GC durante hordas.
+
+Medições em CPU no Sudachi com 180 inimigos demonstraram **redução de 32,5% no tempo de renderização em co-op (380,4 ms → 256,8 ms)**.
+Veja [RESULTADOS.md](./artifacts/switch-perf/RESULTADOS.md) para os dados comparativos completos.

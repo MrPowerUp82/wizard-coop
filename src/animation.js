@@ -1,4 +1,5 @@
 import { drawSoftGlow } from './glow.js';
+import { RENDER_TUNING } from './platform.js';
 // Visual state only: never modifies the authoritative game or collision positions.
 export const MAX_EFFECTS = 128;
 export const MAX_NUMBERS = 60;
@@ -317,9 +318,15 @@ export function createAnimator({ onHit, onKill } = {}) {
         const bounce = floating ? Math.sin(time * 3.5 + a.seed) * 4 : -Math.abs(step) * (a.boss ? 2 : 3.5);
         out.x = -Math.cos(a.castAngle || 0) * a.cast * 3;
         out.y = bounce + breath * 0.7 + down * 12;
-        out.rotation = step * (a.boss ? 0.015 : 0.045) + a.dx * a.walking * 0.025 + down * 0.65 - a.cast * 0.07;
-        out.sx = a.facing * (1 + breath * 0.015 + Math.abs(step) * 0.025 + a.cast * 0.06 + a.hit * 0.1);
-        out.sy = 1 - breath * 0.015 - Math.abs(step) * 0.035 - down * 0.18 - a.hit * 0.08;
+        if (RENDER_TUNING.fastCrowdSprites && !a.boss && !a.elite && key.startsWith('e:')) {
+          out.rotation = 0;
+          out.sx = a.facing;
+          out.sy = 1;
+        } else {
+          out.rotation = step * (a.boss ? 0.015 : 0.045) + a.dx * a.walking * 0.025 + down * 0.65 - a.cast * 0.07;
+          out.sx = a.facing * (1 + breath * 0.015 + Math.abs(step) * 0.025 + a.cast * 0.06 + a.hit * 0.1);
+          out.sy = 1 - breath * 0.015 - Math.abs(step) * 0.035 - down * 0.18 - a.hit * 0.08;
+        }
         out.alpha = 1 - down * 0.72; out.flash = a.hit;
       }
       a.poseStamp = updateStamp;
@@ -646,17 +653,23 @@ export function drawEffects(ctx, animator, drawGhost, visible) {
 }
 
 export function drawNumbers(ctx, animator, visible, reduced) {
+  if (!animator.numbers.length) return;
   ctx.textAlign = 'center';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(8, 10, 16, .85)';
+  let currentFont = '';
   for (const number of animator.numbers) {
     if (!visible(number.x, number.y)) continue;
     const progress = number.age / number.life;
     const rise = reduced ? 0 : easeOut(progress) * 32;
     const big = number.value >= 60 || number.boss;
     ctx.globalAlpha = Math.min(1, (1 - progress) * 1.6);
-    const pop = reduced ? 1 : 1 + Math.sin(Math.min(1, progress / 0.3) * Math.PI) * 0.3;
-    ctx.font = `800 ${(big ? 17 : 12) * pop}px Inter, system-ui, sans-serif`;
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(8, 10, 16, .85)';
+    const popScale = reduced ? 1 : 1 + Math.round(Math.sin(Math.min(1, progress / 0.3) * Math.PI) * 3) * 0.1;
+    const fontSize = Math.round((big ? 17 : 12) * popScale);
+    const fontStr = `800 ${fontSize}px Inter, system-ui, sans-serif`;
+    if (currentFont !== fontStr) {
+      ctx.font = currentFont = fontStr;
+    }
     const text = String(Math.round(number.value));
     ctx.strokeText(text, number.x, number.y - rise);
     ctx.fillStyle = big ? '#ffd36b' : '#fff3e6';

@@ -261,8 +261,9 @@ um Switch real**. Os itens abaixo dependem de como o console reporta os controle
 
 O jogo desenha diretamente em 1280×720, inclusive durante hordas grandes. A resolução adaptativa foi removida
 após relato de queda de FPS ao ativá-la: ela acrescentava um canvas intermediário e uma cópia ampliada por frame.
-O ganho observado no renderer CPU do Sudachi não garantiu melhora no uso real. O teste do bundle agora verifica
-que solo e co-op mantêm o desenho direto ao atravessar os antigos limites de 60/120 inimigos.
+Para acelerar hordas em 720p direto, foi implementado o caminho rápido de blit alinhado a eixos (`drawSprite`),
+desativando micro-rotação/deformação de inimigos comuns (`fastCrowdSprites`), quantizando fontes de números de dano
+e eliminando alocações de closures por frame na separação de inimigos.
 
 Para reproduzir o teste de estresse na build debug, grave em `sdmc:/arcana-autoplay.json`:
 

@@ -77,7 +77,12 @@ export function installFontCompat(ctx) {
     configurable: true,
     enumerable: descriptor.enumerable,
     get: descriptor.get,
-    set(value) { this.__font = normalizeFont(value); descriptor.set.call(this, this.__font); }
+    set(value) {
+      if (this.__rawFont === value) return;
+      this.__rawFont = value;
+      this.__font = normalizeFont(value);
+      descriptor.set.call(this, this.__font);
+    }
   });
   for (const name of ['fillText', 'strokeText', 'measureText']) {
     const draw = proto[name];

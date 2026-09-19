@@ -13,4 +13,4 @@ export function createCanvas(width, height) {
 export const assetUrl = path => `./${path}`;
 
 /** Browser keeps the full visual treatment. Console ports override only expensive decorative paths. */
-export const RENDER_TUNING = Object.freeze({ fastTrails: false, atmosphere: true, simpleShadows: false, cachedGlows: false, crowdShadows: true, enemyHealthBars: 'all', terrainMacro: 1 });
+export const RENDER_TUNING = Object.freeze({ fastTrails: false, atmosphere: true, simpleShadows: false, cachedGlows: false, crowdShadows: true, enemyHealthBars: 'all', terrainMacro: 1, fastCrowdSprites: false });

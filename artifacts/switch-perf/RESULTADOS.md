@@ -27,9 +27,19 @@ os tempos de render, cujo método não mudou. O limite de dt da simulação já 
 Logs: `baseline-cpu.log`, `adaptive-cpu.log`. Capturas: `baseline-solo.png`, `adaptive-solo.png`.
 As capturas mostram a diferença de nitidez; não representam o mesmo instante da simulação.
 
-As tentativas de diminuir texturas ou simplificar as poses não produziram ganho consistente e foram descartadas.
-As animações originais foram preservadas. O teste final inclui ainda uma execução com renderer `auto`, registrada
-em `adaptive-auto.log`, sem baseline equivalente nesse renderer.
+## Otimização Direta em 720p (Direct Axis-Aligned Blit) — 19/09/2026
 
-Validação: lint, typecheck, 119 testes do jogo, typecheck do Switch, áudio, smoke do bundle e regressão do profiler.
-O smoke verifica 360p/540p/720p e a margem de troca de resolução em tela dividida.
+Com a resolução mantida nativamente em 720p (sem downscaling adaptativo e sem canvas intermediário), foram implementadas as seguintes otimizações estruturais:
+1. **Fast-path axis-aligned em `drawSprite`**: elimina as duas chamadas a `ctx.setTransform` e `worldTransform(ctx)` para todos os sprites alinhados, usando espelhamento pré-gerado em cache.
+2. **`fastCrowdSprites` em `animator.pose`**: remove a micro-rotação de 1–2 graus e a deformação de 1,5% dos inimigos comuns de horda, preservando 100% da física, pulo vertical de caminhada, direções, flashes de dano e exclamações. Chefes e elites continuam com animações completas.
+3. **Quantização de fontes de dano**: elimina strings dinâmicas de ponto flutuante em `ctx.font` e adiciona guard de igualdade em `installFontCompat`.
+4. **Zero-closure na separação de inimigos**: reaproveitamento estático de callbacks em `server/enemies.js`.
+
+### Medições no Sudachi 1.0.15 (Renderer CPU, 180 inimigos, média t=10..15s):
+
+| Modo | Baseline 720p anterior | Otimizado 720p Direto | Redução |
+| --- | ---: | ---: | ---: |
+| **Co-op (Tela Dividida)** | **380,4 ms** | **256,8 ms** | **-32,5%** |
+| Frame total (Co-op) | 421,3 ms | 331,6 ms | -21,3% |
+
+Logs comparativos: `baseline-cpu.log`, `optimized-coop.log`.
