@@ -11,6 +11,7 @@
 //   --vpk: packages the build directory into ArcanaSurvivors.vpk
 
 import { build } from 'esbuild';
+import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +24,15 @@ const root = resolve(here, '../..');
 const buildDir = join(here, 'build');
 const debug = process.argv.includes('--debug') || process.env.DEBUG_CONTROLLERS === 'true';
 const makeVpk = process.argv.includes('--vpk') || process.argv.includes('vpk');
+const userProfile = process.env.USERPROFILE || process.env.HOME || '';
+const defaultCachedSdk = userProfile ? join(userProfile, '.cache', 'arcana-vitasdk', 'vitasdk') : null;
+const resolvedVitaSdk = process.env.VITASDK || (defaultCachedSdk && existsSync(join(defaultCachedSdk, 'bin', `arm-vita-eabi-gcc${process.platform === 'win32' ? '.exe' : ''}`)) ? defaultCachedSdk : null);
+const toolSuffix = process.platform === 'win32' ? '.exe' : '';
+const vitaTool = name => resolvedVitaSdk ? join(resolvedVitaSdk, 'bin', `${name}${toolSuffix}`) : null;
+function runTool(command, args) {
+  const result = spawnSync(command, args, { stdio: 'inherit' });
+  if (result.error || result.status !== 0) throw result.error || new Error(`${command} falhou (${result.status})`);
+}
 
 /** Converts a WOFF 1.0 font (zlib-compressed tables) back into TTF/SFNT. */
 export function woffToSfnt(woff) {
@@ -201,7 +211,7 @@ export function createVpkZip(sourceDir, outputFile) {
     local.writeUInt16LE(0, 6);           // Flags
     local.writeUInt16LE(method, 8);      // Method
     local.writeUInt16LE(0, 10);          // Mod time
-    local.writeUInt16LE(0, 12);          // Mod date
+    local.writeUInt16LE(0x0021, 12);     // DOS date: 1980-01-01 (zero is invalid on stricter ZIP readers)
     local.writeUInt32LE(fileCrc, 14);
     local.writeUInt32LE(data.length, 18);
     local.writeUInt32LE(uncompressed.length, 22);
@@ -219,7 +229,7 @@ export function createVpkZip(sourceDir, outputFile) {
     central.writeUInt16LE(0, 8);           // Flags
     central.writeUInt16LE(method, 10);     // Method
     central.writeUInt16LE(0, 12);          // Mod time
-    central.writeUInt16LE(0, 14);          // Mod date
+    central.writeUInt16LE(0x0021, 14);     // DOS date: 1980-01-01
     central.writeUInt32LE(fileCrc, 16);
     central.writeUInt32LE(data.length, 20);
     central.writeUInt32LE(uncompressed.length, 24);
@@ -316,7 +326,7 @@ const platformPlugin = {
     builder.onLoad({ filter: /[\\/]src[\\/]terrain\.js$/ }, args => {
       if (args.path !== join(root, 'src', 'terrain.js')) return;
       const source = readFileSync(args.path, 'utf8');
-      return { contents: `import { assetUrl } from './platform.js';\nconst tiles = Array.from({length: 6}, (_, i) => { const image = new Image(); image.src = assetUrl('assets/baked/terrain-' + i + '.png'); return image; });\n` + source.slice(source.indexOf('export function drawTerrain')), resolveDir: join(root, 'src') };
+      return { contents: `import { assetUrl } from './platform.js';\nconst tileSize = 256;\nconst tiles = Array.from({length: 6}, (_, i) => { const image = new Image(); image.src = assetUrl('assets/baked/terrain-' + i + '.png'); return image; });\n` + source.slice(source.indexOf('export function drawTerrain')), resolveDir: join(root, 'src') };
     });
     builder.onResolve({ filter: /platform\.js$/ }, args => {
       const target = resolve(args.resolveDir, args.path);
@@ -355,25 +365,49 @@ if (existsSync(join(sceSys, 'livearea', 'contents', 'template.xml'))) {
   copyFileSync(join(sceSys, 'livearea', 'contents', 'template.xml'), join(buildDir, 'sce_sys', 'livearea', 'contents', 'template.xml'));
 }
 
-const sfoData = generateParamSfo({
-  APP_VER: { value: '01.00', type: 'utf8' },
-  CATEGORY: { value: 'gda', type: 'utf8' },
-  CONTENT_ID: { value: 'ARCS00001-0000000000000000', type: 'utf8' },
-  TITLE: { value: 'Arcana Survivors', type: 'utf8' },
-  TITLE_ID: { value: 'ARCS00001', type: 'utf8' },
-  VERSION: { value: '01.00', type: 'utf8' }
-});
-writeFileSync(join(buildDir, 'sce_sys', 'param.sfo'), sfoData);
+const sfoPath = join(buildDir, 'sce_sys', 'param.sfo');
+const mksfoex = vitaTool('vita-mksfoex');
+if (mksfoex && existsSync(mksfoex)) {
+  // Prefer VitaSDK's own SFO generator whenever available. This is the exact metadata path used
+  // by normal homebrew builds and avoids emulator-only tolerance hiding an invalid SFO.
+  runTool(mksfoex, [
+    '-s', 'TITLE_ID=ARCS00001', '-s', 'APP_VER=01.00', '-s', 'VERSION=01.00',
+    '-s', 'CATEGORY=gd', '-s', 'CONTENT_ID=EP9000-ARCS00001_00-0000000000000000',
+    '-d', 'PARENTAL_LEVEL=1', 'Arcana Survivors', sfoPath
+  ]);
+} else {
+  const sfoData = generateParamSfo({
+    APP_VER: { value: '01.00', type: 'utf8' },
+    // `gd` is a normal game/application category. `gda` denotes a system application and can be
+    // tolerated by Vita3K while failing the real console's package promotion path.
+    CATEGORY: { value: 'gd', type: 'utf8' },
+    CONTENT_ID: { value: 'EP9000-ARCS00001_00-0000000000000000', type: 'utf8' },
+    PARENTAL_LEVEL: { value: 1, type: 'uint32' },
+    TITLE: { value: 'Arcana Survivors', type: 'utf8' },
+    TITLE_ID: { value: 'ARCS00001', type: 'utf8' },
+    VERSION: { value: '01.00', type: 'utf8' }
+  });
+  writeFileSync(sfoPath, sfoData);
+}
 
 // 5. Only ship a runtime that actually implements the native bridge.
+const RUNTIME_ABI = 2;
 const runtimeEboot = join(here, 'runtime', 'eboot.bin');
 const runtimeManifest = join(here, 'runtime', 'runtime.json');
 if (existsSync(runtimeEboot) && existsSync(runtimeManifest)) {
   const manifest = JSON.parse(readFileSync(runtimeManifest, 'utf8'));
   const hash = file => createHash('sha256').update(readFileSync(file)).digest('hex');
   const sourceHash = file => createHash('sha256').update(readFileSync(file, 'utf8').replace(/\r\n/g, '\n')).digest('hex');
-  if (manifest.abi !== 1 || manifest.sha256 !== hash(runtimeEboot) || manifest.sourceSha256 !== sourceHash(join(here, 'runtime', 'src', 'main.c'))) {
-    throw new Error('Runtime ausente, alterado ou desatualizado. Execute npm run vita:runtime.');
+  const ebootHash = hash(runtimeEboot);
+  const currentSourceHash = sourceHash(join(here, 'runtime', 'src', 'main.c'));
+  if (manifest.abi !== RUNTIME_ABI) {
+    throw new Error(`ABI do runtime incompatível (manifesto: ${manifest.abi}, esperado: ${RUNTIME_ABI}). O eboot.bin incluído é antigo para este JavaScript. Execute npm run vita:runtime e depois npm run vita:vpk.`);
+  }
+  if (manifest.sha256 !== ebootHash) {
+    throw new Error('eboot.bin não corresponde ao runtime.json. Execute npm run vita:runtime e depois npm run vita:vpk.');
+  }
+  if (manifest.sourceSha256 !== currentSourceHash) {
+    throw new Error('runtime/src/main.c mudou desde a compilação do eboot.bin. Não gere um VPK com ABI misturada: execute npm run vita:runtime e depois npm run vita:vpk.');
   }
   copyFileSync(runtimeEboot, join(buildDir, 'eboot.bin'));
 } else if (makeVpk) throw new Error('O VPK exige o runtime QuickJS real. Execute npm run vita:runtime; um executável de apresentação não serve.');
@@ -383,6 +417,20 @@ console.log(`Build PS Vita concluído em ${buildDir} (debug: ${debug})`);
 // 6. Generate VPK if requested
 if (makeVpk) {
   const vpkFile = join(here, 'ArcanaSurvivors.vpk');
-  createVpkZip(buildDir, vpkFile);
+  const packVpk = vitaTool('vita-pack-vpk');
+  if (packVpk && existsSync(packVpk)) {
+    // Real-hardware path: use the official VitaSDK VPK packer. Vita3K accepts a broader range of
+    // ZIP-like packages than VitaShell/ScePromoterUtility, so this is preferred for console tests.
+    runTool(packVpk, [
+      '-s', join(buildDir, 'sce_sys', 'param.sfo'),
+      '-b', join(buildDir, 'eboot.bin'),
+      '--add', `${join(buildDir, 'sce_sys', 'icon0.png')}=sce_sys/icon0.png`,
+      '--add', `${join(buildDir, 'sce_sys', 'livearea')}=sce_sys/livearea`,
+      '--add', `${join(buildDir, 'assets')}=assets`,
+      vpkFile
+    ]);
+  } else {
+    createVpkZip(buildDir, vpkFile);
+  }
   console.log(`VPK gerado com sucesso: ${vpkFile} (${(statSync(vpkFile).size / 1048576).toFixed(2)} MB)`);
 }

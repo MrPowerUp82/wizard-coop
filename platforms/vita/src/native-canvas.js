@@ -6,6 +6,24 @@ import earcut from 'earcut';
 const TAU = Math.PI * 2;
 const EPS = 1e-5;
 const MAX_REUSED_VERTICES = 4096;
+const RADIAL_RING_COUNT = 4;
+const RADIAL_SEGMENTS = 16;
+const RADIAL_UNIT = Array.from({ length: RADIAL_SEGMENTS }, (_, i) => {
+  const angle = TAU * i / RADIAL_SEGMENTS;
+  return [Math.cos(angle), Math.sin(angle)];
+});
+const RADIAL_INDICES = (() => {
+  const indices = [];
+  for (let i = 0; i < RADIAL_SEGMENTS; i++) indices.push(0, 1 + i, 1 + (i + 1) % RADIAL_SEGMENTS);
+  for (let ring = 1; ring < RADIAL_RING_COUNT; ring++) {
+    const inner = 1 + (ring - 1) * RADIAL_SEGMENTS, outer = inner + RADIAL_SEGMENTS;
+    for (let i = 0; i < RADIAL_SEGMENTS; i++) {
+      const ni = (i + 1) % RADIAL_SEGMENTS;
+      indices.push(inner + i, outer + i, inner + ni, inner + ni, outer + i, outer + ni);
+    }
+  }
+  return indices;
+})();
 const clamp = v => Math.max(0, Math.min(1, v));
 const colors = new Map();
 const measureCache = new Map();
@@ -52,8 +70,11 @@ class Gradient {
   ratio(x, y) {
     const p = this.points;
     const dx = p[2] - p[0], dy = p[3] - p[1];
-    return clamp(this.kind === 'radial' ? Math.hypot(x - p[2], y - p[3]) / (p[4] || 1)
-      : ((x - p[0]) * dx + (y - p[1]) * dy) / (dx * dx + dy * dy || 1));
+    if (this.kind === 'radial') {
+      const distance = Math.hypot(x - p[2], y - p[3]);
+      return clamp((distance - p[4]) / (p[5] - p[4] || 1));
+    }
+    return clamp(((x - p[0]) * dx + (y - p[1]) * dy) / (dx * dx + dy * dy || 1));
   }
   packedAt(x, y, alpha) {
     if (!this.stops.length) return 0;
@@ -100,6 +121,7 @@ export class NativeCanvas {
     this.triangleColorsBuffer = this.triangleColors.buffer;
     for (let i = 2; i < this.triangleVertices.length; i += 3) this.triangleVertices[i] = 0.5;
 
+    this.radialPoints = Array.from({ length: 1 + RADIAL_RING_COUNT * RADIAL_SEGMENTS }, () => [0, 0]);
     this.preparedBounds = [NaN, NaN, NaN, NaN];
     this.preparedBlend = null;
   }
@@ -235,10 +257,10 @@ export class NativeCanvas {
     return new Gradient('linear', [m[0] * x0 + m[2] * y0 + m[4], m[1] * x0 + m[3] * y0 + m[5],
       m[0] * x1 + m[2] * y1 + m[4], m[1] * x1 + m[3] * y1 + m[5]]);
   }
-  createRadialGradient(x0, y0, _r0, x1, y1, r1) {
-    const m = this.transform;
+  createRadialGradient(x0, y0, r0, x1, y1, r1) {
+    const m = this.transform, scale = Math.hypot(m[0], m[1]);
     return new Gradient('radial', [m[0] * x0 + m[2] * y0 + m[4], m[1] * x0 + m[3] * y0 + m[5],
-      m[0] * x1 + m[2] * y1 + m[4], m[1] * x1 + m[3] * y1 + m[5], r1 * Math.hypot(m[0], m[1])]);
+      m[0] * x1 + m[2] * y1 + m[4], m[1] * x1 + m[3] * y1 + m[5], Math.max(0, r0 * scale), Math.max(0, r1 * scale)]);
   }
   prepare() {
     const b = this.bounds, p = this.preparedBounds;
@@ -266,12 +288,21 @@ export class NativeCanvas {
     if (this.simpleCircle && this.globalAlpha > 0 && this.native.fillCircle) {
       const c = this.simpleCircle; this.prepare();
       if (this.fillStyle instanceof Gradient && this.fillStyle.kind === 'radial') {
-        // Six concentric hardware circles preserve the glow silhouette at a fraction of the old
-        // hundreds of JS-generated gradient triangles.
-        for (let ring = 6; ring >= 1; ring--) {
-          const f = ring / 6;
-          this.native.fillCircle(c.x, c.y, c.r * f, this.fillStyle.packedAt(c.x + c.r * f, c.y, this.globalAlpha));
+        // IMPORTANT (real Vita): never approximate an additive radial gradient with nested filled
+        // circles. Under `lighter` each circle blends with the previous one, so the center rapidly
+        // saturates to opaque white. Vita3K is much more forgiving here than the real GXM path.
+        // Draw non-overlapping rings in one triangle batch instead: every screen pixel belongs to
+        // one ring, while the final batch still uses additive blending against the scene.
+        const points = this.radialPoints;
+        points[0][0] = c.x; points[0][1] = c.y;
+        for (let ring = 1; ring <= RADIAL_RING_COUNT; ring++) {
+          const radius = c.r * ring / RADIAL_RING_COUNT, base = 1 + (ring - 1) * RADIAL_SEGMENTS;
+          for (let i = 0; i < RADIAL_SEGMENTS; i++) {
+            const unit = RADIAL_UNIT[i], point = points[base + i];
+            point[0] = c.x + unit[0] * radius; point[1] = c.y + unit[1] * radius;
+          }
         }
+        this.triangles(points, RADIAL_INDICES, this.fillStyle);
       } else if (!(this.fillStyle instanceof Gradient)) this.native.fillCircle(c.x, c.y, c.r, packed(rgba(this.fillStyle), this.globalAlpha));
       else this.triangles(this.paths[0], earcut(this.paths[0].flat()), this.fillStyle);
       return;

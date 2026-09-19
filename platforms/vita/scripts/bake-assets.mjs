@@ -19,7 +19,12 @@ export async function bakeAssets(root, output) {
     } }]
   });
   const atlases = Object.fromEntries(await Promise.all(['sprites', 'phases', 'phases2'].map(async name => [name, await loadImage(join(root, 'public/assets', `${name}.webp`))])));
-  const sandbox = { makeCanvas: createCanvas, atlases };
+  const sandbox = {
+    makeCanvas: createCanvas,
+    atlases,
+    // Baking uses the Vita terrain setting. Keep it explicit so the VM never needs to import platform.js.
+    renderTuning: Object.freeze({ terrainMacro: 1 })
+  };
   runInNewContext(result.outputFiles[0].text, sandbox);
   mkdirSync(join(output, 'baked'), { recursive: true });
   for (const name of sandbox.sprites.names) {
@@ -29,7 +34,12 @@ export async function bakeAssets(root, output) {
     }
   }
   const terrain = readFileSync(join(root, 'src/terrain.js'), 'utf8')
-    .replace("import { createCanvas } from './platform.js';", 'const createCanvas = globalThis.makeCanvas;')
+    // terrain.js is an ES module, but this small bake step runs it inside node:vm as a classic script.
+    // Do not match one exact import spelling: shared renderer tuning can add more platform exports over time.
+    .replace(
+      /^import\s+\{[^}]*\}\s+from\s+['"]\.\/platform\.js['"];?\s*$/m,
+      'const createCanvas = globalThis.makeCanvas;\nconst RENDER_TUNING = globalThis.renderTuning;'
+    )
     .replace('export function', 'function');
   runInNewContext(`${terrain}\nglobalThis.tiles = tiles;`, sandbox);
   sandbox.tiles.forEach((tile, i) => writeFileSync(join(output, 'baked', `terrain-${i}.png`), tile.toBuffer('image/png')));

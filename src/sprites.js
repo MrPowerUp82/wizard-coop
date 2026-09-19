@@ -116,14 +116,9 @@ export function drawSprite(ctx, name, x, y, size, rotation = 0, alpha = 1, sx = 
   const sprite = spriteFor(name);
   if (!sprite || alpha <= 0) return;
   const { dpr } = view;
-  const tx = (x + view.shakeX - view.camX) * dpr, ty = (y + view.shakeY - view.camY) * dpr;
-  if (rotation) {
-    const cos = Math.cos(rotation), sin = Math.sin(rotation);
-    ctx.setTransform(dpr * cos * sx, dpr * sin * sx, -dpr * sin * sy, dpr * cos * sy, tx, ty);
-  } else {
-    // Exact axis-aligned transform: avoids sin/cos for pickups and other non-rotating sprites.
-    ctx.setTransform(dpr * sx, 0, 0, dpr * sy, tx, ty);
-  }
+  const cos = Math.cos(rotation), sin = Math.sin(rotation);
+  ctx.setTransform(dpr * cos * sx, dpr * sin * sx, -dpr * sin * sy, dpr * cos * sy,
+    (x + view.shakeX - view.camX) * dpr, (y + view.shakeY - view.camY) * dpr);
   ctx.globalAlpha = alpha;
   const half = size / 2;
   ctx.drawImage(sprite.canvas, -half, -half, size, size);

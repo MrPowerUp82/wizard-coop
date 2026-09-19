@@ -27,7 +27,7 @@ ASFLAGS  = $(CFLAGS)
 all: $(TARGET).vpk
 
 $(TARGET).vpk: eboot.bin ../sce_sys/param.sfo
-	vita-mksfoex -s TITLE_ID=$(TITLE_ID) "Arcana Survivors" param.sfo
+	vita-mksfoex -s TITLE_ID=$(TITLE_ID) -s APP_VER=01.00 -s VERSION=01.00 -s CATEGORY=gd -s CONTENT_ID=EP9000-$(TITLE_ID)_00-0000000000000000 -d PARENTAL_LEVEL=1 "Arcana Survivors" param.sfo
 	vita-pack-vpk -s param.sfo -b eboot.bin \
 		--add ../sce_sys/icon0.png=sce_sys/icon0.png \
 		--add ../sce_sys/livearea/contents/bg.png=sce_sys/livearea/contents/bg.png \

@@ -29,7 +29,7 @@ npm run vita:install
 npm run vita:vpk
 ```
 O arquivo final é gravado em **`platforms/vita/ArcanaSurvivors.vpk`** (~4.0 MB). O build empacota:
-1. `param.sfo` binário oficial do Vita (`TITLE_ID=ARCS00001`, `CATEGORY=gda`, `APP_VER=01.00`, título "Arcana Survivors");
+1. `param.sfo` compatível com hardware real (`TITLE_ID=ARCS00001`, `CATEGORY=gd`, `APP_VER=01.00`, `CONTENT_ID=EP9000-ARCS00001_00-0000000000000000`);
 2. LiveArea completa (`sce_sys/icon0.png`, `sce_sys/livearea/contents/bg.png`, `startup.png`, `template.xml`);
 3. Fontes TTF convertidas (`Inter`, `Cinzel`, `DejaVu Sans`);
 4. Atlas de sprites e efeitos em `assets/*.webp`;

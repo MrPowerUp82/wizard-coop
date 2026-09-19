@@ -1,6 +1,6 @@
 {
-  "abi": 1,
+  "abi": 2,
   "quickjsRevision": "d6962f2a547e0be24db923bf1d553ef62ed85a10",
-  "sha256": "366dad5aed6d88ad21f9e3ebc00bb17d14ced7c43ab40be6e1f6d1921398af95",
-  "sourceSha256": "39d47ce51acc593fe45d100bbaf1578f75e78ac7f371c4354b22b7f8efeee9ec"
+  "sha256": "7152ce780b114ba3abfb20e44d3f9c742845a4c36c0a24072503c863b7bd55a4",
+  "sourceSha256": "33e68fa85c7030984e22170e9bf11e228a6c3011e17dc1c8dab2f1654f3df0e2"
 }

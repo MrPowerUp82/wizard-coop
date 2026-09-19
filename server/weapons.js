@@ -350,8 +350,6 @@ function updateRunes(ctx, p, rank) {
 
 const FAMILIAR_ELEMENTS = ['', 'fire', '', 'moon'];
 const ZONE_ELEMENTS = { burn: 'fire', meteor: 'fire', flameshield: 'fire', roots: '', hail: '', vortex: 'moon' };
-const familiarTargets = [];
-const familiarDistances = [];
 
 /** Runas de tempestade: every rune blast arcs lightning through nearby enemies. */
 function stormArc(s, owner, rune, grid, random) {
@@ -394,27 +392,16 @@ function updateFamiliar(ctx, p, rank) {
   pet.x += (home.x - pet.x) * follow; pet.y += (home.y - pet.y) * follow;
   pet.timer -= dt;
   if (pet.timer > 0) return;
-  const count = cfg.targets[rank - 1] + (evolved ? WEAPONS.evolutions.covenant.targets : 0);
-  familiarTargets.length = 0; familiarDistances.length = 0;
-  // Keep only the nearest N while querying. Gameplay remains nearest-first, but large hordes no longer
-  // allocate a pair for every candidate, sort the whole list and then slice most of it away.
-  grid.query(pet.x, pet.y, cfg.range, (enemy, d2) => {
-    if (enemy.hp <= 0) return;
-    const length = familiarTargets.length;
-    if (length >= count && d2 >= familiarDistances[length - 1]) return;
-    let pos = Math.min(length, count - 1);
-    if (length < count) { familiarTargets.push(enemy); familiarDistances.push(d2); }
-    while (pos > 0 && familiarDistances[pos - 1] > d2) {
-      familiarDistances[pos] = familiarDistances[pos - 1]; familiarTargets[pos] = familiarTargets[pos - 1]; pos--;
-    }
-    familiarDistances[pos] = d2; familiarTargets[pos] = enemy;
-  });
-  if (!familiarTargets.length) { pet.timer = 0.2; return; }
+  const found = [];
+  grid.query(pet.x, pet.y, cfg.range, (enemy, d2) => { if (enemy.hp > 0) found.push([d2, enemy]); });
+  if (!found.length) { pet.timer = 0.2; return; }
+  found.sort((a, b) => a[0] - b[0]);
   const cooldown = Math.max(0.35, cfg.cooldown - cfg.cooldownPerRank * rank) * (evolved ? WEAPONS.evolutions.covenant.cooldown : 1);
   pet.timer = cooldown;
+  const count = cfg.targets[rank - 1] + (evolved ? WEAPONS.evolutions.covenant.targets : 0);
   const damage = p.damage * (cfg.damage + cfg.damagePerRank * rank) * (evolved ? WEAPONS.evolutions.covenant.damage : 1);
   const points = [];
-  for (const enemy of familiarTargets) {
+  for (const [, enemy] of found.slice(0, count)) {
     points.push(Math.round(enemy.x), Math.round(enemy.y));
     damageEnemy(s, enemy, damage, random, { source: p, slow: p.color === 0, element: FAMILIAR_ELEMENTS[p.color], kind: 'familiar' });
     if (p.color === 2 && !enemy.boss) enemy.rootFor = Math.max(enemy.rootFor || 0, 0.35);

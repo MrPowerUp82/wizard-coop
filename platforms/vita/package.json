@@ -13,7 +13,8 @@
     "vpk:debug": "node build.mjs --debug --vpk",
     "typecheck": "tsc -p jsconfig.json",
     "test": "node build.mjs --debug && node test/audio-compat.mjs && node test/smoke.mjs && node test/native-smoke.mjs",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "vpk:fresh": "npm run runtime && node build.mjs --vpk"
   },
   "devDependencies": {
     "@napi-rs/canvas": "1.0.9",

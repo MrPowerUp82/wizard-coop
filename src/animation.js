@@ -225,27 +225,24 @@ export function createAnimator({ onHit, onKill } = {}) {
             pose: { x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 1, flash: 0 } });
           return;
         }
-        const moveX = entity.x - old.x, moveY = entity.y - old.y;
-        const moveSq = moveX * moveX + moveY * moveY;
-        // Most tracked actors are enemies. Keep comparisons squared so hundreds of actors do not pay
-        // for a sqrt every frame; only an actual player dash needs the precise distance for spacing.
-        if (player && alive && !game.over && !reduced && moveSq > 0.25 && moveSq < 48400
+        const distance = Math.hypot(entity.x - old.x, entity.y - old.y);
+        // Space stamps along real movement, including the last dash snapshot. Never bridge teleports.
+        if (player && alive && !game.over && !reduced && distance > 0.5 && distance < 220
           && (entity.dashFor > 0 || old.dashFor > 0) && time - old.trailAt >= 0.025
           && previousPhase === `${game.phase}:${game.phaseStatus}`) {
-          const distance = Math.sqrt(moveSq);
           const count = Math.min(4, Math.max(1, Math.ceil(distance / 18)));
           for (let i = 0; i < count; i++) {
             const t = i / count;
-            effects.push({ kind: 'afterimage', x: old.x + moveX * t, y: old.y + moveY * t,
+            effects.push({ kind: 'afterimage', x: old.x + (entity.x - old.x) * t, y: old.y + (entity.y - old.y) * t,
               color, character: entity.color ?? 0, facing: old.facing, age: 0, life: 0.24 });
           }
           old.trailAt = time;
         }
-        if (moveSq > 0.01 && alive && !game.over) {
-          old.movedAt = time; old.dx = Math.sign(moveX);
+        if (distance > 0.1 && alive && !game.over) {
+          old.movedAt = time; old.dx = Math.sign(entity.x - old.x);
           // Keep the last horizontal direction when stationary or moving vertically.
           // Position deltas work for both local simulation and remote snapshots.
-          if (player && Math.abs(moveX) > 0.1) old.facing = Math.sign(moveX);
+          if (player && Math.abs(entity.x - old.x) > 0.1) old.facing = Math.sign(entity.x - old.x);
         }
         old.walking += ((time - old.movedAt < 0.14 && alive && !game.over ? 1 : 0) - old.walking) * Math.min(1, dt * 14);
         old.stride += dt * (player ? 13 : entity.boss ? 6 : 11) * old.walking;
