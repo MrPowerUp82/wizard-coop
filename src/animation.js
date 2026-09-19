@@ -226,6 +226,16 @@ export function createAnimator({ onHit, onKill } = {}) {
             pose: { x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 1, flash: 0 } });
           return;
         }
+        if (!player && entity.distant) {
+          if (entity.hp < old.hp) {
+            old.hit = 1;
+            addNumber(old, entity.x, entity.y - 26, old.hp - Math.max(0, entity.hp));
+            onHit?.(entity, old.hp - entity.hp);
+          }
+          old.x = entity.x; old.y = entity.y; old.hp = entity.hp; old.alive = alive;
+          old.seen = stamp;
+          return;
+        }
         const distance = Math.hypot(entity.x - old.x, entity.y - old.y);
         // Space stamps along real movement, including the last dash snapshot. Never bridge teleports.
         if (player && alive && !game.over && !reduced && distance > 0.5 && distance < 220

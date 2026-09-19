@@ -1,7 +1,7 @@
 import { BEHAVIORS, ENEMIES, PHASES } from './phases.js';
 import { CONTACT, DIFFICULTY, ELITE, ENCOUNTERS, ENDLESS, LIMITS, PHASE_SCHEDULE, SEPARATION } from './balance.js';
 import { CURSE_EFFECTS, hasCurse } from './curses.js';
-import { distanceSq, hurt, nearest, pushEvent, spawnEnemy } from './combat.js';
+import { distanceSq, hurt, pushEvent, spawnEnemy } from './combat.js';
 import { bossBrain } from './bosses.js';
 import { phaseClock } from './campaign.js';
 import { retainTail } from './arrays.js';
@@ -144,6 +144,11 @@ function behave(ctx, enemy, target, angle, speed) {
 
 export function updateEnemies(ctx) {
   const { s, dt, alive, difficulty, grid } = ctx;
+  if (!alive.length) return;
+  s.tick = (s.tick || 0) + 1;
+  const tick = s.tick;
+  const DISTANT_SQ = 820 * 820;
+
   for (const enemy of s.enemies) {
     if (enemy.hp <= 0) continue;
     enemy.age += dt;
@@ -151,11 +156,48 @@ export function updateEnemies(ctx) {
     enemy.rootFor = Math.max(0, (enemy.rootFor || 0) - dt);
     enemy.freezeFor = Math.max(0, (enemy.freezeFor || 0) - dt);
     if (!enemy.boss && enemy.freezeFor > 0) continue;
-    const target = nearest(enemy, alive);
+
+    // Find nearest living player and minimum squared distance without allocations
+    let target = alive[0];
+    let d2Min = (enemy.x - target.x) ** 2 + (enemy.y - target.y) ** 2;
+    for (let i = 1; i < alive.length; i++) {
+      const p = alive[i];
+      const d2 = (enemy.x - p.x) ** 2 + (enemy.y - p.y) ** 2;
+      if (d2 < d2Min) {
+        d2Min = d2;
+        target = p;
+      }
+    }
+
+    const type = ENEMIES[enemy.type];
+    const isDistant = !enemy.boss && !enemy.elite && d2Min > DISTANT_SQ;
+    enemy.distant = isDistant;
+
+    // Fast-path: distant enemies without active conditions/threats update steering at 20 Hz
+    const hasStatus = (enemy.rootFor > 0) || (enemy.slowFor > 0) || (enemy.fuse > 0) || (enemy.windup > 0) || (enemy.dash > 0);
+    if (isDistant && !hasStatus) {
+      if (enemy.vx === undefined || ((Number(enemy.id) || 0) + tick) % 3 === 0) {
+        const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+        const speed = type.speed * difficulty.speedScale;
+        if (enemy.thief) {
+          const flee = angle + Math.PI + Math.sin(enemy.age * 2.3) * 0.6;
+          const pace = type.speed * ENCOUNTERS.thief.speed;
+          enemy.vx = Math.cos(flee) * pace;
+          enemy.vy = Math.sin(flee) * pace;
+        } else {
+          enemy.vx = Math.cos(angle) * speed;
+          enemy.vy = Math.sin(angle) * speed;
+        }
+      }
+      enemy.x += enemy.vx * dt;
+      enemy.y += enemy.vy * dt;
+      continue;
+    }
+
+    enemy.vx = undefined;
     const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
     enemy.slowFor = Math.max(0, (enemy.slowFor || 0) - dt);
     enemy.touchCooldown = Math.max(0, (enemy.touchCooldown || 0) - dt);
-    const type = ENEMIES[enemy.type];
     const slow = enemy.slowFor > 0 ? (enemy.boss ? 0.85 : 0.6) : 1;
     let speed = type.speed * slow * difficulty.speedScale * (enemy.elite ? ELITE.speed : 1);
     if (enemy.rootFor > 0) speed *= enemy.boss ? 0.75 : 0;
@@ -199,11 +241,11 @@ function accumulateSeparation(other, d2) {
 /** Soft push between overlapping enemies so hordes spread into a crowd instead of one stacked line. */
 function separate(s, grid) {
   grid.clear();
-  for (const enemy of s.enemies) if (enemy.hp > 0) grid.insert(enemy);
+  for (const enemy of s.enemies) if (enemy.hp > 0 && !enemy.distant) grid.insert(enemy);
   const { radius, strength } = SEPARATION;
   curRadius = radius;
   for (const enemy of s.enemies) {
-    if (enemy.hp <= 0 || enemy.boss || ENEMIES[enemy.type].behavior === 'flier') continue;
+    if (enemy.hp <= 0 || enemy.boss || enemy.distant || ENEMIES[enemy.type].behavior === 'flier') continue;
     curEnemy = enemy;
     sepPx = 0;
     sepPy = 0;
