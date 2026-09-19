@@ -145,6 +145,13 @@ async function main() {
   writeFileSync(join(romfs, 'nxjs.ini'), `[renderer]
 ; cpu | gpu | auto — chosen by build.mjs --renderer
 mode = ${renderer}
+; Arcana keeps many immutable sprite/offscreen textures alive. beta.6 can retain a larger Ganesh cache
+; in application mode, reducing texture eviction/re-upload churn during late split-screen hordes.
+gpu_cache = 128
+
+[v8]
+; Full JIT is selected automatically in application mode; applet mode stays memory-safe/jitless.
+jit = auto
 `);
   console.log(`RomFS pronto em ${romfs} (${debug ? 'debug: DEBUG_CONTROLLERS ativo' : 'release'}, renderer ${renderer})`);
 }

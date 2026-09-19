@@ -130,9 +130,24 @@ flowchart TD
 ## 5. Runtime Nativo C (VitaSDK)
 
 Para compilar ou estender o runner nativo em C com o VitaSDK, consulte o diretório `platforms/vita/runtime/`:
-- `src/main.c`: Ponto de entrada nativo configurando overclock oficial do Vita para 444MHz CPU / 222MHz GPU (`scePowerSetArmClockFrequency`), amostragem analógica estendida (`SCE_CTRL_MODE_ANALOG_WIDE`), e laço a 60 FPS sincronizado via `sceDisplayWaitVblankStart()`.
+- `src/main.c`: Ponto de entrada nativo com clocks de performance **444 MHz CPU / 222 MHz BUS / 222 MHz GPU / 166 MHz XBAR**, bridge QuickJS→vita2d otimizada para círculos/linhas/retângulos, amostragem analógica e laço sincronizado ao display.
 - `Makefile`: Build padrão via `arm-vita-eabi-gcc` com flags `-O3 -fno-short-enums` e linking com stubs oficiais (`vita2d`, `SceCtrl_stub`, `SceGxm_stub`, etc.).
 - `CMakeLists.txt`: Configuração alternativa para toolchains CMake modernos do VitaSDK.
+
+---
+
+## 5.1. Performance do runtime
+
+Este código inclui uma otimização específica do renderer Vita. Primitivas simples não são mais trianguladas no JavaScript quando podem ser enviadas diretamente ao vita2d; buffers e paths temporários também são reutilizados. Veja `../../PERFORMANCE-PORTS.md` para a lista completa.
+
+**Importante:** mudanças em `runtime/src/main.c` tornam o `eboot.bin` existente obsoleto. Antes do VPK final, execute:
+
+```bash
+npm run vita:runtime
+npm run vita:vpk
+```
+
+O `build.mjs` compara o hash do source com `runtime/runtime.json` e aborta se o runtime nativo não tiver sido recompilado.
 
 ---
 
@@ -147,7 +162,7 @@ Embora o port tenha sido verificado com suite de testes automatizados e no emula
   - Arquivo: `platforms/vita/src/input/controllers.js` e `platforms/vita/runtime/src/main.c`.
   - Teste: Em um PlayStation TV com DualShock 4 emparelhado, confirme se as portas Bluetooth assumem o controle solo e respondem adequadamente à desconexão e reconexão.
 - [ ] **HARDWARE VALIDATION REQUIRED — Overclock e Estabilidade de FPS**
-  - Arquivo: `platforms/vita/runtime/src/main.c` (`scePowerSetArmClockFrequency(444)`).
+  - Arquivo: `platforms/vita/runtime/src/main.c` (CPU 444 / BUS 222 / GPU 222 / XBAR 166 MHz).
   - Teste: Verifique a taxa de quadros (60 FPS estável) durante hordas intensas da Fase 5 com múltiplos projéteis na tela.
 - [ ] **HARDWARE VALIDATION REQUIRED — Display OLED vs LCD**
   - Arquivo: `platforms/vita/src/ui/draw.js` (`COLORS`).

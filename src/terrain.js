@@ -1,4 +1,4 @@
-import { createCanvas } from './platform.js';
+import { createCanvas, RENDER_TUNING } from './platform.js';
 
 // Small cached tiles: the floor is drawn locally and never sent over WebSocket.
 const palettes = [
@@ -9,7 +9,7 @@ const palettes = [
   ['#131c30', '#202d43', '#2c3b51', '#a98b50'],
   ['#171020', '#281d37', '#382849', '#8c51b6']
 ];
-const tiles = palettes.map((colors, phase) => {
+const baseTiles = palettes.map((colors, phase) => {
   const tile = createCanvas(256, 256);
   const c = tile.getContext('2d');
   c.fillStyle = colors[0]; c.fillRect(0, 0, 256, 256);
@@ -76,9 +76,20 @@ const tiles = palettes.map((colors, phase) => {
   return tile;
 });
 
+// Switch renders two cameras in co-op. A 2×2 macro-tile is pixel-identical to four 256px tiles but
+// cuts floor draw calls roughly in half. Other platforms keep the original tile size.
+const terrainMacro = Math.max(1, RENDER_TUNING.terrainMacro || 1);
+const tileSize = 256 * terrainMacro;
+const tiles = terrainMacro === 1 ? baseTiles : baseTiles.map(base => {
+  const macro = createCanvas(tileSize, tileSize);
+  const c = macro.getContext('2d');
+  for (let y = 0; y < tileSize; y += 256) for (let x = 0; x < tileSize; x += 256) c.drawImage(base, x, y);
+  return macro;
+});
+
 export function drawTerrain(ctx, phase, camX, camY, width, height) {
   const tile = tiles[phase] || tiles[0];
-  const x0 = -((camX % 256 + 256) % 256), y0 = -((camY % 256 + 256) % 256);
-  for (let y = y0; y < height; y += 256) for (let x = x0; x < width; x += 256) ctx.drawImage(tile, x, y);
+  const x0 = -((camX % tileSize + tileSize) % tileSize), y0 = -((camY % tileSize + tileSize) % tileSize);
+  for (let y = y0; y < height; y += tileSize) for (let x = x0; x < width; x += tileSize) ctx.drawImage(tile, x, y);
   ctx.fillStyle = 'rgba(3, 8, 13, .3)'; ctx.fillRect(0, 0, width, height);
 }

@@ -15,7 +15,7 @@
 unsigned int _newlib_heap_size_user = 192 * 1024 * 1024;
 static int running = 1, texture_count, clip_empty;
 static vita2d_texture *textures[128];
-static vita2d_font *fonts[3][41];
+static vita2d_font *fonts[3];
 static const char *font_names[] = {"inter-400", "cinzel-700", "dejavu-400"};
 static const char *save_path = "ux0:data/ArcanaSurvivors/save.json";
 static char error_message[2048];
@@ -57,13 +57,63 @@ FN(native_clip) {
     return JS_UNDEFINED;
 }
 FN(native_blend) { vita2d_set_blend_mode_add(JS_ToBool(ctx, argv[0])); return JS_UNDEFINED; }
+FN(native_fill_circle) {
+    if (clip_empty) return JS_UNDEFINED;
+    float x = number(ctx, argv[0]), y = number(ctx, argv[1]), radius = number(ctx, argv[2]);
+    if (radius > 0.0f) vita2d_draw_fill_circle(x, y, radius, color(ctx, argv[3]));
+    return JS_UNDEFINED;
+}
+FN(native_stroke_circle) {
+    if (clip_empty) return JS_UNDEFINED;
+    float x = number(ctx, argv[0]), y = number(ctx, argv[1]), radius = number(ctx, argv[2]);
+    float width = fmaxf(0.5f, number(ctx, argv[3]));
+    if (radius <= 0.0f) return JS_UNDEFINED;
+    int segments = radius >= 90.0f ? 48 : 32;
+    int count = (segments + 1) * 2;
+    vita2d_color_vertex *v = vita2d_pool_memalign(count * sizeof(*v), 4);
+    if (!v) return JS_ThrowInternalError(ctx, "Frame circle pool exhausted");
+    uint32_t c = color(ctx, argv[4]);
+    float outer = radius + width * 0.5f, inner = fmaxf(0.0f, radius - width * 0.5f);
+    for (int i = 0; i <= segments; i++) {
+        float a = 6.2831853071795864769f * (float)i / (float)segments, co = cosf(a), si = sinf(a);
+        v[i * 2] = (vita2d_color_vertex){x + co * outer, y + si * outer, .5f, c};
+        v[i * 2 + 1] = (vita2d_color_vertex){x + co * inner, y + si * inner, .5f, c};
+    }
+    vita2d_draw_array(SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, v, count);
+    return JS_UNDEFINED;
+}
+FN(native_rect) {
+    if (clip_empty) return JS_UNDEFINED;
+    float x = number(ctx, argv[0]), y = number(ctx, argv[1]), w = number(ctx, argv[2]), h = number(ctx, argv[3]);
+    if (w > 0.0f && h > 0.0f) vita2d_draw_rectangle(x, y, w, h, color(ctx, argv[4]));
+    return JS_UNDEFINED;
+}
+FN(native_stroke_line) {
+    if (clip_empty) return JS_UNDEFINED;
+    float x0 = number(ctx, argv[0]), y0 = number(ctx, argv[1]), x1 = number(ctx, argv[2]), y1 = number(ctx, argv[3]);
+    float width = fmaxf(0.5f, number(ctx, argv[4]));
+    uint32_t c = color(ctx, argv[5]);
+    if (width <= 1.25f) { vita2d_draw_line(x0, y0, x1, y1, c); return JS_UNDEFINED; }
+    float dx = x1 - x0, dy = y1 - y0, length = sqrtf(dx * dx + dy * dy);
+    if (length <= 0.0001f) return JS_UNDEFINED;
+    float px = -dy / length * width * 0.5f, py = dx / length * width * 0.5f;
+    vita2d_color_vertex *v = vita2d_pool_memalign(4 * sizeof(*v), 4);
+    if (!v) return JS_ThrowInternalError(ctx, "Frame line pool exhausted");
+    v[0] = (vita2d_color_vertex){x0 + px, y0 + py, .5f, c};
+    v[1] = (vita2d_color_vertex){x0 - px, y0 - py, .5f, c};
+    v[2] = (vita2d_color_vertex){x1 + px, y1 + py, .5f, c};
+    v[3] = (vita2d_color_vertex){x1 - px, y1 - py, .5f, c};
+    vita2d_draw_array(SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, v, 4);
+    return JS_UNDEFINED;
+}
 FN(native_triangles) {
     if (clip_empty) return JS_UNDEFINED;
     size_t bytes, color_bytes;
     float *p = (float *)JS_GetArrayBuffer(ctx, &bytes, argv[0]);
     uint32_t *c = (uint32_t *)JS_GetArrayBuffer(ctx, &color_bytes, argv[1]);
-    if (!p || !c || bytes % 36 || color_bytes != bytes / 3) return JS_ThrowTypeError(ctx, "Invalid triangle buffers");
-    size_t count = bytes / (3 * sizeof(float));
+    size_t available = bytes / (3 * sizeof(float));
+    size_t count = argc > 2 ? (size_t)number(ctx, argv[2]) : available;
+    if (!p || !c || count > available || color_bytes < count * sizeof(uint32_t)) return JS_ThrowTypeError(ctx, "Invalid triangle buffers");
     if (count > 65532) return JS_ThrowRangeError(ctx, "Too many vertices");
     vita2d_color_vertex *v = vita2d_pool_memalign(count * sizeof(*v), 4);
     if (!v) return JS_ThrowInternalError(ctx, "Frame geometry pool exhausted");
@@ -102,11 +152,13 @@ static vita2d_font *get_font(JSContext *ctx, JSValueConst name, int size) {
     const char *s = JS_ToCString(ctx, name); if (!s) return NULL;
     int face = 0; for (int i = 0; i < 3; i++) if (!strcmp(s, font_names[i])) face = i;
     JS_FreeCString(ctx, s); if (size < 8 || size > 48) return NULL;
-    if (!fonts[face][size - 8]) {
+    /* vita2d_font is size-independent: loading one TTF per pixel size wasted several MB and
+       caused avoidable stalls as new HUD/font sizes appeared during a run. */
+    if (!fonts[face]) {
         char path[128]; snprintf(path, sizeof(path), "app0:/assets/fonts/%s.ttf", font_names[face]);
-        fonts[face][size - 8] = vita2d_load_font_file(path);
+        fonts[face] = vita2d_load_font_file(path);
     }
-    return fonts[face][size - 8];
+    return fonts[face];
 }
 FN(native_text) {
     int size = number(ctx, argv[1]); vita2d_font *font = get_font(ctx, argv[0], size);
@@ -178,7 +230,9 @@ static const JSCFunctionListEntry api[] = {
     JS_CFUNC_DEF("now", 0, native_now), JS_CFUNC_DEF("exit", 0, native_exit),
     JS_CFUNC_DEF("log", 1, native_log), JS_CFUNC_DEF("pad", 1, native_pad),
     JS_CFUNC_DEF("clip", 4, native_clip), JS_CFUNC_DEF("blend", 1, native_blend),
-    JS_CFUNC_DEF("triangles", 2, native_triangles), JS_CFUNC_DEF("loadTexture", 1, native_load_texture),
+    JS_CFUNC_DEF("fillCircle", 4, native_fill_circle), JS_CFUNC_DEF("strokeCircle", 5, native_stroke_circle),
+    JS_CFUNC_DEF("rect", 5, native_rect), JS_CFUNC_DEF("strokeLine", 6, native_stroke_line),
+    JS_CFUNC_DEF("triangles", 3, native_triangles), JS_CFUNC_DEF("loadTexture", 1, native_load_texture),
     JS_CFUNC_DEF("image", 7, native_image), JS_CFUNC_DEF("text", 6, native_text),
     JS_CFUNC_DEF("measure", 3, native_measure), JS_CFUNC_DEF("readSave", 0, native_read_save),
     JS_CFUNC_DEF("writeSave", 1, native_write_save)
@@ -198,7 +252,12 @@ int main(void) {
     sceIoMkdir("ux0:data/ArcanaSurvivors", 0777);
     log_file = fopen("ux0:data/ArcanaSurvivors/runtime.log", "w");
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG); sceCtrlSetSamplingModeExt(SCE_CTRL_MODE_ANALOG);
+    /* Use the Vita's standard maximum performance clocks for this homebrew. The old runtime only
+       raised the ARM clock, leaving the renderer and memory bus at lower defaults. */
     scePowerSetArmClockFrequency(444);
+    scePowerSetBusClockFrequency(222);
+    scePowerSetGpuClockFrequency(222);
+    scePowerSetGpuXbarClockFrequency(166);
     if (vita2d_init_advanced(4 * 1024 * 1024) < 0) return 1;
     vita2d_set_vblank_wait(1); vita2d_set_clear_color(RGBA8(7, 17, 23, 255));
     JSRuntime *rt = JS_NewRuntime();
@@ -250,6 +309,6 @@ int main(void) {
     JS_FreeValue(ctx, shutdown); JS_FreeValue(ctx, global); JS_FreeContext(ctx); JS_FreeRuntime(rt);
     vita2d_wait_rendering_done();
     for (int i = 0; i < texture_count; i++) vita2d_free_texture(textures[i]);
-    for (int f = 0; f < 3; f++) for (int s = 0; s < 41; s++) if (fonts[f][s]) vita2d_free_font(fonts[f][s]);
+    for (int f = 0; f < 3; f++) if (fonts[f]) vita2d_free_font(fonts[f]);
     vita2d_fini(); if (log_file) fclose(log_file); sceKernelExitProcess(0); return 0;
 }

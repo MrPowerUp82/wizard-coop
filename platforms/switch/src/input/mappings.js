@@ -41,19 +41,20 @@ export const JOYCON_STICK_FRAME = 'device';
 
 export const STICK_DEADZONE = 0.2;
 
-function deadzone(x, y) {
+function deadzone(x, y, out = { x: 0, y: 0 }) {
   const length = Math.hypot(x, y);
-  if (length < STICK_DEADZONE) return { x: 0, y: 0 };
+  if (length < STICK_DEADZONE) { out.x = 0; out.y = 0; return out; }
   // Rescale so the edge of the deadzone is 0 and full tilt is 1, keeping the direction.
   const scale = Math.min(1, (length - STICK_DEADZONE) / (1 - STICK_DEADZONE)) / length;
-  return { x: x * scale, y: y * scale };
+  out.x = x * scale; out.y = y * scale;
+  return out;
 }
 
 // nx.js axes: [leftX, leftY, rightX, rightY], each -1..1, Y positive = down (Web Gamepad convention).
 
 /** Pro Controller, handheld, Joy-Con pair, GameCube: left stick as is. */
-export function normalizeStandardAxes(axes) {
-  return deadzone(axes[0] || 0, axes[1] || 0);
+export function normalizeStandardAxes(axes, out) {
+  return deadzone(axes[0] || 0, axes[1] || 0, out);
 }
 
 /**
@@ -61,24 +62,24 @@ export function normalizeStandardAxes(axes) {
  * controller is turned 90° counter-clockwise. Pushing the stick toward the player's right is the
  * device's "down"; toward the player's top is the device's "right".
  */
-export function normalizeJoyConLeftAxes(axes, frame = JOYCON_STICK_FRAME) {
+export function normalizeJoyConLeftAxes(axes, frame = JOYCON_STICK_FRAME, out) {
   const x = axes[0] || 0, y = axes[1] || 0;
-  return frame === 'system' ? deadzone(x, y) : deadzone(y, -x);
+  return frame === 'system' ? deadzone(x, y, out) : deadzone(y, -x, out);
 }
 
 /**
  * Joy-Con R held sideways: turned 90° clockwise, stick under the left thumb. Its stick is the "right"
  * stick (axes 2 and 3). The player's right is the device's "up"; the player's bottom is the device's "right".
  */
-export function normalizeJoyConRightAxes(axes, frame = JOYCON_STICK_FRAME) {
+export function normalizeJoyConRightAxes(axes, frame = JOYCON_STICK_FRAME, out) {
   const x = axes[2] || 0, y = axes[3] || 0;
-  return frame === 'system' ? deadzone(x, y) : deadzone(-y, x);
+  return frame === 'system' ? deadzone(x, y, out) : deadzone(-y, x, out);
 }
 
-export function normalizeAxes(kind, axes) {
-  if (kind === 'joyLeft') return normalizeJoyConLeftAxes(axes);
-  if (kind === 'joyRight') return normalizeJoyConRightAxes(axes);
-  return normalizeStandardAxes(axes);
+export function normalizeAxes(kind, axes, out) {
+  if (kind === 'joyLeft') return normalizeJoyConLeftAxes(axes, JOYCON_STICK_FRAME, out);
+  if (kind === 'joyRight') return normalizeJoyConRightAxes(axes, JOYCON_STICK_FRAME, out);
+  return normalizeStandardAxes(axes, out);
 }
 
 const B = HidNpadButton;

@@ -4,6 +4,7 @@ import { CURSE_EFFECTS, hasCurse } from './curses.js';
 import { distanceSq, hurt, nearest, pushEvent, spawnEnemy } from './combat.js';
 import { bossBrain } from './bosses.js';
 import { phaseClock } from './campaign.js';
+import { retainTail } from './arrays.js';
 
 /** `s` is optional: it adds the endless lap and the run's curses on top of the base ramp. */
 export function difficultyAt(phaseTime, playerCount = 1, phase = 0, s = null) {
@@ -210,5 +211,5 @@ export function updateEnemyShots({ s, dt, alive }) {
       if (p.alive && distanceSq(shot, p) < (shot.radius + 18) ** 2) { hurt(p, shot.damage, s); shot.ttl = 0; break; }
     }
   }
-  s.enemyShots = s.enemyShots.filter(shot => shot.ttl > 0).slice(-LIMITS.enemyShots);
+  retainTail(s.enemyShots, shot => shot.ttl > 0, LIMITS.enemyShots);
 }

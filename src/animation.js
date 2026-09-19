@@ -1,3 +1,4 @@
+import { drawSoftGlow } from './glow.js';
 // Visual state only: never modifies the authoritative game or collision positions.
 export const MAX_EFFECTS = 128;
 export const MAX_NUMBERS = 60;
@@ -5,6 +6,7 @@ const TAU = Math.PI * 2;
 const colors = ['#76dfff', '#ff9955', '#92ed68', '#c4a0ff'];
 const SIGNAL_ICONS = { here: '⚑', help: '✚', danger: '⚠', look: '◉' };
 const EVENT_COLORS = { boom: '#ffb36b', elite: '#ffd36b', chest: '#ffe08a', magnet: '#8fd8ff', revive: '#9dffca', phoenix: '#ffb35c' };
+const FLOATING_TYPES = new Set(['wraith', 'eye', 'bat', 'lich', 'revenant', 'seer', 'voidling', 'archon']);
 
 /** @param {{ onHit?: (entity: any, amount: number) => void, onKill?: (actor: any) => void }} [hooks] */
 export function createAnimator({ onHit, onKill } = {}) {
@@ -17,6 +19,11 @@ export function createAnimator({ onHit, onKill } = {}) {
   let shake = 0;
   let freezeFor = 0;
   let lastEventId = null;
+  let updateStamp = 0;
+  const emptyPose = Object.freeze({ x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 1, flash: 0 });
+  const shakeResult = { x: 0, y: 0 };
+  const flashResult = { color: '#ffffff', alpha: 0 };
+  const signalScratch = [];
 
   let flash = null;
 
@@ -202,9 +209,9 @@ export function createAnimator({ onHit, onKill } = {}) {
       if (lastEventId === null) lastEventId = events.reduce((max, event) => Math.max(max, event.id), 0);
       for (const event of events) if (event.id > lastEventId) { lastEventId = event.id; handleEvent(event); }
 
-      const seen = new Set();
+      // Stamp actors instead of allocating a Set every frame just to discover removals.
+      const stamp = ++updateStamp;
       const track = (entity, key, player) => {
-        seen.add(key);
         const old = actors.get(key);
         const alive = player ? entity.alive !== false : entity.hp > 0;
         const color = player ? colors[entity.color ?? 0] : entity.elite ? '#ffd36b' : '#ffbc86';
@@ -214,7 +221,8 @@ export function createAnimator({ onHit, onKill } = {}) {
             stride: 0, walking: 0, hit: 0, cast: 0, down: alive ? 0 : 1, facing: 1,
             castCount: entity.castCount || 0, charge: entity.specialCharge || 0, level: entity.level,
             bossCooldown: entity.attackCooldown, rangedCooldown: entity.rangedCooldown,
-            dashFor: entity.dashFor || 0, trailAt: -1 });
+            dashFor: entity.dashFor || 0, trailAt: -1, seen: stamp, poseStamp: -1,
+            pose: { x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 1, flash: 0 } });
           return;
         }
         const distance = Math.hypot(entity.x - old.x, entity.y - old.y);
@@ -265,15 +273,23 @@ export function createAnimator({ onHit, onKill } = {}) {
           effects.push({ kind: 'ascend', x: entity.x, y: entity.y, color: '#ffe49b', age: 0, life: 1.15, radius: 85, major: true });
           motes(entity.x, entity.y, 'star', '#ffe49b', 12, { speed: 70, spread: 45, gravity: -100, life: 1.1, size: 5 });
         }
-        Object.assign(old, { x: entity.x, y: entity.y, hp: entity.hp, alive,
-          castCount: entity.castCount || 0, charge: entity.specialCharge || 0, level: entity.level,
-          bossCooldown: entity.attackCooldown, rangedCooldown: entity.rangedCooldown, dashFor: entity.dashFor || 0 });
+        // Direct assignment avoids one short-lived object per tracked entity per frame.
+        old.x = entity.x; old.y = entity.y; old.hp = entity.hp; old.alive = alive;
+        old.castCount = entity.castCount || 0; old.charge = entity.specialCharge || 0; old.level = entity.level;
+        old.bossCooldown = entity.attackCooldown; old.rangedCooldown = entity.rangedCooldown;
+        old.dashFor = entity.dashFor || 0; old.seen = stamp;
       };
-      for (const p of Object.values(game.players)) track(p, `p:${p.id}`, true);
+      for (const id in game.players) { const p = game.players[id]; track(p, `p:${p.id}`, true); }
       for (const enemy of game.enemies) track(enemy, `e:${enemy.id}`, false);
-      for (const [key, actor] of actors) if (!seen.has(key)) {
-        if (!reduced && key.startsWith('e:') && previousPhase === `${game.phase}:${game.phaseStatus}`
-          && Object.values(game.players).some(p => Math.hypot(p.x - actor.x, p.y - actor.y) < 1000)) {
+      for (const [key, actor] of actors) if (actor.seen !== stamp) {
+        let nearPlayer = false;
+        if (!reduced && key.startsWith('e:') && previousPhase === `${game.phase}:${game.phaseStatus}`) {
+          for (const id in game.players) {
+            const p = game.players[id], dx = p.x - actor.x, dy = p.y - actor.y;
+            if (dx * dx + dy * dy < 1000000) { nearPlayer = true; break; }
+          }
+        }
+        if (nearPlayer) {
           burst(actor.x, actor.y, actor.color, 5, 30);
           if (effects.length < MAX_EFFECTS) effects.push({ kind: 'ghost', x: actor.x, y: actor.y,
             type: actor.type, boss: actor.boss, elite: actor.elite, age: 0, life: 0.24 });
@@ -286,31 +302,46 @@ export function createAnimator({ onHit, onKill } = {}) {
     },
     pose(key) {
       const a = actors.get(key);
-      if (!a) return { x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 1, flash: 0 };
+      if (!a) return emptyPose;
+      // Split-screen may ask for the same enemy pose in both viewports. Cache the trigonometry once
+      // per simulation/animation update instead of recomputing it once per camera.
+      if (a.poseStamp === updateStamp) return a.pose;
+      const out = a.pose;
       const down = reduced ? Number(!a.alive) : a.down;
-      if (reduced) return { x: 0, y: 0, rotation: 0, sx: a.facing, sy: 1, alpha: down ? 0.28 : 1, flash: 0 };
-      const step = Math.sin(a.stride + a.seed) * a.walking * (1 - down);
-      const breath = Math.sin(time * 2.8 + a.seed) * (1 - down);
-      const floating = ['wraith', 'eye', 'bat', 'lich', 'revenant', 'seer', 'voidling', 'archon'].includes(a.type);
-      const bounce = floating ? Math.sin(time * 3.5 + a.seed) * 4 : -Math.abs(step) * (a.boss ? 2 : 3.5);
-      return {
-        x: -Math.cos(a.castAngle || 0) * a.cast * 3,
-        y: bounce + breath * 0.7 + down * 12,
-        rotation: step * (a.boss ? 0.015 : 0.045) + a.dx * a.walking * 0.025 + down * 0.65 - a.cast * 0.07,
-        sx: a.facing * (1 + breath * 0.015 + Math.abs(step) * 0.025 + a.cast * 0.06 + a.hit * 0.1),
-        sy: 1 - breath * 0.015 - Math.abs(step) * 0.035 - down * 0.18 - a.hit * 0.08,
-        alpha: 1 - down * 0.72, flash: a.hit
-      };
+      if (reduced) {
+        out.x = 0; out.y = 0; out.rotation = 0; out.sx = a.facing; out.sy = 1; out.alpha = down ? 0.28 : 1; out.flash = 0;
+      } else {
+        const step = Math.sin(a.stride + a.seed) * a.walking * (1 - down);
+        const breath = Math.sin(time * 2.8 + a.seed) * (1 - down);
+        const floating = FLOATING_TYPES.has(a.type);
+        const bounce = floating ? Math.sin(time * 3.5 + a.seed) * 4 : -Math.abs(step) * (a.boss ? 2 : 3.5);
+        out.x = -Math.cos(a.castAngle || 0) * a.cast * 3;
+        out.y = bounce + breath * 0.7 + down * 12;
+        out.rotation = step * (a.boss ? 0.015 : 0.045) + a.dx * a.walking * 0.025 + down * 0.65 - a.cast * 0.07;
+        out.sx = a.facing * (1 + breath * 0.015 + Math.abs(step) * 0.025 + a.cast * 0.06 + a.hit * 0.1);
+        out.sy = 1 - breath * 0.015 - Math.abs(step) * 0.035 - down * 0.18 - a.hit * 0.08;
+        out.alpha = 1 - down * 0.72; out.flash = a.hit;
+      }
+      a.poseStamp = updateStamp;
+      return out;
     },
     shake(amount) { if (!reduced) shake = Math.max(shake, amount); },
     get shakeOffset() {
-      if (reduced || !shake) return { x: 0, y: 0 };
-      return { x: Math.sin(time * 91) * shake, y: Math.cos(time * 67) * shake };
+      if (reduced || !shake) { shakeResult.x = 0; shakeResult.y = 0; }
+      else { shakeResult.x = Math.sin(time * 91) * shake; shakeResult.y = Math.cos(time * 67) * shake; }
+      return shakeResult;
     },
     /** Full-screen tint that fades out after big spells, or null. */
     /** Active teammate signals, for off-screen arrows. */
-    get signals() { return effects.filter(fx => fx.kind === 'signal'); },
-    get flash() { return flash ? { color: flash.color, alpha: flash.alpha * (1 - flash.age / flash.life) } : null; },
+    get signals() {
+      signalScratch.length = 0;
+      for (const fx of effects) if (fx.kind === 'signal') signalScratch.push(fx);
+      return signalScratch;
+    },
+    get flash() {
+      if (!flash) return null;
+      flashResult.color = flash.color; flashResult.alpha = flash.alpha * (1 - flash.age / flash.life); return flashResult;
+    },
     get time() { return time; },
     get effects() { return effects; },
     get numbers() { return numbers; },
@@ -336,10 +367,7 @@ function jagged(ctx, points, seed, progress) {
 const easeOut = t => 1 - (1 - t) ** 3;
 
 function glow(ctx, x, y, radius, color, alpha) {
-  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-  gradient.addColorStop(0, color); gradient.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.globalAlpha = alpha; ctx.fillStyle = gradient;
-  ctx.beginPath(); ctx.arc(x, y, radius, 0, TAU); ctx.fill();
+  drawSoftGlow(ctx, x, y, radius, color, alpha);
 }
 
 function drawMote(ctx, fx, progress) {

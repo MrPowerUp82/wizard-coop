@@ -28,15 +28,23 @@ if (native) {
   host.addEventListener = () => {};
   host.console = { log: (...args) => native.log(args.join(' ')), error: (...args) => native.log(args.join(' ')) };
   let next = 1;
-  const frames = new Map(), timers = new Map();
+  let frames = new Map(), dispatchFrames = new Map();
+  const timers = new Map();
   host.requestAnimationFrame = callback => { const id = next++; frames.set(id, callback); return id; };
-  host.cancelAnimationFrame = id => frames.delete(id);
+  host.cancelAnimationFrame = id => { frames.delete(id); dispatchFrames.delete(id); };
   host.setTimeout = (callback, delay = 0) => { const id = next++; timers.set(id, { callback, at: native.now() + delay }); return id; };
   host.clearTimeout = id => timers.delete(id);
   host.__arcanaFrame = now => {
+    context.beginFrame();
     for (const [id, timer] of timers) if (now >= timer.at) { timers.delete(id); timer.callback(); }
-    const pending = [...frames.values()]; frames.clear();
-    for (const callback of pending) callback(now);
+    // Ping-pong the RAF queues. The old implementation cloned all callbacks into a new Array
+    // every frame, which is unnecessary pressure on QuickJS' GC.
+    const pending = frames;
+    frames = dispatchFrames;
+    dispatchFrames = pending;
+    frames.clear();
+    for (const callback of dispatchFrames.values()) callback(now);
+    dispatchFrames.clear();
     if (now >= flushAt) { flush(); flushAt = now + 2000; }
   };
   host.__arcanaShutdown = flush;

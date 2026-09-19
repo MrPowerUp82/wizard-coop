@@ -19,3 +19,6 @@ export function createCanvas(width, height) {
 
 /** public/ assets are copied into the VPK's assets/ directory by build.mjs. */
 export const assetUrl = path => `app0:/${path.replace(/^\.?\//, '')}`;
+
+/** Vita keeps gameplay and signature effects, while trimming the least visible per-frame decoration. */
+export const RENDER_TUNING = Object.freeze({ fastTrails: true, atmosphere: false, simpleShadows: true, cachedGlows: false, crowdShadows: true, enemyHealthBars: 'all', terrainMacro: 1 });

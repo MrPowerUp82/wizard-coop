@@ -156,6 +156,10 @@ real com Joy-Cons simulados) e, com `npm run dev` rodando, `http://localhost:517
 abre o bundle do Switch no navegador em 1280×720 com Joy-Cons simulados pelo teclado (veja a página). Depois de
 `npm run switch:build:debug`, reinicie o `npm run dev` (ele não observa `platforms/`).
 
+## Otimizações para hordas / split-screen
+
+O port mantém o mesmo número de inimigos e as mesmas regras da web. Este build reduz alocações temporárias no core, recicla buckets da grade espacial e reutiliza a pose visual dos atores entre as viewports. No Switch, o rastro de projéteis evita criar um `CanvasGradient` novo por projétil/view e usa duas passagens sólidas equivalentes. A versão browser continua com os efeitos originais completos. Veja `../../PERFORMANCE-PORTS.md`.
+
 ## Renderer
 
 O nx.js tem dois renderers de canvas (`romfs/nxjs.ini`, `[renderer] mode`): GPU (Skia na GPU, padrão no modo
@@ -252,3 +256,17 @@ um Switch real**. Os itens abaixo dependem de como o console reporta os controle
   continuam sendo registradas). O co-op local tem 2 jogadores, como a tela dividida existente.
 - No Sudachi, o renderer de GPU desenha errado (seção *Renderer*); o NRO de emulador usa CPU e fica mais lento no co-op
   (~30–40 FPS medidos). A escolha de poder e a pausa sobre a tela dividida custam mais (~20 FPS no emulador em CPU).
+
+## Performance em hordas / split-screen
+
+A build do Switch possui um perfil visual próprio que preserva gameplay, sprites e efeitos de combate, mas evita caminhos caros do Canvas: glows reutilizáveis, macro-tiles de piso e menos decoração redundante em multidões.
+
+Para o melhor FPS, execute o Homebrew Menu em **application mode (title override / full RAM)**. O nx.js usa GPU e V8 JIT automaticamente nesse regime; iniciar pelo Album normalmente coloca o runtime no regime applet, no qual ele usa escolhas mais conservadoras de memória.
+
+Para testar explicitamente o renderer GPU:
+
+```bash
+npm run nro:gpu
+```
+
+O `nxjs.ini` usa cache GPU de 128 MiB. A build padrão continua `renderer=auto`, que é a opção mais segura.

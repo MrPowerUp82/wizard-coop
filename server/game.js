@@ -12,6 +12,7 @@ import { updateObjective } from './objectives.js';
 import { updateEncounter } from './encounters.js';
 import { healingScale, sanitizeCurses } from './curses.js';
 import { createGrid } from './spatial.js';
+import { retainTail } from './arrays.js';
 
 export { DROP_TTL, LIMITS, REVIVE, SPECIAL } from './balance.js';
 export { POWERS, applyPower, availablePowers, rerollPowers } from './powers.js';
@@ -169,7 +170,7 @@ function updateHazards({ s, dt, alive }) {
       for (const p of alive) if (distanceSq(hazard, p) < hazard.radius ** 2) hurt(p, hazard.damage, s);
     }
   }
-  s.hazards = s.hazards.filter(h => h.ttl > 0);
+  retainTail(s.hazards, h => h.ttl > 0);
 }
 
 /** Vínculo vital: allies (not yourself) near a linked player slowly regenerate. */
@@ -227,7 +228,7 @@ export function updateGame(s, dt, random = Math.random) {
   s.events ??= [];
   s.runes ??= [];
   s.zones ??= [];
-  if (s.events.length && s.events[0].t < s.time - EVENT_WINDOW) s.events = s.events.filter(event => event.t >= s.time - EVENT_WINDOW);
+  if (s.events.length && s.events[0].t < s.time - EVENT_WINDOW) retainTail(s.events, event => event.t >= s.time - EVENT_WINDOW);
   if (s.phaseStatus === 'transition') {
     s.transitionTime = Math.max(0, s.transitionTime - dt);
     if (!s.transitionTime) startNextPhase(s, alive);
@@ -266,7 +267,7 @@ export function updateGame(s, dt, random = Math.random) {
   updateEnemyShots(ctx);
   updateShots(ctx);
   updateWeapons(ctx);
-  s.enemies = s.enemies.filter(enemy => enemy.hp > 0);
+  retainTail(s.enemies, enemy => enemy.hp > 0);
 
   if (ctx.coop) updateLifelink(ctx);
   reviveAllies(s, players, fallen, dt);
@@ -276,10 +277,10 @@ export function updateGame(s, dt, random = Math.random) {
   s.cleanup -= dt;
   if (s.cleanup <= 0) {
     s.cleanup = 0.75;
-    s.gems = s.gems.filter(gem => !gem.dead && gem.ttl > 0 && alive.some(p => distanceSq(gem, p) < 1500 ** 2)).slice(-LIMITS.drops);
-    s.enemies = s.enemies.filter(enemy => enemy.boss || (enemy.age < 75 && alive.some(p => distanceSq(enemy, p) < 1450 ** 2))).slice(-LIMITS.enemies);
+    retainTail(s.gems, gem => !gem.dead && gem.ttl > 0 && alive.some(p => distanceSq(gem, p) < 1500 ** 2), LIMITS.drops);
+    retainTail(s.enemies, enemy => enemy.boss || (enemy.age < 75 && alive.some(p => distanceSq(enemy, p) < 1450 ** 2)), LIMITS.enemies);
   } else {
-    s.gems = s.gems.filter(gem => !gem.dead && gem.ttl > 0).slice(-LIMITS.drops);
+    retainTail(s.gems, gem => !gem.dead && gem.ttl > 0, LIMITS.drops);
   }
   if (players.every(p => !p.alive)) s.over = true;
   if (!s.over && s.phaseStatus === 'boss' && !s.enemies.some(e => e.boss)) {

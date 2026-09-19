@@ -13,7 +13,9 @@
     "typecheck": "tsc -p jsconfig.json",
     "test": "node build.mjs --debug && node test/audio-compat.mjs && node test/smoke.mjs",
     "check": "npm run typecheck && npm test",
-    "nro:emu": "nxjs-nro --fat && node -e \"require('node:fs').renameSync('ArcanaSurvivors.nro', 'ArcanaSurvivors-emu.nro')\""
+    "nro:emu": "nxjs-nro --fat && node -e \"require('node:fs').renameSync('ArcanaSurvivors.nro', 'ArcanaSurvivors-emu.nro')\"",
+    "build:gpu": "node build.mjs --renderer=gpu",
+    "nro:gpu": "npm run build:gpu && nxjs-nro --fat"
   },
   "nacp": {
     "title": "Arcana Survivors"

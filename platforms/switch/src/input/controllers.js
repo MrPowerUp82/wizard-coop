@@ -18,7 +18,7 @@ const EMPTY = { x: 0, y: 0 };
 
 function padState(index) {
   return { index, id: '', kind: 'standard', label: '', connected: false, raw: 0, previous: 0, axes: [0, 0, 0, 0],
-    move: EMPTY, styleSet: 0, deviceType: 0, rawBig: 0n, held: '', heldFor: 0, lastUsed: 0 };
+    move: { x: 0, y: 0 }, styleSet: 0, deviceType: 0, rawBig: 0n, held: '', heldFor: 0, lastUsed: 0 };
 }
 
 /**
@@ -31,8 +31,8 @@ export function createControllers({ onSpecial, onDash, onPause, isPlaying, getGa
   const bindings = [null, null];
   let coop = false;
   let clock = 0;
-  let events = [];
-  let changes = [];
+  const events = [];
+  const changes = [];
 
   const bound = slot => pads.find(p => p.connected && bindings[slot] && p.id === bindings[slot]) || null;
   const slotOf = pad => (!coop ? 0 : bindings.findIndex(id => id && id === pad.id));
@@ -62,13 +62,22 @@ export function createControllers({ onSpecial, onDash, onPause, isPlaying, getGa
     pad.previous = pad.raw;
     if (!gamepad || !gamepad.connected) {
       if (wasConnected) changes.push({ type: 'disconnected', pad: { ...pad } });
-      Object.assign(pad, { connected: false, raw: 0, previous: 0, move: EMPTY, held: '', heldFor: 0 });
+      pad.connected = false; pad.raw = 0; pad.previous = 0; pad.move.x = 0; pad.move.y = 0; pad.held = ''; pad.heldFor = 0;
       return;
     }
     const { kind, label } = classifyPad(gamepad);
-    Object.assign(pad, { connected: true, id: String(gamepad.id), kind, label, styleSet: gamepad.styleSet | 0,
-      deviceType: gamepad.deviceType | 0, rawBig: gamepad.rawButtons ?? 0n, raw: rawButtons(gamepad), axes: [...gamepad.axes] });
-    pad.move = normalizeAxes(kind, pad.axes);
+    pad.connected = true;
+    pad.id = String(gamepad.id);
+    pad.kind = kind;
+    pad.label = label;
+    pad.styleSet = gamepad.styleSet | 0;
+    pad.deviceType = gamepad.deviceType | 0;
+    pad.rawBig = gamepad.rawButtons ?? 0n;
+    pad.raw = rawButtons(gamepad);
+    // Keep the debug snapshot without allocating a fresh axes array every frame.
+    const axes = gamepad.axes || [];
+    for (let i = 0; i < 4; i++) pad.axes[i] = Number(axes[i] || 0);
+    normalizeAxes(kind, pad.axes, pad.move);
     if (!wasConnected) { pad.previous = pad.raw; changes.push({ type: 'connected', pad: { ...pad } }); }
     if (pad.raw || pad.move.x || pad.move.y) pad.lastUsed = clock;
   }
@@ -78,8 +87,8 @@ export function createControllers({ onSpecial, onDash, onPause, isPlaying, getGa
     /** Reads every controller once per frame and fires gameplay callbacks. */
     poll(dt = 1 / 60) {
       clock += dt;
-      events = [];
-      changes = [];
+      events.length = 0;
+      changes.length = 0;
       const list = getGamepads() || [];
       for (let i = 0; i < 8; i++) update(pads[i], list[i]);
       // A returning controller takes its slot back; nothing about the player changes.
@@ -144,10 +153,16 @@ export function createControllers({ onSpecial, onDash, onPause, isPlaying, getGa
     isFree: pad => !bindings.includes(pad.id),
     /** Button captions for the split HUD panel of a slot (a dropped controller keeps its captions). */
     labels(slot) {
-      const pad = coop ? bound(slot) || pads.find(p => bindings[slot] && p.id === bindings[slot])
-        : pads.filter(p => p.connected).sort((a, b) => b.lastUsed - a.lastUsed)[0];
+      let pad = coop ? bound(slot) || pads.find(p => bindings[slot] && p.id === bindings[slot]) : null;
+      if (!coop) for (const candidate of pads) {
+        if (candidate.connected && (!pad || candidate.lastUsed >= pad.lastUsed)) pad = candidate;
+      }
       return labelsFor(pad?.kind);
     },
-    get connectedCount() { return pads.filter(p => p.connected).length; }
+    get connectedCount() {
+      let count = 0;
+      for (const pad of pads) if (pad.connected) count++;
+      return count;
+    }
   };
 }

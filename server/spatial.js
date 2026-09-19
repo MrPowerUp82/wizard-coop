@@ -4,12 +4,23 @@ const keyOf = (cx, cy) => (cx + OFFSET) * 65536 + (cy + OFFSET);
 
 export function createGrid(cellSize = 96) {
   const buckets = new Map();
+  // Recycle the small bucket arrays instead of creating hundreds of short-lived arrays every tick.
+  // This matters on QuickJS/V8 console runtimes where GC pauses become visible late in a run.
+  const pool = [];
   return {
-    clear() { buckets.clear(); },
+    clear() {
+      for (const bucket of buckets.values()) { bucket.length = 0; pool.push(bucket); }
+      buckets.clear();
+    },
     insert(entity) {
       const key = keyOf(Math.floor(entity.x / cellSize), Math.floor(entity.y / cellSize));
       const bucket = buckets.get(key);
-      bucket ? bucket.push(entity) : buckets.set(key, [entity]);
+      if (bucket) bucket.push(entity);
+      else {
+        const next = pool.pop() || [];
+        next.push(entity);
+        buckets.set(key, next);
+      }
     },
     /** Calls visit(entity, distanceSq) for entities within radius; stop early by returning true. */
     query(x, y, radius, visit) {
@@ -20,7 +31,8 @@ export function createGrid(cellSize = 96) {
         const bucket = buckets.get(keyOf(cx, cy));
         if (!bucket) continue;
         for (const entity of bucket) {
-          const d2 = (entity.x - x) ** 2 + (entity.y - y) ** 2;
+          const dx = entity.x - x, dy = entity.y - y;
+          const d2 = dx * dx + dy * dy;
           if (d2 <= r2 && visit(entity, d2)) return;
         }
       }

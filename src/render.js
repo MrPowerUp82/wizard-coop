@@ -5,6 +5,8 @@ import { auraRadius, orbitRadius } from '../server/weapons.js';
 import { drawTerrain } from './terrain.js';
 import { drawEffects, drawNumbers } from './animation.js';
 import { ENEMY_SPRITES, PLAYER_SPRITES, SHOT_SPRITES, drawSprite, view, worldTransform } from './sprites.js';
+import { RENDER_TUNING } from './platform.js';
+import { drawSoftGlow } from './glow.js';
 
 const TAU = Math.PI * 2;
 const PLAYER_COLORS = SPELLS.map(spell => spell.tint);
@@ -17,17 +19,25 @@ function drawTrail(ctx, shot, color, reduced) {
   const length = Math.min(shot.special ? 95 : shot.shard ? 25 : 58, speed * 0.14);
   const tx = shot.x - shot.vx / speed * length, ty = shot.y - shot.vy / speed * length;
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
-  const trail = ctx.createLinearGradient(shot.x, shot.y, tx, ty);
-  trail.addColorStop(0, color); trail.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.strokeStyle = trail; ctx.globalAlpha = 0.3; ctx.lineWidth = shot.special ? 14 : 7;
-  ctx.beginPath(); ctx.moveTo(shot.x, shot.y); ctx.lineTo(tx, ty); ctx.stroke();
-  ctx.globalAlpha = 0.85; ctx.lineWidth = shot.special ? 4 : 2; ctx.stroke();
+  ctx.strokeStyle = color;
+  if (RENDER_TUNING.fastTrails) {
+    // Consoles: same silhouette and element color without allocating a CanvasGradient for every shot.
+    ctx.globalAlpha = 0.24; ctx.lineWidth = shot.special ? 12 : 6;
+    ctx.beginPath(); ctx.moveTo(shot.x, shot.y); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.globalAlpha = 0.72; ctx.lineWidth = shot.special ? 3.5 : 1.8; ctx.stroke();
+  } else {
+    const trail = ctx.createLinearGradient(shot.x, shot.y, tx, ty);
+    trail.addColorStop(0, color); trail.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.strokeStyle = trail; ctx.globalAlpha = 0.3; ctx.lineWidth = shot.special ? 14 : 7;
+    ctx.beginPath(); ctx.moveTo(shot.x, shot.y); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.globalAlpha = 0.85; ctx.lineWidth = shot.special ? 4 : 2; ctx.stroke();
+  }
   ctx.restore();
 }
 
 /** A fixed world grid keeps the atmosphere continuous as the camera moves, with no particle allocation. */
 function drawAtmosphere(ctx, phase, camX, camY, W, H, time, reduced) {
-  if (reduced) return;
+  if (reduced || !RENDER_TUNING.atmosphere) return;
   const spacing = 190;
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   ctx.fillStyle = ['#b8f57f', '#b9cbff', '#ffad68', '#a6e5bd', '#ffe49b', '#c4a0ff'][phase % 6];
@@ -74,9 +84,7 @@ function drawFamiliar(ctx, x, y, color, time, evolved, reduced) {
   ctx.save();
   ctx.translate(x, y + bob); ctx.scale(scale, scale);
   ctx.globalCompositeOperation = 'lighter';
-  const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, 34);
-  aura.addColorStop(0, color); aura.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.globalAlpha = 0.45; ctx.fillStyle = aura; circle(ctx, 0, 0, 34); ctx.fill();
+  drawSoftGlow(ctx, 0, 0, 34, color, 0.45);
   ctx.globalCompositeOperation = 'source-over';
   // Wispy tail trailing below the body.
   ctx.globalAlpha = 0.55; ctx.fillStyle = color;
@@ -146,9 +154,7 @@ function drawEncounter(ctx, encounter, me, time, reduced) {
     if (!done) {
       ctx.globalCompositeOperation = 'lighter';
       const glowRadius = 22 + (reduced ? 0 : Math.sin(time * 5) * 5);
-      const gradient = ctx.createRadialGradient(encounter.x, encounter.y - 24, 0, encounter.x, encounter.y - 24, glowRadius);
-      gradient.addColorStop(0, '#ff7aa8'); gradient.addColorStop(1, 'rgba(255,60,120,0)');
-      ctx.fillStyle = gradient; circle(ctx, encounter.x, encounter.y - 24, glowRadius); ctx.fill();
+      drawSoftGlow(ctx, encounter.x, encounter.y - 24, glowRadius, '#ff7aa8', 0.9);
       ctx.globalCompositeOperation = 'source-over';
     }
   }
@@ -163,9 +169,13 @@ function drawEncounter(ctx, encounter, me, time, reduced) {
 function drawSpecialZone(ctx, zone, time, reduced) {
   const spin = reduced ? 0 : time;
   if (zone.kind === 'hail') {
-    const gradient = ctx.createRadialGradient(zone.x, zone.y, 10, zone.x, zone.y, zone.radius);
-    gradient.addColorStop(0, 'rgba(200,245,255,.28)'); gradient.addColorStop(1, 'rgba(118,223,255,0)');
-    ctx.globalAlpha = 1; ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
+    ctx.globalAlpha = 1;
+    if (RENDER_TUNING.cachedGlows) drawSoftGlow(ctx, zone.x, zone.y, zone.radius, '#c8f5ff', 0.28);
+    else {
+      const gradient = ctx.createRadialGradient(zone.x, zone.y, 10, zone.x, zone.y, zone.radius);
+      gradient.addColorStop(0, 'rgba(200,245,255,.28)'); gradient.addColorStop(1, 'rgba(118,223,255,0)');
+      ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
+    }
     ctx.strokeStyle = '#bff4ff'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6; ctx.stroke();
     if (reduced) return;
     // Hailstones: deterministic pseudo-random streaks falling inside the circle.
@@ -180,21 +190,38 @@ function drawSpecialZone(ctx, zone, time, reduced) {
     }
   } else if (zone.kind === 'flameshield') {
     ctx.globalCompositeOperation = 'lighter';
-    const gradient = ctx.createRadialGradient(zone.x, zone.y, zone.radius * 0.5, zone.x, zone.y, zone.radius);
-    gradient.addColorStop(0, 'rgba(255,120,40,0)'); gradient.addColorStop(0.8, 'rgba(255,140,60,.35)'); gradient.addColorStop(1, 'rgba(255,90,30,0)');
-    ctx.globalAlpha = 1; ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
-    for (let n = 0; n < 10; n++) {
-      const a = spin * 3 + n * TAU / 10;
-      const x = zone.x + Math.cos(a) * zone.radius * 0.85, y = zone.y + Math.sin(a) * zone.radius * 0.85;
-      const flame = ctx.createRadialGradient(x, y, 0, x, y, 20);
-      flame.addColorStop(0, '#fff1c4'); flame.addColorStop(0.4, '#ff9955'); flame.addColorStop(1, 'rgba(255,60,20,0)');
-      ctx.fillStyle = flame; circle(ctx, x, y, 20); ctx.fill();
+    ctx.globalAlpha = 1;
+    if (RENDER_TUNING.cachedGlows) {
+      drawSoftGlow(ctx, zone.x, zone.y, zone.radius, '#ff8c3c', 0.34);
+      for (let n = 0; n < 10; n++) {
+        const a = spin * 3 + n * TAU / 10;
+        const x = zone.x + Math.cos(a) * zone.radius * 0.85, y = zone.y + Math.sin(a) * zone.radius * 0.85;
+        drawSoftGlow(ctx, x, y, 20, '#ffb06b', 0.9);
+        ctx.globalAlpha = 0.72; ctx.fillStyle = '#fff1c4'; circle(ctx, x, y, 5); ctx.fill(); ctx.globalAlpha = 1;
+      }
+    } else {
+      const gradient = ctx.createRadialGradient(zone.x, zone.y, zone.radius * 0.5, zone.x, zone.y, zone.radius);
+      gradient.addColorStop(0, 'rgba(255,120,40,0)'); gradient.addColorStop(0.8, 'rgba(255,140,60,.35)'); gradient.addColorStop(1, 'rgba(255,90,30,0)');
+      ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
+      for (let n = 0; n < 10; n++) {
+        const a = spin * 3 + n * TAU / 10;
+        const x = zone.x + Math.cos(a) * zone.radius * 0.85, y = zone.y + Math.sin(a) * zone.radius * 0.85;
+        const flame = ctx.createRadialGradient(x, y, 0, x, y, 20);
+        flame.addColorStop(0, '#fff1c4'); flame.addColorStop(0.4, '#ff9955'); flame.addColorStop(1, 'rgba(255,60,20,0)');
+        ctx.fillStyle = flame; circle(ctx, x, y, 20); ctx.fill();
+      }
     }
     ctx.globalCompositeOperation = 'source-over';
   } else if (zone.kind === 'vortex') {
-    const gradient = ctx.createRadialGradient(zone.x, zone.y, 0, zone.x, zone.y, zone.radius);
-    gradient.addColorStop(0, 'rgba(20,6,40,.85)'); gradient.addColorStop(0.35, 'rgba(90,40,160,.45)'); gradient.addColorStop(1, 'rgba(196,160,255,0)');
-    ctx.globalAlpha = 1; ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
+    ctx.globalAlpha = 1;
+    if (RENDER_TUNING.cachedGlows) {
+      ctx.fillStyle = 'rgba(20,6,40,.58)'; circle(ctx, zone.x, zone.y, zone.radius * 0.42); ctx.fill();
+      drawSoftGlow(ctx, zone.x, zone.y, zone.radius, '#6f45aa', 0.5);
+    } else {
+      const gradient = ctx.createRadialGradient(zone.x, zone.y, 0, zone.x, zone.y, zone.radius);
+      gradient.addColorStop(0, 'rgba(20,6,40,.85)'); gradient.addColorStop(0.35, 'rgba(90,40,160,.45)'); gradient.addColorStop(1, 'rgba(196,160,255,0)');
+      ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
+    }
     ctx.strokeStyle = '#d9c2ff'; ctx.lineCap = 'round';
     for (let arm = 0; arm < 4; arm++) {
       ctx.globalAlpha = 0.7; ctx.lineWidth = 2.5;
@@ -268,12 +295,15 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
   if (game.encounter && visible(game.encounter.x, game.encounter.y, 200)) drawEncounter(ctx, game.encounter, me, time, reduced);
 
   for (const zone of game.zones || []) if (visible(zone.x, zone.y, zone.radius)) {
-    if (['hail', 'flameshield', 'vortex'].includes(zone.kind)) { drawSpecialZone(ctx, zone, time, reduced); ctx.globalAlpha = 1; continue; }
+    if (zone.kind === 'hail' || zone.kind === 'flameshield' || zone.kind === 'vortex') { drawSpecialZone(ctx, zone, time, reduced); ctx.globalAlpha = 1; continue; }
     ctx.globalAlpha = 0.32 + (reduced ? 0 : Math.sin(time * 14 + zone.x) * 0.08);
-    const gradient = ctx.createRadialGradient(zone.x, zone.y, 4, zone.x, zone.y, zone.radius);
     const roots = zone.kind === 'roots';
-    gradient.addColorStop(0, roots ? '#d1ff93' : '#ffcf6b'); gradient.addColorStop(0.6, roots ? '#55c46a' : '#ff6a2b'); gradient.addColorStop(1, roots ? 'rgba(50,180,80,0)' : 'rgba(255,80,30,0)');
-    ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
+    if (RENDER_TUNING.cachedGlows) drawSoftGlow(ctx, zone.x, zone.y, zone.radius, roots ? '#76d35f' : '#ff7d35', 0.48);
+    else {
+      const gradient = ctx.createRadialGradient(zone.x, zone.y, 4, zone.x, zone.y, zone.radius);
+      gradient.addColorStop(0, roots ? '#d1ff93' : '#ffcf6b'); gradient.addColorStop(0.6, roots ? '#55c46a' : '#ff6a2b'); gradient.addColorStop(1, roots ? 'rgba(50,180,80,0)' : 'rgba(255,80,30,0)');
+      ctx.fillStyle = gradient; circle(ctx, zone.x, zone.y, zone.radius); ctx.fill();
+    }
     if (zone.warning > 0 || roots) {
       ctx.globalAlpha = 0.8; ctx.strokeStyle = roots ? '#92ed68' : '#ffd36b'; ctx.lineWidth = 2; ctx.stroke();
       if (roots) for (let n = 0; n < 8; n++) {
@@ -380,8 +410,13 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
       ctx.restore();
     }
     const pose = animator.pose(`e:${enemy.id}`);
-    ctx.fillStyle = `rgba(0,0,0,${pose.alpha * 0.24})`;
-    ctx.beginPath(); ctx.ellipse(enemy.x, enemy.y + size * 0.36, size * 0.28, size * 0.09, 0, 0, TAU); ctx.fill();
+    if (RENDER_TUNING.crowdShadows || enemy.elite || enemy.boss) {
+      ctx.fillStyle = `rgba(0,0,0,${pose.alpha * 0.24})`;
+      ctx.beginPath();
+      if (RENDER_TUNING.simpleShadows) ctx.arc(enemy.x, enemy.y + size * 0.36, size * 0.16, 0, TAU);
+      else ctx.ellipse(enemy.x, enemy.y + size * 0.36, size * 0.28, size * 0.09, 0, 0, TAU);
+      ctx.fill();
+    }
     drawSprite(ctx, ENEMY_SPRITES[enemy.type] || type.sprite || enemy.type, enemy.x + pose.x, enemy.y + pose.y, size,
       pose.rotation, pose.alpha, pose.sx, pose.sy, Math.max(pose.flash, enemy.windup > 0 ? 0.45 : 0));
     if (enemy.windup > 0) {
@@ -389,14 +424,18 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
       ctx.fillText('!', enemy.x, enemy.y - size * 0.55);
     }
     if (enemy.boss) continue;
-    const barWidth = enemy.elite ? 56 : 40;
-    const barY = enemy.y - size * 0.53;
-    ctx.fillStyle = '#10151a'; ctx.fillRect(enemy.x - barWidth / 2, barY, barWidth, enemy.elite ? 5 : 3);
-    ctx.fillStyle = enemy.elite ? '#ffc34d' : '#b95465';
-    ctx.fillRect(enemy.x - barWidth / 2, barY, barWidth * Math.max(0, enemy.hp / enemy.maxHp), enemy.elite ? 5 : 3);
+    const showBar = RENDER_TUNING.enemyHealthBars === 'all' || enemy.elite || enemy.hp < enemy.maxHp;
+    if (showBar) {
+      const barWidth = enemy.elite ? 56 : 40;
+      const barY = enemy.y - size * 0.53;
+      ctx.fillStyle = '#10151a'; ctx.fillRect(enemy.x - barWidth / 2, barY, barWidth, enemy.elite ? 5 : 3);
+      ctx.fillStyle = enemy.elite ? '#ffc34d' : '#b95465';
+      ctx.fillRect(enemy.x - barWidth / 2, barY, barWidth * Math.max(0, enemy.hp / enemy.maxHp), enemy.elite ? 5 : 3);
+    }
   }
 
-  for (const player of Object.values(game.players)) {
+  for (const playerId in game.players) {
+    const player = game.players[playerId];
     if (!visible(player.x, player.y, 260)) continue;
     const alive = player.alive !== false;
     const color = PLAYER_COLORS[player.color ?? 0];
@@ -440,7 +479,10 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
     }
     ctx.globalAlpha = player.connected === false ? 0.4 : 1;
     ctx.fillStyle = `rgba(0,0,0,${pose.alpha * 0.24})`;
-    ctx.beginPath(); ctx.ellipse(player.x, player.y + 24, 19, 6, 0, 0, TAU); ctx.fill();
+    ctx.beginPath();
+    if (RENDER_TUNING.simpleShadows) ctx.arc(player.x, player.y + 24, 10, 0, TAU);
+    else ctx.ellipse(player.x, player.y + 24, 19, 6, 0, 0, TAU);
+    ctx.fill();
     drawSprite(ctx, PLAYER_SPRITES[player.color ?? 0], player.x + pose.x, player.y + pose.y, 68, pose.rotation,
       pose.alpha * (player.connected === false ? 0.45 : 1), pose.sx, pose.sy, pose.flash);
     if (alive && powers.orbit) {
@@ -484,7 +526,8 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
     return sx >= 45 && sx <= W - 45 && sy >= 65 && sy <= H - 55;
   };
   if (!offline) {
-    for (const player of Object.values(game.players)) {
+    for (const playerId in game.players) {
+    const player = game.players[playerId];
       if (player === focus || player === me || inView(player)) continue;
       drawEdgeArrow(ctx, W, H, focus, player, player.alive === false ? '#ffb58e' : '#83e1c4', `${player.alive === false ? 'REVIVER ' : ''}${player.name}`);
     }

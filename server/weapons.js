@@ -4,6 +4,7 @@ import { healingScale } from './curses.js';
 import { dashDirection } from './movement.js';
 import { rankOf } from './powers.js';
 import { damageEnemy, distanceSq, nextId, pushEvent } from './combat.js';
+import { retainTail } from './arrays.js';
 
 export const SPELLS = Object.freeze([
   { name: 'Raio glacial', sprite: 'bolt', tint: '#76dfff', speed: 490, radius: 29, pierce: 1, slow: true },
@@ -29,6 +30,16 @@ export const specialOf = p => (p?.specialVariant === 1 ? ALT_SPECIALS : SPECIALS
 const ATTACK_RANGE = 900;
 const BOOMERANG_TURN = 0.8;
 const MAX_BOSS_RADIUS = 64;
+
+function nearestEnemy(enemies, origin, range) {
+  let target = null, best = range * range;
+  for (const enemy of enemies) {
+    if (enemy.hp <= 0) continue;
+    const d2 = distanceSq(origin, enemy);
+    if (d2 < best) { best = d2; target = enemy; }
+  }
+  return target;
+}
 
 function playerShot(p, angle, special = false) {
   const spell = SPELLS[p.color];
@@ -62,8 +73,7 @@ export function activateSpecial(s, playerId, random = Math.random) {
     }
     s.enemyShots = s.enemyShots.filter(shot => distanceSq(p, shot) > 220 ** 2);
   } else if (p.color === 1) {
-    const target = s.enemies.filter(e => e.hp > 0 && distanceSq(p, e) < 500 ** 2)
-      .sort((a, b) => distanceSq(p, a) - distanceSq(p, b))[0];
+    const target = nearestEnemy(s.enemies, p, 500);
     const direction = dashDirection(p);
     const zone = { id: nextId(s), x: target?.x ?? p.x + direction.x * 180, y: target?.y ?? p.y + direction.y * 180,
       radius: 165, ttl: 3.6, warning: 0.6, kind: 'meteor', damage: p.damage * 9, dps: p.damage * 0.5, owner: p.id, color: 1 };
@@ -100,8 +110,7 @@ function castAltSpecial(s, p, event) {
     }
     for (let n = 0; n < 16; n++) s.shots.push(playerShot(p, n * Math.PI / 8, true));
   } else {
-    const target = s.enemies.filter(e => e.hp > 0 && distanceSq(p, e) < 450 ** 2)
-      .sort((a, b) => distanceSq(p, a) - distanceSq(p, b))[0];
+    const target = nearestEnemy(s.enemies, p, 450);
     const direction = dashDirection(p);
     const x = target?.x ?? p.x + direction.x * 200, y = target?.y ?? p.y + direction.y * 200;
     s.zones.push({ id: nextId(s), x, y, radius: 230, ttl: 2.2, kind: 'vortex', dps: p.damage, pull: 260,
@@ -181,7 +190,10 @@ function redirect(shot, grid, from) {
 }
 
 export function updateShots({ s, dt, random, grid }) {
+  // Scratch arrays are reused for every projectile. Keeping candidates ordered while the spatial
+  // query runs avoids Array.sort() + repeated distanceSq() calls in projectile-heavy late hordes.
   const hits = [];
+  const hitDistances = [];
   for (const shot of s.shots) {
     const owner = shot.owner ? s.players[shot.owner] : null;
     const spell = SPELLS[shot.color ?? 0];
@@ -201,13 +213,23 @@ export function updateShots({ s, dt, random, grid }) {
     shot.x += shot.vx * dt; shot.y += shot.vy * dt; shot.ttl -= dt;
     if (shot.ttl <= 0) continue;
     hits.length = 0;
+    hitDistances.length = 0;
     const reach = shot.fullmoon && shot.returning ? WEAPONS.evolutions.fullmoon.size : 1;
     grid.query(shot.x, shot.y, spell.radius * reach + MAX_BOSS_RADIUS, (enemy, d2) => {
-      if (enemy.hp > 0 && d2 < (hitRadius(enemy, spell) * reach) ** 2 && !shot.hitIds.includes(enemy.id)) hits.push([d2, enemy]);
+      if (!(enemy.hp > 0 && d2 < (hitRadius(enemy, spell) * reach) ** 2) || shot.hitIds.includes(enemy.id)) return;
+      let at = hits.length;
+      // Candidate sets are small because the spatial grid has already culled the world. Insertion is
+      // cheaper than a general sort here and preserves the exact nearest-first collision semantics.
+      while (at > 0 && hitDistances[at - 1] > d2) {
+        hits[at] = hits[at - 1];
+        hitDistances[at] = hitDistances[at - 1];
+        at--;
+      }
+      hits[at] = enemy;
+      hitDistances[at] = d2;
     });
     if (!hits.length) continue;
-    hits.sort((a, b) => a[0] - b[0]);
-    for (const [, enemy] of hits) {
+    for (const enemy of hits) {
       shot.hitIds.push(enemy.id);
       const kind = shot.special ? 'special' : shot.shard ? 'shatter' : shot.returning ? 'boomerang' : 'spell';
       damageEnemy(s, enemy, shot.damage, random, { slow: spell.slow, source: owner, shard: shot.shard, kind,
@@ -222,7 +244,7 @@ export function updateShots({ s, dt, random, grid }) {
       if (owner && shot.color === 2 && rankOf(owner, 'ricochet')) { redirect(shot, grid, enemy); break; }
     }
   }
-  s.shots = s.shots.filter(shot => shot.ttl > 0).slice(-LIMITS.shots);
+  retainTail(s.shots, shot => shot.ttl > 0, LIMITS.shots);
 }
 
 function hitOnce(enemy, key, time, every) {
@@ -413,14 +435,14 @@ export function updateWeapons(ctx) {
     pushEvent(s, 'boom', { x: Math.round(rune.x), y: Math.round(rune.y), r: Math.round(rune.radius), color: rune.color });
     if (owner && rankOf(owner, 'stormrunes')) stormArc(s, owner, rune, grid, random);
   }
-  s.runes = s.runes.filter(rune => rune.ttl > 0);
+  retainTail(s.runes, rune => rune.ttl > 0);
   for (const zone of s.zones) {
     zone.ttl -= dt;
     const owner = s.players[zone.owner] || null;
     if (zone.follow) {
       if (!owner?.alive) { zone.ttl = 0; continue; }
       zone.x = owner.x; zone.y = owner.y;
-      s.enemyShots = s.enemyShots.filter(shot => distanceSq(shot, zone) > zone.radius ** 2);
+      retainTail(s.enemyShots, shot => distanceSq(shot, zone) > zone.radius ** 2);
     }
     if (zone.kind === 'meteor' && zone.warning > 0) {
       zone.warning -= dt;
@@ -443,7 +465,7 @@ export function updateWeapons(ctx) {
       pushEvent(s, 'boom', { x: Math.round(zone.x), y: Math.round(zone.y), r: zone.radius, color: 3 });
     }
   }
-  s.zones = s.zones.filter(zone => zone.ttl > 0);
+  retainTail(s.zones, zone => zone.ttl > 0);
 }
 
 /** Rough sustained single-target DPS, used to size boss health to the group's real strength. */

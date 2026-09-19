@@ -9,7 +9,7 @@ import { SceCtrlButton as B } from '../src/input/mappings.js';
 
 const build = fileURLToPath(new URL('../build/', import.meta.url));
 const output = createCanvas(960, 544), ctx = output.getContext('2d');
-const textures = [], clips = [], calls = { image: 0, triangles: 0, text: 0 };
+const textures = [], clips = [], calls = { image: 0, triangles: 0, text: 0, fillCircle: 0, strokeCircle: 0, line: 0, rect: 0 };
 const pads = new Map([[0, { port: 0, buttons: 0, lx: 128, ly: 128, rx: 128, ry: 128 }]]);
 let now = 0, saved = '{}', exited = false, clip = [0, 0, 960, 544], additive = false;
 const log = console.log.bind(console);
@@ -31,9 +31,15 @@ globalThis.ArcanaNative = {
     assert.ok(image.width > 0); const id = textures.push(image) - 1; return [id, image.width, image.height];
   },
   clip(...bounds) { clip = bounds; clips.push(bounds); }, blend(value) { additive = value; },
-  triangles(buffer, colors) {
+  fillCircle(x, y, radius, color) { calls.fillCircle++; draw(() => { ctx.fillStyle = css(color); ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill(); }); },
+  strokeCircle(x, y, radius, width, color) { calls.strokeCircle++; draw(() => { ctx.strokeStyle = css(color); ctx.lineWidth = width; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke(); }); },
+  rect(x, y, w, h, color) { calls.rect++; draw(() => { ctx.fillStyle = css(color); ctx.fillRect(x, y, w, h); }); },
+  strokeLine(x0, y0, x1, y1, width, color) { calls.line++; draw(() => { ctx.strokeStyle = css(color); ctx.lineWidth = width; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); }); },
+  triangles(buffer, colors, count) {
     calls.triangles++;
-    const vertices = new Float32Array(buffer), palette = new Uint32Array(colors);
+    const allVertices = new Float32Array(buffer), allPalette = new Uint32Array(colors);
+    const vertexCount = count ?? allVertices.length / 3;
+    const vertices = allVertices.subarray(0, vertexCount * 3), palette = allPalette.subarray(0, vertexCount);
     assert.equal(vertices.length % 9, 0); assert.equal(vertices.length / 3, palette.length);
     assert.ok(vertices.every(Number.isFinite));
     draw(() => { for (let i = 0; i < vertices.length; i += 9) {
@@ -85,5 +91,6 @@ writeFileSync(join(build, 'native-solo2.png'), output.toBuffer('image/png'));
 localStorage.setItem('native-test', 'persist'); globalThis.__arcanaShutdown();
 assert.equal(JSON.parse(saved)['native-test'], 'persist');
 globalThis.Vita.exit(); assert.equal(exited, true);
-assert.ok(calls.image > 100 && calls.triangles > 100 && calls.text > 100);
+assert.ok(calls.image > 100 && calls.text > 100);
+assert.ok(calls.fillCircle + calls.strokeCircle + calls.line + calls.rect > 100, 'native primitive fast paths must be exercised');
 log('Native ABI smoke passed:', calls, `${textures.length} real PNG textures`);

@@ -27,7 +27,8 @@
     "vita:build:debug": "npm --prefix platforms/vita run build:debug",
     "vita:vpk": "npm --prefix platforms/vita run vpk",
     "vita:vpk:debug": "npm --prefix platforms/vita run vpk:debug",
-    "vita:check": "npm --prefix platforms/vita run check"
+    "vita:check": "npm --prefix platforms/vita run check",
+    "switch:nro:gpu": "npm --prefix platforms/switch run build -- --renderer=gpu && npm --prefix platforms/switch run nro"
   },
   "dependencies": {
     "@fontsource/cinzel": "^5.3.0",
