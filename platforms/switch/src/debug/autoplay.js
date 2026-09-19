@@ -4,6 +4,10 @@
 // run with no input, logs the profiler once per second to sdmc:/arcana-autoplay.log, saves a screenshot
 // to sdmc:/arcana-autoplay-<n>.png, and the app exits after the last step.
 
+import { spawnEnemy } from '../../../../server/combat.js';
+import { seededRandom } from '../../../../server/curses.js';
+import { LIMITS } from '../../../../server/balance.js';
+
 const LOG = 'sdmc:/arcana-autoplay.log';
 
 // Optional per-step experiments ("disable": [...]) to find what costs render time on the console.
@@ -17,7 +21,11 @@ const EXPERIMENTS = {
   roundfont: proto => overrideSetter(proto, 'font', function (set, value) { set.call(this, String(value).replace(/([\d.]+)px/, (_, px) => `${Math.round(Number(px))}px`)); }),
   terrain: proto => {
     const drawImage = proto.drawImage;
-    return override(proto, 'drawImage', function (image, ...args) { if (image?.width === 256 && image?.height === 256 && args.length === 2) return; return drawImage.call(this, image, ...args); });
+    return override(proto, 'drawImage', function (image, ...args) { if ([256, 512].includes(image?.width) && image?.height === image.width && args.length === 2) return; return drawImage.call(this, image, ...args); });
+  },
+  sprites: proto => {
+    const drawImage = proto.drawImage;
+    return override(proto, 'drawImage', function (image, ...args) { if (image?.width <= 256 && image?.height <= 256) return; return drawImage.call(this, image, ...args); });
   },
   lighter: proto => overrideSetter(proto, 'globalCompositeOperation', function (set, value) { set.call(this, value === 'lighter' ? 'source-over' : value); })
 };
@@ -28,7 +36,7 @@ function overrideSetter(proto, name, wrap) {
   return () => Object.defineProperty(proto, name, descriptor);
 }
 
-export function createAutoplay({ startRun, endGame, controllers, perf, getView }) {
+export function createAutoplay({ startRun, endGame, controllers, perf, getView, getGame }) {
   let plan = null;
   try {
     const data = Switch.readFileSync('sdmc:/arcana-autoplay.json');
@@ -48,6 +56,22 @@ export function createAutoplay({ startRun, endGame, controllers, perf, getView }
     elapsed = 0; second = 0;
     undo = (step.disable || []).flatMap(name => EXPERIMENTS[name]?.(proto) || []);
     startRun({ split: step.mode === 'coop', character: step.character ?? 0, secondCharacter: 1 });
+    if (step.enemies > 0) {
+      const game = getGame();
+      game.random = seededRandom(step.seed ?? 12345);
+      game.enemies.length = 0;
+      game.spawn = 1e9;
+      game.scheduleCursor = 1e9;
+      const count = Math.min(LIMITS.enemies, Math.floor(step.enemies));
+      for (let n = 0; n < count; n++) {
+        const angle = game.random() * Math.PI * 2;
+        const radius = 100 + game.random() * 400;
+        spawnEnemy(game, n % 2 ? 'beetle' : 'mushroom',
+          game.players.me.x + Math.cos(angle) * radius,
+          game.players.me.y + Math.sin(angle) * radius, 10000);
+      }
+      for (const player of Object.values(game.players)) player.hp = player.maxHp = 1e9;
+    }
     // No controllers are held during a measurement: keep both slots on "any controller" so nothing pauses.
     controllers.setCoop(false);
     log(`step ${index} ${step.mode}${step.disable ? ` disable=${step.disable.join(',')}` : ''}`);

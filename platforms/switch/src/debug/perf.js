@@ -4,9 +4,18 @@
 
 export function createPerf() {
   let fps = 60, frame = 16.7, update = 0, render = 0;
+  let elapsed = 0, frames = 0;
   const smooth = (previous, value) => previous * 0.9 + value * 0.1;
   return {
-    frame(dt) { if (dt > 0) { fps = smooth(fps, 1 / dt); frame = smooth(frame, dt * 1000); } },
+    frame(dt) {
+      if (!(dt > 0)) return;
+      elapsed += dt; frames++;
+      if (elapsed >= 1) {
+        fps = frames / elapsed;
+        frame = elapsed * 1000 / frames;
+        elapsed = 0; frames = 0;
+      }
+    },
     update(ms) { update = smooth(update, ms); },
     render(ms) { render = smooth(render, ms); },
     get stats() { return { fps, frame, update, render }; },

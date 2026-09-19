@@ -259,6 +259,23 @@ um Switch real**. Os itens abaixo dependem de como o console reporta os controle
 
 ## Performance em hordas / split-screen
 
+O cenário agora usa resolução interna adaptativa: 1280×720 normalmente, 960×540 a partir de 60 inimigos e
+640×360 a partir de 120. Ao diminuir a horda, volta a 540p abaixo de 100 e a 720p abaixo de 40; essa margem evita
+trocas repetidas e realocações perto dos limites. HUD, painéis dos jogadores, divisória, menus e escolhas de poder
+continuam em 720p. A imagem do cenário fica menos nítida nas hordas grandes; todas as animações e regras continuam presentes.
+
+Para reproduzir o teste de estresse na build debug, grave em `sdmc:/arcana-autoplay.json`:
+
+```json
+{"steps":[{"mode":"solo","seconds":20,"enemies":180,"seed":12345},{"mode":"coop","seconds":20,"enemies":180,"seed":12345}]}
+```
+
+`enemies` cria uma horda de teste (limitada pelo teto real do jogo), com HP elevado e jogadores com HP elevado,
+sem novas ondas. Não representa uma partida normal. Remova o JSON para voltar ao uso normal da build debug.
+O autoplay não deposita moedas. O profiler mede tempo real entre frames, inclusive abaixo de 20 FPS.
+As experiências `disable` também aceitam `sprites`; `terrain` reconhece os macro-tiles de 512px.
+Resultados e limitações desta medição estão em `../../artifacts/switch-perf/RESULTADOS.md`.
+
 A build do Switch possui um perfil visual próprio que preserva gameplay, sprites e efeitos de combate, mas evita caminhos caros do Canvas: glows reutilizáveis, macro-tiles de piso e menos decoração redundante em multidões.
 
 Para o melhor FPS, execute o Homebrew Menu em **application mode (title override / full RAM)**. O nx.js usa GPU e V8 JIT automaticamente nesse regime; iniciar pelo Album normalmente coloca o runtime no regime applet, no qual ele usa escolhas mais conservadoras de memória.

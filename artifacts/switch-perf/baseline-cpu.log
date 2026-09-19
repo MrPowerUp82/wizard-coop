@@ -1,0 +1,34 @@
+autoplay 2026-09-19T04:33:56.936Z
+step 0 solo
+t=1s heap=8.7MB native=297.4MB fps=36.1 frame=479.1ms update=31.50ms render=28.30ms enemies=180 shots=1
+t=2s heap=10.0MB native=297.4MB fps=32.8 frame=470.1ms update=37.25ms render=43.07ms enemies=180 shots=1
+t=3s heap=11.7MB native=297.7MB fps=29.8 frame=455.0ms update=40.23ms render=57.06ms enemies=180 shots=0
+t=4s heap=13.1MB native=297.7MB fps=27.3 frame=429.9ms update=38.40ms render=63.86ms enemies=180 shots=0
+t=5s heap=14.3MB native=297.7MB fps=25.0 frame=408.7ms update=35.46ms render=74.47ms enemies=180 shots=0
+t=6s heap=7.5MB native=298.7MB fps=20.8 frame=420.8ms update=36.52ms render=85.63ms enemies=180 shots=0
+t=7s heap=11.8MB native=298.8MB fps=14.6 frame=331.6ms update=35.84ms render=105.26ms enemies=180 shots=0
+t=8s heap=14.7MB native=308.5MB fps=11.0 frame=307.0ms update=27.56ms render=135.88ms enemies=180 shots=0
+t=9s heap=12.1MB native=307.7MB fps=8.7 frame=280.4ms update=23.30ms render=156.67ms enemies=180 shots=0
+t=10s heap=10.3MB native=307.6MB fps=6.9 frame=252.7ms update=15.94ms render=161.50ms enemies=180 shots=0
+t=11s heap=9.9MB native=308.1MB fps=5.8 frame=279.9ms update=15.61ms render=205.10ms enemies=180 shots=0
+t=12s heap=12.1MB native=308.1MB fps=5.4 frame=286.4ms update=32.55ms render=201.90ms enemies=180 shots=0
+t=13s heap=10.1MB native=308.3MB fps=5.0 frame=267.3ms update=25.76ms render=200.37ms enemies=180 shots=0
+t=14s heap=9.2MB native=308.5MB fps=4.8 frame=249.4ms update=20.32ms render=197.86ms enemies=180 shots=0
+t=15s heap=15.0MB native=308.5MB fps=4.6 frame=248.3ms update=19.56ms render=203.36ms enemies=180 shots=0
+step 1 coop
+t=1s heap=9.9MB native=311.6MB fps=17.7 frame=164.5ms update=18.12ms render=208.71ms enemies=180 shots=0
+t=2s heap=15.6MB native=311.8MB fps=13.7 frame=208.4ms update=14.50ms render=232.05ms enemies=180 shots=0
+t=3s heap=13.5MB native=311.8MB fps=10.0 frame=262.7ms update=12.04ms render=266.62ms enemies=180 shots=0
+t=4s heap=16.1MB native=311.9MB fps=8.6 frame=287.4ms update=15.10ms render=277.28ms enemies=180 shots=0
+t=5s heap=9.2MB native=312.6MB fps=7.3 frame=327.0ms update=14.80ms render=298.85ms enemies=180 shots=0
+t=6s heap=13.4MB native=312.8MB fps=6.3 frame=356.4ms update=12.84ms render=320.16ms enemies=180 shots=0
+t=7s heap=10.7MB native=312.7MB fps=5.3 frame=363.1ms update=11.04ms render=329.27ms enemies=180 shots=0
+t=8s heap=11.6MB native=310.4MB fps=4.8 frame=386.5ms update=10.00ms render=329.41ms enemies=180 shots=0
+t=9s heap=8.4MB native=310.5MB fps=4.3 frame=372.0ms update=8.89ms render=324.34ms enemies=180 shots=0
+t=10s heap=12.2MB native=310.6MB fps=3.9 frame=422.0ms update=8.86ms render=375.29ms enemies=180 shots=0
+t=11s heap=14.6MB native=310.6MB fps=3.6 frame=434.6ms update=8.37ms render=389.66ms enemies=180 shots=0
+t=12s heap=10.5MB native=310.6MB fps=3.4 frame=439.4ms update=8.39ms render=394.35ms enemies=180 shots=0
+t=13s heap=8.2MB native=310.7MB fps=3.2 frame=418.9ms update=7.89ms render=380.30ms enemies=180 shots=0
+t=14s heap=13.6MB native=310.7MB fps=3.1 frame=407.3ms update=8.22ms render=370.92ms enemies=180 shots=0
+t=15s heap=9.1MB native=310.8MB fps=3.0 frame=405.8ms update=7.61ms render=371.72ms enemies=180 shots=0
+done

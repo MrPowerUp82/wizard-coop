@@ -57,7 +57,7 @@ O empacotador verifica o hash do source e recusa um `eboot.bin` antigo.
 - dificuldade;
 - dano/HP;
 - quantidade de jogadores;
-- resolução nativa;
+- resolução nativa da interface (o Switch agora reduz a resolução interna do cenário em hordas grandes; ver abaixo);
 - bosses ou fases;
 - simulação/tick rate.
 
@@ -96,3 +96,13 @@ npm run switch:nro:gpu
 ```
 
 Se o GPU forçado não puder ser inicializado, use novamente a build `auto`. Para comparar corretamente, use a build debug e observe `update ms` versus `render ms` durante a mesma fase/horda.
+
+## Nintendo Switch — resolução do cenário em hordas
+
+O Switch reduz apenas a resolução interna do mundo para 540p/360p quando há 60/120 inimigos, com margem na volta
+para evitar oscilações. A interface permanece nativa, e web/Vita mantêm seu caminho anterior. Não reduz entidades,
+animações, simulação nem a área visível das câmeras. Existe perda de nitidez do cenário durante as hordas.
+
+O profiler foi corrigido para medir o tempo real, sem o limite de 50 ms aplicado ao passo da simulação.
+O autoplay agora permite uma horda reproduzível com `enemies` e `seed`, funciona sem controle e não deposita moedas.
+Veja `artifacts/switch-perf/RESULTADOS.md` para a comparação no Sudachi; desempenho em Switch real ainda precisa de medição.

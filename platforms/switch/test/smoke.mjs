@@ -10,6 +10,7 @@ import { build } from 'esbuild';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { spawnEnemy } from '../../../server/combat.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const W = 1280, H = 720;
@@ -28,7 +29,10 @@ class FakeContext {
   createRadialGradient() { return { addColorStop() {} }; }
   createLinearGradient() { return { addColorStop() {} }; }
   getImageData(x, y, w, h) { return { data: new Uint8ClampedArray(w * h * 4), width: w, height: h }; }
-  drawImage() { log.draws++; }
+  drawImage(image, ...args) {
+    log.draws++;
+    if (this.screen && args.length === 4 && args[2] === W && args[3] === H) log.worldSize = [image.width, image.height];
+  }
 }
 for (const name of ['save', 'restore', 'setTransform', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'arc', 'ellipse', 'fill', 'stroke',
   'fillRect', 'strokeRect', 'clearRect', 'clip', 'fillText', 'strokeText', 'translate', 'rotate', 'scale', 'quadraticCurveTo',
@@ -201,6 +205,23 @@ assert.equal(app.paused, false, 'Minus on Joy-Con L resumes');
 
 // Audio went through the compat layer (oscillators rendered into buffers).
 assert.ok(audioLog.started > 0, 'sounds played via AudioBufferSourceNode');
+
+// Heavy crowds change only world resolution; the two player panels still draw at native size.
+for (const player of Object.values(app.game.players)) { player.pendingPowers = null; player.invulnerableFor = 100; }
+app.game.enemies.length = 0;
+for (let n = 0; n < 180; n++) spawnEnemy(app.game, 'mushroom', 300 + n, 300, 10000);
+tick(2);
+assert.deepEqual(log.worldSize, [640, 360]);
+app.game.enemies.length = 110;
+tick();
+assert.deepEqual(log.worldSize, [640, 360], 'hysteresis retains the surface near the boundary');
+app.game.enemies.length = 80;
+tick();
+assert.deepEqual(log.worldSize, [960, 540]);
+app.game.enemies.length = 20;
+log.worldSize = null;
+tick();
+assert.equal(log.worldSize, null, 'small crowds return to native rendering');
 
 // Game over follows the existing rules and returns to the menu.
 app.game.over = true;
