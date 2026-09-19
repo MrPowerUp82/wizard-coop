@@ -7,8 +7,7 @@
 // clip() + fillRect(): the same pixels, inside the same path, with the path left intact for a later
 // stroke(). Found with the on-console primitive diagnostic described in README.md.
 
-const radial = new WeakSet();
-const HUGE = 1e5;
+const radialBounds = new WeakMap();
 
 /** Patches the context class of `ctx` (and of OffscreenCanvas contexts) once. */
 export function installCanvasCompat(ctx) {
@@ -16,16 +15,20 @@ export function installCanvasCompat(ctx) {
     if (!proto || proto.__arcanaCanvas) continue;
     const createRadialGradient = proto.createRadialGradient;
     const fill = proto.fill;
-    proto.createRadialGradient = function (...args) {
-      const gradient = createRadialGradient.apply(this, args);
-      radial.add(gradient);
+    proto.createRadialGradient = function (x0, y0, r0, x1, y1, r1) {
+      const gradient = createRadialGradient.call(this, x0, y0, r0, x1, y1, r1);
+      const r = Math.max(Number(r0) || 0, Number(r1) || 0);
+      const cx = typeof x1 === 'number' ? x1 : (Number(x0) || 0);
+      const cy = typeof y1 === 'number' ? y1 : (Number(y0) || 0);
+      radialBounds.set(gradient, [cx - r - 2, cy - r - 2, (r + 2) * 2, (r + 2) * 2]);
       return gradient;
     };
     proto.fill = function (...args) {
-      if (args.length || !radial.has(this.fillStyle)) return fill.apply(this, args);
+      const bounds = radialBounds.get(this.fillStyle);
+      if (args.length || !bounds) return fill.apply(this, args);
       this.save();
       this.clip();
-      this.fillRect(-HUGE, -HUGE, HUGE * 2, HUGE * 2);
+      this.fillRect(bounds[0], bounds[1], bounds[2], bounds[3]);
       this.restore();
     };
     Object.defineProperty(proto, '__arcanaCanvas', { value: true });

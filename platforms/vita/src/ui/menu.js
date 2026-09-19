@@ -39,7 +39,7 @@ export function createVitaMenu({ controllers, wallet, audio, debugControllers, o
   const character = savedCharacter('arcana-character', 0);
   const characters = [character, savedCharacter('arcana-character-p2', (character + 1) % SPELLS.length)];
   let campaign = campaignId(prefs.get('arcana-campaign'));
-  let ready = [false, false];
+  const ready = [false, false];
   let message = null;
   let shopFocus = 0;
 
@@ -54,7 +54,6 @@ export function createVitaMenu({ controllers, wallet, audio, debugControllers, o
     const record = dailyRecord(challenge.key);
     return [
       { id: 'solo', label: 'Jogar solo', detail: 'Sobreviva no seu ritmo' },
-      { id: 'coop', label: 'Co-op local', detail: 'Tela dividida · 2 Controles / PS TV' },
       { id: 'daily', label: 'Desafio diário', detail: `${challenge.curses.map(id => CURSES[id].title).join(' + ')} · ${characterNames[challenge.character]}${record ? ` · recorde: ${record.phase}` : ''}` },
       { id: 'campaign', label: 'Ritmo da campanha', detail: `◀ ${CAMPAIGNS[campaign].name} ▶` },
       { id: 'shop', label: 'Grimório', detail: `${wallet.coins} moedas` },
@@ -67,14 +66,7 @@ export function createVitaMenu({ controllers, wallet, audio, debugControllers, o
     screen = next;
     focus = 0;
     click();
-    if (next === 'lobby') {
-      ready = [false, false];
-      controllers.setCoop(true);
-      controllers.autoAssign();
-      if (characters[1] === characters[0]) characters[1] = (characters[0] + 1) % SPELLS.length;
-    } else if (next === 'main') {
-      controllers.setCoop(false);
-    }
+    controllers.setCoop(false);
   }
 
   function mainInput(event) {
@@ -92,7 +84,6 @@ export function createVitaMenu({ controllers, wallet, audio, debugControllers, o
     } else if (event.action === 'confirm') {
       const item = items[focus];
       if (item.id === 'solo') go('solo');
-      else if (item.id === 'coop') go('lobby');
       else if (item.id === 'daily') onDaily();
       else if (item.id === 'campaign') {
         const list = campaigns();

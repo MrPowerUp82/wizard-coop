@@ -1,7 +1,7 @@
 # Arcana Survivors — PlayStation Vita (homebrew `.vpk`)
 
 Port do jogo para PlayStation Vita e PlayStation TV como pacote homebrew (`.vpk`). Roda o **mesmo** jogo da versão web e do Nintendo Switch:
-solo, desafio diário e o **co-op local em tela dividida compartilhado**, renderizado nativamente a **960×544** (resolução nativa das telas OLED e LCD do Vita).
+solo e desafio diário, renderizado nativamente em tela cheia a **960×544** (resolução nativa das telas OLED e LCD do Vita, sem tela dividida).
 
 | Componente | Especificação |
 | --- | --- |
@@ -45,7 +45,7 @@ Gera o pacote com a flag `DEBUG_CONTROLLERS` ativada, incluindo painel de diagn�
 ```bash
 npm run vita:check
 ```
-Executa verificação de tipos (`tsc -p jsconfig.json`), teste unitário da camada de áudio (`test/audio-compat.mjs`) e teste de fumaça headless completo (`test/smoke.mjs`), simulando ciclo de vida, navegação de menus, partida solo, troca de poderes, desconexão/reconexão de controles e co-op local em tela dividida de 480×544 por metade.
+Executa verificação de tipos (`tsc -p jsconfig.json`), teste unitário da camada de áudio (`test/audio-compat.mjs`) e teste de fumaça headless completo (`test/smoke.mjs`), simulando ciclo de vida, navegação de menus, partida solo em tela cheia (960×544), troca de poderes, desconexão/reconexão de controles no PS Vita e PSTV.
 
 ---
 
@@ -79,12 +79,10 @@ O mapeamento de controles utiliza as máscaras oficiais da API `SceCtrl` do Vita
 | Trocar opções de poder | R | **▢** | **▢** |
 | Painel de Debug (em builds debug) | — | **SELECT + L1** | **SELECT + L1** / **Share + L1** |
 
-### Co-op Local e Tela Dividida
-- **No PlayStation TV:** Suporta até 2 jogadores simultâneos usando DualShock 3 ou DualShock 4 emparelhados via Bluetooth.
-  - Porta 1 (primeiro controle) controla o **Jogador 1** (lado esquerdo da tela, 480×544).
-  - Porta 2 (segundo controle) controla o **Jogador 2** (lado direito da tela, 480×544).
-  - No menu, vá em **Co-op local**, ambos os jogadores pressionam **✕** para confirmar presença e selecionar seus arcanistas.
-- **Desconexão de Controle:** Se a bateria de um controle acabar ou o sinal cair durante a partida, o jogo pausa imediatamente exibindo um aviso claro. Ao reconectar o controle (ou pressionar ✕ em outro controle livre), a partida é retomada preservando rigorosamente toda a vida, XP, itens, moedas e estado dos personagens.
+### Modo Solo e Controles Externos (PSTV)
+- **Tela Cheia Exclusiva:** O port de PS Vita não possui tela dividida; a experiência é dedicada em tela cheia a 960×544 para máxima nitidez e fluidez a 60 FPS.
+- **No PlayStation TV:** Suporta controles DualShock 3 ou DualShock 4 emparelhados via Bluetooth. O controle ativo comanda a partida solo com resposta imediata.
+- **Desconexão de Controle:** Se a bateria de um controle acabar ou o sinal cair durante a partida, o jogo pausa imediatamente exibindo um aviso claro. Ao reconectar o controle (ou pressionar ✕ em outro controle livre), a partida é retomada preservando rigorosamente toda a vida, XP, itens, moedas e estado do personagem.
 
 ---
 
@@ -145,9 +143,9 @@ Embora o port tenha sido verificado com suite de testes automatizados e no emula
 - [ ] **HARDWARE VALIDATION REQUIRED — Calibração do Analógico e Deadzone**
   - Arquivo: `platforms/vita/src/input/mappings.js` (`normalizeAnalogAxes`, `STICK_DEADZONE`).
   - Teste: No menu **Controles** da build debug, verifique se sticks analógicos com leve desgaste ("drift") permanecem em repouso com `(0.00, 0.00)` e respondem prontamente ao movimento total.
-- [ ] **HARDWARE VALIDATION REQUIRED — PSTV Multi-Controller Port Sampling**
+- [ ] **HARDWARE VALIDATION REQUIRED — Suporte a Controles Externos no PSTV**
   - Arquivo: `platforms/vita/src/input/controllers.js` e `platforms/vita/runtime/src/main.c`.
-  - Teste: Em um PlayStation TV com dois DualShock 4 emparelhados, confirme se a Porta 1 e Porta 2 operam com inputs completamente independentes no modo co-op de tela dividida.
+  - Teste: Em um PlayStation TV com DualShock 4 emparelhado, confirme se as portas Bluetooth assumem o controle solo e respondem adequadamente à desconexão e reconexão.
 - [ ] **HARDWARE VALIDATION REQUIRED — Overclock e Estabilidade de FPS**
   - Arquivo: `platforms/vita/runtime/src/main.c` (`scePowerSetArmClockFrequency(444)`).
   - Teste: Verifique a taxa de quadros (60 FPS estável) durante hordas intensas da Fase 5 com múltiplos projéteis na tela.

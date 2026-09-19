@@ -2,7 +2,7 @@
 // Headless smoke test of the real PS Vita bundle (build/assets/main.js, debug build) in Node.
 // Simulates the PS Vita runtime environment (960×544 canvas, SceCtrl multi-port inputs,
 // AudioContext with synthesis shim, localStorage, Vita filesystem) and drives:
-// menu → solo → co-op local split-screen with two DualShocks, disconnect/reconnect, pause, power choice and game over.
+// menu → solo → wireless DualShock on PSTV, disconnect/reconnect, pause, power choice and game over (strictly full-screen 960×544).
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -203,80 +203,69 @@ press(vita, B.DOWN);
 press(vita, B.CROSS); // Sair para o menu
 assert.equal(app.mode, 'menu', 'pause menu returns to main menu');
 
-// 3. Co-op: PlayStation TV with two DualShock 4 controllers (Ports 1 and 2)
+// 3. PlayStation TV with DualShock 4 on Port 1 (PSTV / external pad)
 pads[0] = null;
 tick();
-const ds4_1 = pad(1, SceCtrlType.DS4, 'DualShock 4 #1');
-const ds4_2 = pad(2, SceCtrlType.DS4, 'DualShock 4 #2');
+const ds4 = pad(1, SceCtrlType.DS4, 'DualShock 4');
 tick();
 
-// Navigate down to "Co-op local" and press CROSS
-press(ds4_1, B.DOWN);
-press(ds4_1, B.CROSS);
-// In lobby, both players ready up with CROSS
+// Start run with DualShock
+press(ds4, B.CROSS); // Jogar solo
 tick();
-press(ds4_1, B.CROSS);
-press(ds4_2, B.CROSS);
-assert.equal(app.mode, 'offline', 'both ready starts the co-op run');
+press(ds4, B.CROSS); // Confirm character
+assert.equal(app.mode, 'offline', 'external controller starts solo run');
 
 const players = app.game.players;
-assert.deepEqual(Object.keys(players), ['me', 'p2']);
-const p2 = players.p2;
+assert.deepEqual(Object.keys(players), ['me']);
 
-// Simultaneous, independent movement on Ports 1 and 2
+// Movement on Port 1
 log.clips.length = 0;
-const startPos = { me: players.me.x, p2: p2.x, time: app.game.time };
-ds4_1.lx = 255; // P1 moves right
-ds4_2.lx = 0;   // P2 moves left
+const startPos = { me: players.me.x, time: app.game.time };
+ds4.lx = 255; // moves right
 tick(30);
-ds4_1.lx = 128;
-ds4_2.lx = 128;
+ds4.lx = 128;
 
-assert.ok(players.me.x - startPos.me > 40, 'Port 1 moves Player 1 right');
-assert.ok(startPos.p2 - p2.x > 40, 'Port 2 moves Player 2 left');
+assert.ok(players.me.x - startPos.me > 40, 'Port 1 moves Player right');
 assert.ok(Math.abs(app.game.time - startPos.time - 30 / 60) < 0.02, 'simulation advances once per frame');
-assert.equal(log.clips.length, 60, 'two viewports rendered per frame');
-assert.deepEqual(log.clips.slice(0, 2), [[0, 0, 480, 544], [480, 0, 480, 544]], 'split-screen divides 960x544 into 480x544 halves');
+assert.equal(log.clips.length, 30, 'one full-screen viewport rendered per frame');
+assert.ok(log.clips.every(([x, y, w, h]) => x === 0 && y === 0 && w === W && h === H), 'strictly full-screen 960x544, no split screen');
 
-// Actions: Port 1 special (CROSS/R1) only affects Player 1
+// Actions: Port 1 special (CROSS/R1)
 players.me.specialCharge = 100;
-p2.specialCharge = 100;
-press(ds4_1, B.CROSS);
-assert.ok(players.me.specialCharge < 100, 'Port 1 fires Player 1 special');
-assert.equal(p2.specialCharge, 100, 'Player 2 special unaffected');
+press(ds4, B.CROSS);
+assert.ok(players.me.specialCharge < 100, 'Port 1 fires special');
 
-// Port 2 dash (CIRCLE/L1) dashes Player 2 only
-press(ds4_2, B.CIRCLE);
-assert.ok(p2.dashCooldown > 0, 'Port 2 dashes Player 2');
+// Port 1 dash (CIRCLE/L1)
+press(ds4, B.CIRCLE);
+assert.ok(players.me.dashCooldown > 0, 'Port 1 dashes');
 
-// Level up / Power choice for Player 2
-p2.pendingPowers = ['arcane', 'haste', 'vitality'];
+// Level up / Power choice
+players.me.pendingPowers = ['arcane', 'haste', 'vitality'];
 tick();
-press(ds4_1, B.CROSS); // P1 cannot choose for P2
-assert.ok(p2.pendingPowers, 'Player 1 cannot pick Player 2 power');
-ds4_2.lx = 255; tick(); ds4_2.lx = 128; tick(); // P2 moves right to select second power
-const focused = p2.pendingPowers[1];
-const rank = p2.powers[focused] || 0;
-press(ds4_2, B.CROSS);
-assert.equal(p2.powers[focused], rank + 1, 'Player 2 picked focused power with Port 2 controller');
+ds4.lx = 255; tick(); ds4.lx = 128; tick(); // Moves right to select second power
+const focused = players.me.pendingPowers[1];
+const rank = players.me.powers[focused] || 0;
+press(ds4, B.CROSS);
+assert.equal(players.me.powers[focused], rank + 1, 'picked focused power with controller');
 
-// Disconnect Player 2 controller: pauses automatically, state is preserved, reconnect restores
-const snapshot = { hp: p2.hp, level: p2.level, powers: { ...p2.powers } };
-pads[2] = null;
+// Disconnect controller: pauses automatically, state is preserved, reconnect restores
+const snapshot = { hp: players.me.hp, level: players.me.level, powers: { ...players.me.powers } };
+pads[1] = null;
 tick(3);
-assert.equal(app.paused, true, 'losing a co-op controller automatically pauses');
-pads[2] = ds4_2;
+assert.equal(app.paused, true, 'losing controller automatically pauses');
+pads[1] = ds4;
 tick(2);
-assert.equal(app.controllers.padFor(1), app.controllers.pads[2], 'same controller rebinds to Player 2 slot');
-assert.deepEqual({ hp: p2.hp, level: p2.level, powers: { ...p2.powers } }, snapshot, 'Player 2 state fully preserved');
-press(ds4_2, B.CROSS); // Resume
+assert.equal(app.controllers.pads[1].connected, true, 'controller reconnected on port 1');
+assert.equal(app.controllers.connectedCount, 1);
+assert.deepEqual({ hp: players.me.hp, level: players.me.level, powers: { ...players.me.powers } }, snapshot, 'player state fully preserved');
+press(ds4, B.CROSS); // Resume
 assert.equal(app.paused, false, 'resume after reconnect');
 
 // Pause and unpause with START
-press(ds4_2, B.START);
+press(ds4, B.START);
 assert.equal(app.paused, true, 'START pauses');
-press(ds4_1, B.START);
-assert.equal(app.paused, false, 'START on Port 1 resumes');
+press(ds4, B.START);
+assert.equal(app.paused, false, 'START resumes');
 
 // Audio verification
 assert.ok(audioLog.started > 0, 'sounds played via software synthesis audio shim');
@@ -284,7 +273,7 @@ assert.ok(audioLog.started > 0, 'sounds played via software synthesis audio shim
 // Game over and coin deposit
 app.game.over = true;
 tick(65);
-press(ds4_1, B.CROSS);
+press(ds4, B.CROSS);
 assert.equal(app.mode, 'menu');
 assert.ok(Number(JSON.parse(store.get('arcana-meta') || '{}').coins ?? 0) >= 0, 'wallet saved');
 

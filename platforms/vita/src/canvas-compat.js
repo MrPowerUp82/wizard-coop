@@ -5,7 +5,6 @@
 // vector backends (roundRect, ellipse, setLineDash, radial gradients).
 
 const radial = new WeakSet();
-const HUGE = 1e5;
 
 /**
  * Ensures standard Canvas 2D methods (roundRect, ellipse, setLineDash) are present
@@ -32,9 +31,10 @@ export function installCanvasCompat(ctx) {
       };
       proto.fill = function (...args) {
         if (args.length || !radial.has(this.fillStyle)) return fill.apply(this, args);
+        const cw = this.canvas?.width || 960, ch = this.canvas?.height || 544;
         this.save();
         this.clip();
-        this.fillRect(-HUGE, -HUGE, HUGE * 2, HUGE * 2);
+        this.fillRect(-cw, -ch, cw * 3, ch * 3);
         this.restore();
       };
     }
@@ -44,8 +44,11 @@ export function installCanvasCompat(ctx) {
       proto.roundRect = function (x, y, w, h, r = 0) {
         let radius = typeof r === 'number' ? r : (Array.isArray(r) ? r[0] : 0);
         radius = Math.min(radius, Math.min(w, h) / 2);
+        if (radius <= 0) {
+          this.rect(x, y, w, h);
+          return;
+        }
         this.moveTo(x + radius, y);
-        this.lineTo(x + w - radius, y);
         this.arcTo(x + w, y, x + w, y + radius, radius);
         this.lineTo(x + w, y + h - radius);
         this.arcTo(x + w, y + h, x + w - radius, y + h, radius);
@@ -60,6 +63,10 @@ export function installCanvasCompat(ctx) {
     // 3. ellipse polyfill
     if (!proto.ellipse) {
       proto.ellipse = function (x, y, rx, ry, rotation, startAngle, endAngle, counterclockwise = false) {
+        if (rx === ry && !rotation) {
+          this.arc(x, y, rx, startAngle, endAngle, counterclockwise);
+          return;
+        }
         this.save();
         this.translate(x, y);
         this.rotate(rotation);

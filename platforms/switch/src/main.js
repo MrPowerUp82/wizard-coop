@@ -88,7 +88,10 @@ const menu = createSwitchMenu({
 
 const autoplay = DEBUG_CONTROLLERS ? createAutoplay({ startRun, endGame, controllers, perf, getView: () => view }) : null;
 
+let frozenCanvas = null;
+
 function startRun({ challenge = null, split = false, character = 0, secondCharacter = 1 }) {
+  frozenCanvas = null;
   run = createOfflineRun({ challenge, split, campaign: menu.campaign, curses: [], name: split ? 'Jogador 1' : 'Arcanista',
     character, secondCharacter, upgrades: wallet.upgrades, loadout: { weapon: null, special: 0 } });
   ({ game, local } = run);
@@ -120,6 +123,7 @@ function endGame() {
   mode = 'menu';
   run = game = view = round = results = null;
   paused = false;
+  frozenCanvas = null;
   animator.reset();
   hud.resetCaches();
   controllers.setCoop(false);
@@ -282,12 +286,32 @@ function playFrame(now, dt) {
   const renderStart = performance.now();
   const blocked = paused || choosing || view.over || view.phaseStatus === 'transition';
   const keys = [controllers.labels(0), controllers.labels(1)];
-  // The existing split screen decides the layout: one full-screen view solo, two halves in co-op.
-  renderLocalViews(ctx, view, { me, mine, split, animator, W, H, dpr, reduced: false, offline: true, blocked, keys });
-  // Solo has no DOM HUD here, so the player's status uses the same per-player panel as split screen.
-  if (!split) drawPlayerPanel(ctx, me, { slot: 0, ox: 0, W, H, dpr, blocked, keys: keys[0] });
-  hud.update(view, me, { paused });
-  hud.draw(ctx, W, H, dt);
+  const isOverlayOpen = Boolean(paused || choosing || results);
+
+  if (isOverlayOpen && frozenCanvas) {
+    ctx.drawImage(frozenCanvas, 0, 0);
+  } else {
+    // The existing split screen decides the layout: one full-screen view solo, two halves in co-op.
+    renderLocalViews(ctx, view, { me, mine, split, animator, W, H, dpr, reduced: false, offline: true, blocked, keys });
+    // Solo has no DOM HUD here, so the player's status uses the same per-player panel as split screen.
+    if (!split) drawPlayerPanel(ctx, me, { slot: 0, ox: 0, W, H, dpr, blocked, keys: keys[0] });
+    hud.update(view, me, { paused });
+    hud.draw(ctx, W, H, dt);
+
+    if (isOverlayOpen && typeof OffscreenCanvas !== 'undefined') {
+      if (!frozenCanvas || frozenCanvas.width !== W || frozenCanvas.height !== H) {
+        frozenCanvas = new OffscreenCanvas(W, H);
+      }
+      const fctx = frozenCanvas.getContext('2d');
+      installFontCompat(fctx);
+      installCanvasCompat(fctx);
+      renderLocalViews(fctx, view, { me, mine, split, animator, W, H, dpr, reduced: false, offline: true, blocked, keys });
+      if (!split) drawPlayerPanel(fctx, me, { slot: 0, ox: 0, W, H, dpr, blocked, keys: keys[0] });
+      hud.draw(fctx, W, H, dt);
+    }
+  }
+  if (!isOverlayOpen) frozenCanvas = null;
+
   if (results) drawResults();
   else if (paused) drawPause();
   else if (choosing) hud.drawPowers(ctx, W, H);

@@ -14,6 +14,21 @@ import { COLORS, bar, roundPanel, text, veil, wrapText } from './draw.js';
 const TOAST_SECONDS = 2.2, ANNOUNCE_SECONDS = 2.6;
 const TONES = { danger: COLORS.danger, gold: COLORS.gold, '': COLORS.mint };
 
+let rimCanvas = null;
+function getRimCanvas(W, H) {
+  if (rimCanvas && rimCanvas.width === W && rimCanvas.height === H) return rimCanvas;
+  if (typeof OffscreenCanvas !== 'undefined') {
+    rimCanvas = new OffscreenCanvas(W, H);
+    const rc = rimCanvas.getContext('2d');
+    const grad = rc.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.7);
+    grad.addColorStop(0, 'rgba(180, 20, 40, 0)');
+    grad.addColorStop(1, 'rgba(200, 30, 50, 1)');
+    rc.fillStyle = grad;
+    rc.fillRect(0, 0, W, H);
+  }
+  return rimCanvas;
+}
+
 export function createSwitchHud() {
   let toast = null, announce = null, damage = 0, low = false;
   let shown = { view: null, me: null, paused: false };
@@ -70,9 +85,12 @@ export function createSwitchHud() {
       // Damage flash and low-health rim.
       if (damage > 0 || low) {
         const alpha = Math.max(damage * 0.35, low ? 0.18 + Math.sin(performance.now() / 260) * 0.06 : 0);
-        const gradient = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.7);
-        gradient.addColorStop(0, 'rgba(180, 20, 40, 0)'); gradient.addColorStop(1, `rgba(200, 30, 50, ${alpha})`);
-        ctx.fillStyle = gradient; ctx.fillRect(0, 0, W, H);
+        if (alpha > 0.01) {
+          const rim = getRimCanvas(W, H);
+          ctx.globalAlpha = alpha;
+          ctx.drawImage(rim, 0, 0);
+          ctx.globalAlpha = 1;
+        }
       }
 
       // Timer and realm progress, centered on top.

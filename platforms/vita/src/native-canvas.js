@@ -5,11 +5,12 @@ import earcut from 'earcut';
 const TAU = Math.PI * 2;
 const clamp = v => Math.max(0, Math.min(1, v));
 const colors = new Map();
+
 function rgba(value) {
-  if (colors.has(value)) return colors.get(value);
-  let c;
+  let c = colors.get(value);
+  if (c) return c;
   if (value === 'transparent') c = [0, 0, 0, 0];
-  else if (String(value).startsWith('#')) {
+  else if (typeof value === 'string' && value.charCodeAt(0) === 35 /* # */) {
     let hex = value.slice(1);
     if (hex.length === 3 || hex.length === 4) hex = [...hex].map(s => s + s).join('');
     c = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
@@ -19,13 +20,22 @@ function rgba(value) {
     c = values ? values.map(Number) : [255, 255, 255];
     if (c.length === 3) c.push(1);
   }
-  if (colors.size > 2048) colors.clear();
+  if (colors.size > 2048) {
+    const iter = colors.keys();
+    for (let i = 0; i < 512; i++) {
+      const next = iter.next();
+      if (next.done) break;
+      colors.delete(next.value);
+    }
+  }
   colors.set(value, c);
   return c;
 }
+
 function packed(c, alpha) {
   return ((Math.round(clamp(c[3] * alpha) * 255) << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
 }
+
 class Gradient {
   constructor(kind, points) { this.kind = kind; this.points = points; this.stops = []; }
   addColorStop(at, color) { this.stops.push([at, rgba(color)]); this.stops.sort((a, b) => a[0] - b[0]); }
@@ -45,7 +55,10 @@ class Gradient {
     return left[1];
   }
 }
+
 const STATE = ['fillStyle', 'strokeStyle', 'globalAlpha', 'globalCompositeOperation', 'lineWidth', 'lineCap', 'lineJoin', 'font', 'textAlign', 'textBaseline', 'shadowBlur', 'shadowColor', 'lineDashOffset'];
+const measureCache = new Map();
+
 export class NativeCanvas {
   constructor(native, width = 960, height = 544) {
     this.native = native; this.canvas = { width, height };
@@ -54,6 +67,17 @@ export class NativeCanvas {
     this.font = '16px Inter'; this.textAlign = 'left'; this.textBaseline = 'alphabetic';
     this.transform = [1, 0, 0, 1, 0, 0]; this.stack = [];
     this.bounds = [0, 0, width, height]; this.dash = []; this.beginPath();
+
+    // Reusable buffers to eliminate GC churn
+    this.imageCorners = new Float32Array(8);
+    this.imageCornersBuffer = this.imageCorners.buffer;
+
+    this.rectVertices = new Float32Array(18); // 6 vertices * 3 coords
+    this.rectVerticesBuffer = this.rectVertices.buffer;
+    this.rectColors = new Uint32Array(6);
+    this.rectColorsBuffer = this.rectColors.buffer;
+    // Pre-fill z=0.5 for all rect vertices
+    for (let i = 2; i < 18; i += 3) this.rectVertices[i] = 0.5;
   }
   point(x, y) { const [a, b, c, d, e, f] = this.transform; return [a * x + c * y + e, b * x + d * y + f]; }
   setTransform(a, b, c, d, e, f) { this.transform = [a, b, c, d, e, f]; }
@@ -74,6 +98,7 @@ export class NativeCanvas {
   rect(x, y, w, h) { this.moveTo(x, y); this.lineTo(x + w, y); this.lineTo(x + w, y + h); this.lineTo(x, y + h); this.closePath(); }
   roundRect(x, y, w, h, radius = 0) {
     const r = Math.max(0, Math.min(Array.isArray(radius) ? radius[0] : radius, Math.abs(w) / 2, Math.abs(h) / 2));
+    if (r <= 0) { this.rect(x, y, w, h); return; }
     this.moveTo(x + r, y);
     this.arc(x + w - r, y + r, r, -Math.PI / 2, 0);
     this.arc(x + w - r, y + h - r, r, 0, Math.PI / 2);
@@ -143,7 +168,28 @@ export class NativeCanvas {
     }
     this.triangles(points, indices, this.strokeStyle);
   }
-  fillRect(x, y, w, h) { this.triangles([this.point(x, y), this.point(x + w, y), this.point(x + w, y + h), this.point(x, y + h)], [0, 1, 2, 0, 2, 3], this.fillStyle); }
+  fillRect(x, y, w, h) {
+    if (this.globalAlpha <= 0 || w <= 0 || h <= 0) return;
+    if (this.fillStyle instanceof Gradient) {
+      this.triangles([this.point(x, y), this.point(x + w, y), this.point(x + w, y + h), this.point(x, y + h)], [0, 1, 2, 0, 2, 3], this.fillStyle);
+      return;
+    }
+    const p0 = this.point(x, y), p1 = this.point(x + w, y), p2 = this.point(x + w, y + h), p3 = this.point(x, y + h);
+    const v = this.rectVertices;
+    // Triangle 1: p0, p1, p2
+    v[0] = p0[0]; v[1] = p0[1];
+    v[3] = p1[0]; v[4] = p1[1];
+    v[6] = p2[0]; v[7] = p2[1];
+    // Triangle 2: p0, p2, p3
+    v[9] = p0[0]; v[10] = p0[1];
+    v[12] = p2[0]; v[13] = p2[1];
+    v[15] = p3[0]; v[16] = p3[1];
+    const c = packed(rgba(this.fillStyle), this.globalAlpha);
+    const col = this.rectColors;
+    col[0] = col[1] = col[2] = col[3] = col[4] = col[5] = c;
+    this.prepare();
+    this.native.triangles(this.rectVerticesBuffer, this.rectColorsBuffer);
+  }
   strokeRect(x, y, w, h) { const paths = this.paths, path = this.path; this.beginPath(); this.rect(x, y, w, h); this.stroke(); this.paths = paths; this.path = path; }
   clip() {
     const points = this.paths.flat(); if (!points.length) return;
@@ -157,12 +203,27 @@ export class NativeCanvas {
     const symbols = [...value].some(c => c.codePointAt(0) > 0x24f);
     return [symbols || this.font.includes('DejaVu') ? 'dejavu-400' : this.font.includes('Cinzel') ? 'cinzel-700' : 'inter-400', size];
   }
-  measureText(value) { return { width: this.native.measure(...this.fontInfo(String(value)), String(value)) }; }
+  measureText(value) {
+    const str = String(value);
+    const [font, size] = this.fontInfo(str);
+    const key = font + ':' + size + ':' + str;
+    let width = measureCache.get(key);
+    if (width === undefined) {
+      width = this.native.measure(font, size, str);
+      if (measureCache.size > 1024) measureCache.clear();
+      measureCache.set(key, width);
+    }
+    return { width };
+  }
   fillText(value, x, y, maxWidth) {
     value = String(value).replace(/[᛭ᛉ⛨]/g, c => ({ '᛭': '✱', 'ᛉ': 'Ψ', '⛨': '✠' })[c]);
-    const [font, size] = this.fontInfo(value), width = this.measureText(value).width;
-    if (maxWidth && width > maxWidth) { while (value.length > 1 && this.measureText(value + '…').width > maxWidth) value = value.slice(0, -1); value += '…'; }
-    const measured = this.measureText(value).width;
+    const [font, size] = this.fontInfo(value);
+    let measured = this.measureText(value).width;
+    if (maxWidth && measured > maxWidth) {
+      while (value.length > 1 && this.measureText(value + '…').width > maxWidth) value = value.slice(0, -1);
+      value += '…';
+      measured = this.measureText(value).width;
+    }
     if (this.textAlign === 'center') x -= measured / 2;
     else if (this.textAlign === 'right' || this.textAlign === 'end') x -= measured;
     if (this.textBaseline === 'top') y += size;
@@ -175,7 +236,13 @@ export class NativeCanvas {
     if (args.length === 2) { [x, y] = args; w = sw; h = sh; }
     else if (args.length === 4) [x, y, w, h] = args;
     else [sx, sy, sw, sh, x, y, w, h] = args;
-    const corners = [this.point(x, y), this.point(x + w, y), this.point(x, y + h), this.point(x + w, y + h)];
-    this.prepare(); this.native.image(image.id, new Float32Array(corners.flat()).buffer, sx, sy, sw, sh, packed([255, 255, 255, 1], this.globalAlpha));
+    const p0 = this.point(x, y), p1 = this.point(x + w, y), p2 = this.point(x, y + h), p3 = this.point(x + w, y + h);
+    const c = this.imageCorners;
+    c[0] = p0[0]; c[1] = p0[1];
+    c[2] = p1[0]; c[3] = p1[1];
+    c[4] = p2[0]; c[5] = p2[1];
+    c[6] = p3[0]; c[7] = p3[1];
+    this.prepare();
+    this.native.image(image.id, this.imageCornersBuffer, sx, sy, sw, sh, packed([255, 255, 255, 1], this.globalAlpha));
   }
 }

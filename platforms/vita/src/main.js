@@ -28,7 +28,7 @@ import { drawControllerDebug } from './debug/controller-debug.js';
 import { createPerf } from './debug/perf.js';
 import { createAutoplay } from './debug/autoplay.js';
 
-// PlayStation Vita shell. Drives the shared offline run and split screen from src/localCoop.js,
+// PlayStation Vita shell. Drives the shared offline run from src/localCoop.js in dedicated full-screen solo (960×544),
 // the authoritative simulation (server/game.js), renderer and feedback.
 
 const global = /** @type {any} */ (globalThis);
@@ -96,7 +96,7 @@ const menu = createVitaMenu({
   audio,
   debugControllers: isDebug,
   onSolo: character => startRun({ character }),
-  onCoop: (character, secondCharacter) => startRun({ split: true, character, secondCharacter }),
+  onCoop: character => startRun({ character }),
   onDaily: () => startRun({ challenge: dailyChallenge() }),
   onExit: () => {
     if (global.Vita?.exit) global.Vita.exit();
@@ -106,20 +106,21 @@ const menu = createVitaMenu({
 
 const autoplay = isDebug ? createAutoplay({ startRun, endGame, controllers, perf, getView: () => view }) : null;
 
-function startRun({ challenge = null, split = false, character = 0, secondCharacter = 1 }) {
+function startRun({ challenge = null, character = 0 } = {}) {
+  // PS Vita operates strictly in full-screen solo mode (960×544)
   run = createOfflineRun({
     challenge,
-    split,
+    split: false,
     campaign: menu.campaign,
     curses: [],
-    name: split ? 'Jogador 1' : 'Arcanista',
+    name: 'Arcanista',
     character,
-    secondCharacter,
+    secondCharacter: 0,
     upgrades: wallet.upgrades,
     loadout: { weapon: null, special: 0 }
   });
   ({ game, local } = run);
-  controllers.setCoop(local.length > 1);
+  controllers.setCoop(false);
   mode = 'offline';
   paused = false;
   overlayFocus = 0;
@@ -131,7 +132,7 @@ function startRun({ challenge = null, split = false, character = 0, secondCharac
   audio.unlock();
   menu.enter('playing');
   const curses = game.curses.map(id => CURSES[id]?.title).filter(Boolean).join(' + ');
-  hud.announce(challenge ? `Desafio diário · ${curses}` : `${split ? 'Tela dividida' : 'Solo'} · ${CAMPAIGNS[game.campaign]?.name || 'Campanha'}`, 'gold');
+  hud.announce(challenge ? `Desafio diário · ${curses}` : `Solo · ${CAMPAIGNS[game.campaign]?.name || 'Campanha'}`, 'gold');
 }
 
 function depositCoins() {
@@ -243,10 +244,8 @@ function overlayInput(dt) {
       else if (action === 'confirm') {
         if (overlayFocus === 0) togglePause(false);
         else if (overlayFocus === 1) {
-          const split = local.length > 1;
           const c0 = view?.players?.me?.character || 0;
-          const c1 = view?.players?.p2?.character || 1;
-          startRun({ split, character: c0, secondCharacter: c1 });
+          startRun({ character: c0 });
         } else {
           endGame();
           return;
@@ -309,11 +308,10 @@ function playFrame(now, dt) {
   if (perf) perf.update(performance.now() - updateStart);
   view = game;
   const me = view.players.me;
-  const split = local.length > 1;
   const mine = localPlayersOf(view, local);
   const picker = chooserOf(mine, me);
   const pickerSlot = Math.max(0, local.indexOf(picker.id));
-  const choosing = hud.syncPowers(picker, { onChoose: choosePower, onReroll: reroll, title: split ? `Novo poder · Jogador ${pickerSlot + 1}` : undefined });
+  const choosing = hud.syncPowers(picker, { onChoose: choosePower, onReroll: reroll, title: undefined });
   if (choosing) hud.setPowerLabels(controllers.labels(pickerSlot));
   if (view.over && !round.gameOverShown) showResults();
   animator.update(view, dt, { paused: paused || choosing, reduced: false });
@@ -325,8 +323,8 @@ function playFrame(now, dt) {
   if (ctx) {
     const blocked = paused || choosing || view.over || view.phaseStatus === 'transition';
     const keys = [controllers.labels(0), controllers.labels(1)];
-    renderLocalViews(ctx, view, { me, mine, split, animator, W, H, dpr, reduced: false, offline: true, blocked, keys });
-    if (!split) drawPlayerPanel(ctx, me, { slot: 0, ox: 0, W, H, dpr, blocked, keys: keys[0] });
+    renderLocalViews(ctx, view, { me, mine, split: false, animator, W, H, dpr, reduced: false, offline: true, blocked, keys });
+    drawPlayerPanel(ctx, me, { slot: 0, ox: 0, W, H, dpr, blocked, keys: keys[0] });
     hud.update(view, me, { paused });
     hud.draw(ctx, W, H, dt);
     if (results) drawResults();
@@ -334,7 +332,7 @@ function playFrame(now, dt) {
     else if (choosing) hud.drawPowers(ctx, W, H);
   }
   if (perf) perf.render(performance.now() - renderStart);
-  if (perf && showDebug && ctx) perf.draw(ctx, view, controllers, { split });
+  if (perf && showDebug && ctx) perf.draw(ctx, view, controllers, { split: false });
 }
 
 function frame(now) {
