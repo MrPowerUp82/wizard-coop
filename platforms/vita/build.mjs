@@ -371,7 +371,8 @@ const runtimeManifest = join(here, 'runtime', 'runtime.json');
 if (existsSync(runtimeEboot) && existsSync(runtimeManifest)) {
   const manifest = JSON.parse(readFileSync(runtimeManifest, 'utf8'));
   const hash = file => createHash('sha256').update(readFileSync(file)).digest('hex');
-  if (manifest.abi !== 1 || manifest.sha256 !== hash(runtimeEboot) || manifest.sourceSha256 !== hash(join(here, 'runtime', 'src', 'main.c'))) {
+  const sourceHash = file => createHash('sha256').update(readFileSync(file, 'utf8').replace(/\r\n/g, '\n')).digest('hex');
+  if (manifest.abi !== 1 || manifest.sha256 !== hash(runtimeEboot) || manifest.sourceSha256 !== sourceHash(join(here, 'runtime', 'src', 'main.c'))) {
     throw new Error('Runtime ausente, alterado ou desatualizado. Execute npm run vita:runtime.');
   }
   copyFileSync(runtimeEboot, join(buildDir, 'eboot.bin'));
