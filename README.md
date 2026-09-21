@@ -2,6 +2,9 @@
 
 Survival roguelite cooperativo para a web, de 1 a 4 jogadores. O cliente estático funciona no GitHub Pages, e o servidor WebSocket roda separadamente em Node.js na VPS. A mesma simulação (`server/game.js`) roda no navegador no modo offline e no servidor autoritativo no co-op.
 
+> [!NOTE]
+> **Ports para consoles (Nintendo Switch, PS Vita, PSP):** A continuação e evolução dos ports foi transferida para o projeto dedicado em C++20: [wizard-coop-ports](https://github.com/MrPowerUp82/wizard-coop-ports) ([README local](../wizard_coop_cpp/README.md)). O novo projeto substitui o port em JavaScript (nx.js) por uma implementação nativa de alta performance (60 FPS, renderer em lote e zero heap por frame).
+
 ## Desenvolvimento
 
 ```bash
@@ -29,6 +32,11 @@ Para conectar ao backend local, abra `http://localhost:5173/?server=ws://localho
 O workflow do GitHub Pages executa lint, checagem de tipos e testes antes de publicar.
 
 ## Nintendo Switch (homebrew)
+
+> [!IMPORTANT]
+> **Aviso de migração dos ports:** A continuação e o desenvolvimento ativo dos ports de console agora acontecem no projeto nativo em C++20: [wizard-coop-ports](https://github.com/MrPowerUp82/wizard-coop-ports) ([README](../wizard_coop_cpp/README.md)). O port nativo resolve as limitações e quedas de FPS do runtime JavaScript (nx.js), suportando Nintendo Switch, PS Vita e PSP.
+>
+> As instruções abaixo documentam o port inicial experimental em JavaScript (nx.js).
 
 O mesmo jogo roda no Switch como `ArcanaSurvivors.nro` (nx.js 1.0.0-beta.6): solo, desafio diário e o co-op local em
 tela dividida, com Joy-Con L como Jogador 1 e Joy-Con R como Jogador 2, cada um na horizontal.

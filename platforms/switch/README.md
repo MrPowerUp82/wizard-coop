@@ -1,5 +1,10 @@
 # Arcana Survivors — Nintendo Switch (homebrew `.nro`)
 
+> [!IMPORTANT]
+> **Aviso de migração:** A continuação e o desenvolvimento ativo dos ports de console foram migrados para o projeto nativo em C++20: [wizard-coop-ports](https://github.com/MrPowerUp82/wizard-coop-ports) ([README local](../../../wizard_coop_cpp/README.md)). O novo projeto conta com simulação e renderer nativos sem perdas de quadros para Nintendo Switch, PS Vita e PSP.
+>
+> As informações abaixo tratam do port original experimental baseado no runtime JavaScript nx.js.
+
 Port do jogo para Nintendo Switch com [nx.js](https://nxjs.n8.io). Roda o **mesmo** jogo da versão web:
 solo, desafio diário e o **co-op local em tela dividida que já existia**, agora com Joy-Cons separados.
 
