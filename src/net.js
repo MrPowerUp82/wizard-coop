@@ -1,4 +1,4 @@
-import { decodeState } from '../server/protocol.js';
+import { PROTOCOL_VERSION, decodeState } from '../server/protocol.js';
 import { movementDelta } from '../server/movement.js';
 
 const INTERPOLATION_DELAY = 0.1;
@@ -58,8 +58,8 @@ export function createSession(url, entry, handlers) {
     try { ws = new WebSocket(url); } catch { handlers.onError?.({ message: 'Endereço do servidor inválido' }); return; }
     socket = ws;
     ws.onopen = () => {
-      if (resume) ws.send(JSON.stringify({ type: 'resume', room: session.room, token: session.token }));
-      else ws.send(JSON.stringify({ type: entry.action, room: entry.code, name: entry.name, visibility: entry.visibility, color: entry.color, meta: entry.meta, campaign: entry.campaign, curses: entry.curses, loadout: entry.loadout }));
+      if (resume) ws.send(JSON.stringify({ type: 'resume', v: PROTOCOL_VERSION, room: session.room, token: session.token }));
+      else ws.send(JSON.stringify({ type: entry.action, v: PROTOCOL_VERSION, room: entry.code, name: entry.name, visibility: entry.visibility, color: entry.color, meta: entry.meta, campaign: entry.campaign, curses: entry.curses, loadout: entry.loadout }));
       clearInterval(pingTimer);
       const ping = () => send({ type: 'ping', t: performance.now() });
       ping();

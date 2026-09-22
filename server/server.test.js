@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import WebSocket from 'ws';
-import { decodeState } from './protocol.js';
+import { PROTOCOL_VERSION, decodeState } from './protocol.js';
 
 test('servidor tolera mensagens inválidas e preserva a sala após entrada duplicada', { timeout: 10000 }, async t => {
   const child = spawn(process.execPath, ['server/server.js'], {
@@ -148,4 +148,30 @@ test('limita salas abertas e fechadas, permite entrar no limite e libera vagas a
   await observer.receive('joined');
   observer.send({ type: 'listRooms' });
   assert.deepEqual((await observer.receive('rooms')).capacity, { used: 2, max: 2 });
+});
+
+test('recusa cliente de outra versão do protocolo e informa a versão na lista de salas', { timeout: 10000 }, async t => {
+  const child = spawn(process.execPath, ['server/server.js'], {
+    env: { ...process.env, PORT: '0' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true
+  });
+  t.after(() => child.kill());
+  const [output] = await once(child.stdout, 'data');
+  const port = String(output).match(/:(\d+)/)?.[1];
+  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+  t.after(() => ws.terminate());
+  await once(ws, 'open');
+  const messages = [];
+  ws.on('message', raw => messages.push(JSON.parse(raw)));
+  async function receive(type) {
+    while (!messages.some(message => message.type === type)) await once(ws, 'message');
+    return messages.splice(messages.findIndex(message => message.type === type), 1)[0];
+  }
+  ws.send(JSON.stringify({ type: 'listRooms' }));
+  assert.equal((await receive('rooms')).v, PROTOCOL_VERSION);
+  ws.send(JSON.stringify({ type: 'create', v: PROTOCOL_VERSION + 1 }));
+  const error = await receive('error');
+  assert.equal(error.code, 'PROTOCOL_MISMATCH');
+  assert.match(error.message, /Atualize/);
+  ws.send(JSON.stringify({ type: 'create', v: PROTOCOL_VERSION, name: 'Ana' }));
+  assert.ok((await receive('joined')).playerId);
 });

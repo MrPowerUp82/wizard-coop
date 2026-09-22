@@ -2,11 +2,14 @@
 // the viewer is sent; decodeState rebuilds the same shape publicState() produces for offline play.
 import { ENEMIES } from './phases.js';
 
+/** Bump whenever the snapshot layout or any client/server message changes shape (native clients check it). */
+export const PROTOCOL_VERSION = 1;
+
 export const VIEW_RADIUS = 1250;
-const ENEMY_TYPES = Object.keys(ENEMIES);
-const DROP_TYPES = ['gem', 'heart', 'greenGem', 'coin', 'magnet', 'chest'];
-const SPRITES = ['bolt', 'fire', 'thorn', 'blade'];
-const STATUSES = ['horde', 'boss', 'transition', 'complete'];
+export const ENEMY_TYPES = Object.keys(ENEMIES);
+export const DROP_TYPES = ['gem', 'heart', 'greenGem', 'coin', 'magnet', 'chest'];
+export const SPRITES = ['bolt', 'fire', 'thorn', 'blade'];
+export const STATUSES = ['horde', 'boss', 'transition', 'complete'];
 
 const round = Math.round;
 const tenth = value => Math.round(value * 10) / 10;
@@ -14,10 +17,10 @@ const hundredth = value => Math.round(value * 100) / 100;
 
 const ENEMY_FLAGS = { boss: 1, elite: 2, slowed: 4, windup: 8, fuse: 16, dashWarn: 32, thief: 512 };
 const SHOT_FLAGS = { special: 1, shard: 2, returning: 4, fullmoon: 8 };
-const ENCOUNTER_KINDS = ['merchant', 'shrine', 'thief'];
+export const ENCOUNTER_KINDS = ['merchant', 'shrine', 'thief'];
 
 // Players travel as value arrays in PLAYER_KEYS order, so field names are not repeated on every tick.
-const PLAYER_KEYS = ['id', 'name', 'color', 'x', 'y', 'hp', 'maxHp', 'xp', 'level', 'alive', 'speed', 'powers', 'pendingPowers',
+export const PLAYER_KEYS = ['id', 'name', 'color', 'x', 'y', 'hp', 'maxHp', 'xp', 'level', 'alive', 'speed', 'powers', 'pendingPowers',
   'specialCharge', 'coins', 'reviveProgress', 'reviveBy', 'reviving', 'castCount', 'castAngle', 'invulnerableFor', 'orbitAngle',
   'rerolls', 'phoenix', 'inputSeq', 'powerTimer', 'connected', 'dashFor', 'dashCooldown', 'dashX', 'dashY', 'moveX', 'moveY',
   'specialCooldown', 'motionId', 'stats', 'familiar', 'specialVariant', 'shopProgress'];

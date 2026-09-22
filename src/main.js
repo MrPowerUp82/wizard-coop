@@ -15,6 +15,7 @@ import { CAMPAIGNS } from '../server/campaign.js';
 import { PHASES } from '../server/phases.js';
 import { CURSES } from '../server/curses.js';
 import { sendSignal } from '../server/game.js';
+import { PROTOCOL_VERSION } from '../server/protocol.js';
 import { createCodex } from './codex.js';
 import { moodFor } from './music.js';
 import { createAnimator } from './animation.js';
@@ -365,7 +366,7 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
   let lobbyRunning = false;
   const entry = { action, code, visibility, name: playerName(), color: menu.character, meta: wallet.upgrades, campaign: menu.campaign,
     curses: menu.curses, loadout: menu.loadout, resume };
-  const requestEntry = color => current.send({ type: action, room: code, name: playerName(), visibility, color, meta: wallet.upgrades,
+  const requestEntry = color => current.send({ type: action, v: PROTOCOL_VERSION, room: code, name: playerName(), visibility, color, meta: wallet.upgrades,
     campaign: menu.campaign, curses: menu.curses, loadout: menu.loadout });
   const renderLobbyCharacters = (disabled = false) => {
     renderCharacterPicker($('#lobbyCharacters'), current.playerId ? current.color : menu.character, lobbyPlayers, current.playerId, color => {
