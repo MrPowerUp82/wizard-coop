@@ -34,6 +34,9 @@ const $ = selector => document.querySelector(selector);
 const canvas = $('#game');
 const ctx = canvas.getContext('2d');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const mobileQuery = matchMedia('(max-width: 800px), (pointer: coarse) and (max-width: 1400px), (max-height: 500px) and (orientation: landscape)');
+const isMobile = () => mobileQuery.matches;
+const MOBILE_ZOOM = 0.8;
 let W = innerWidth, H = innerHeight, dpr = 1;
 
 const audio = createAudio();
@@ -60,7 +63,7 @@ let meId = null;
 let paused = false;
 let last = performance.now();
 let round = null;
-let camera = { x: 0, y: 0 };
+let camera = { x: 0, y: 0, zoom: 1 };
 let local = ['me']; // offline player ids driven from this keyboard, in slot order (split screen has two)
 const isSplit = () => mode === 'offline' && local.length > 1;
 /** The players this machine controls: both halves in split screen, otherwise just this player. */
@@ -222,7 +225,10 @@ addEventListener('keydown', event => {
   const kind = SIGNAL_KEYS[event.key.toLowerCase()];
   if (kind) signal(kind);
 });
-canvas.addEventListener('click', event => signal('look', { x: camera.x + event.clientX, y: camera.y + event.clientY }));
+canvas.addEventListener('click', event => {
+  const z = camera.zoom || 1;
+  signal('look', { x: camera.x + event.clientX / z, y: camera.y + event.clientY / z });
+});
 for (const button of /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('[data-signal]'))) {
   button.onclick = () => signal(button.dataset.signal);
 }
@@ -254,7 +260,8 @@ function step(now, dt) {
   audio.music(paused ? 'menu' : moodFor(view, mode), view.phase || 0);
   const reduced = reducedMotion.matches;
   const blocked = paused || choosing || view.over || view.phaseStatus === 'transition';
-  camera = renderLocalViews(ctx, view, { me, mine, split, animator, W, H, dpr, reduced, offline: mode === 'offline', blocked }) || camera;
+  const zoom = isMobile() ? MOBILE_ZOOM : 1;
+  camera = renderLocalViews(ctx, view, { me, mine, split, animator, W, H, dpr, reduced, offline: mode === 'offline', blocked, zoom }) || camera;
   hud.update(view, me, { paused, offline: mode === 'offline' });
 }
 

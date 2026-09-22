@@ -87,9 +87,15 @@ const tiles = terrainMacro === 1 ? baseTiles : baseTiles.map(base => {
   return macro;
 });
 
-export function drawTerrain(ctx, phase, camX, camY, width, height) {
+export function drawTerrain(ctx, phase, camX, camY, width, height, zoom = 1) {
   const tile = tiles[phase] || tiles[0];
-  const x0 = -((camX % tileSize + tileSize) % tileSize), y0 = -((camY % tileSize + tileSize) % tileSize);
-  for (let y = y0; y < height; y += tileSize) for (let x = x0; x < width; x += tileSize) ctx.drawImage(tile, x, y);
+  const scaledTileSize = tileSize * zoom;
+  const x0 = -(((camX * zoom) % scaledTileSize + scaledTileSize) % scaledTileSize);
+  const y0 = -(((camY * zoom) % scaledTileSize + scaledTileSize) % scaledTileSize);
+  for (let y = y0; y < height; y += scaledTileSize) {
+    for (let x = x0; x < width; x += scaledTileSize) {
+      ctx.drawImage(tile, x, y, scaledTileSize, scaledTileSize);
+    }
+  }
   ctx.fillStyle = 'rgba(3, 8, 13, .3)'; ctx.fillRect(0, 0, width, height);
 }

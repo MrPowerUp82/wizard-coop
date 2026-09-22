@@ -105,10 +105,14 @@ function bake(name) {
 export const spriteFor = name => cache.get(name) || bake(name);
 
 /** Shared camera so sprite draws can set one transform instead of save/translate/rotate/restore. */
-export const view = { dpr: 1, camX: 0, camY: 0, shakeX: 0, shakeY: 0 };
+export const view = { dpr: 1, zoom: 1, ox: 0, oy: 0, camX: 0, camY: 0, shakeX: 0, shakeY: 0 };
 
 export function worldTransform(ctx) {
-  ctx.setTransform(view.dpr, 0, 0, view.dpr, (view.shakeX - view.camX) * view.dpr, (view.shakeY - view.camY) * view.dpr);
+  const zoom = view.zoom || 1;
+  const dpr = view.dpr * zoom;
+  const tx = ((view.shakeX - view.camX) * zoom + (view.ox || 0)) * view.dpr;
+  const ty = ((view.shakeY - view.camY) * zoom + (view.oy || 0)) * view.dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, tx, ty);
   ctx.globalAlpha = 1;
 }
 
@@ -140,10 +144,12 @@ export function drawSprite(ctx, name, x, y, size, rotation = 0, alpha = 1, sx = 
     return;
   }
 
-  const { dpr } = view;
+  const zoom = view.zoom || 1;
+  const dpr = view.dpr * zoom;
   const cos = Math.cos(rotation), sin = Math.sin(rotation);
-  ctx.setTransform(dpr * cos * sx, dpr * sin * sx, -dpr * sin * sy, dpr * cos * sy,
-    (x + view.shakeX - view.camX) * dpr, (y + view.shakeY - view.camY) * dpr);
+  const tx = ((x + view.shakeX - view.camX) * zoom + (view.ox || 0)) * view.dpr;
+  const ty = ((y + view.shakeY - view.camY) * zoom + (view.oy || 0)) * view.dpr;
+  ctx.setTransform(dpr * cos * sx, dpr * sin * sx, -dpr * sin * sy, dpr * cos * sy, tx, ty);
   ctx.globalAlpha = alpha;
   const half = size / 2;
   ctx.drawImage(sprite.canvas, -half, -half, size, size);

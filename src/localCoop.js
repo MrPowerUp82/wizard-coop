@@ -69,18 +69,19 @@ export function offlineActor(view, local, slot, paused) {
  * own camera and status panel per player in split screen (a fallen player keeps watching their revive
  * circle). Returns the solo camera's top-left corner, or null in split screen.
  */
-export function renderLocalViews(ctx, view, { me, mine, split, animator, W, H, dpr, reduced, offline, blocked, keys = undefined }) {
+export function renderLocalViews(ctx, view, { me, mine, split, animator, W, H, dpr, reduced, offline, blocked, keys = undefined, zoom = 1 }) {
   if (split) {
     const half = Math.floor(W / 2);
     mine.forEach((p, slot) => {
       const ox = slot ? half : 0, width = slot ? W - half : half;
-      renderWorld(ctx, view, { me: p, focus: p, animator, W: width, H, dpr, reduced, offline: false, ox });
+      renderWorld(ctx, view, { me: p, focus: p, animator, W: width, H, dpr, reduced, offline: false, ox, zoom });
       drawPlayerPanel(ctx, p, { slot, ox, W: width, H, dpr, blocked, keys: keys?.[slot] });
     });
     drawDivider(ctx, half, H, dpr);
     return null;
   }
   const focus = me.alive === false ? Object.values(view.players).find(p => p.alive !== false) || me : me;
-  renderWorld(ctx, view, { me, focus, animator, W, H, dpr, reduced, offline });
-  return { x: focus.x - W / 2, y: focus.y - H / 2 };
+  renderWorld(ctx, view, { me, focus, animator, W, H, dpr, reduced, offline, zoom });
+  const viewW = W / zoom, viewH = H / zoom;
+  return { x: focus.x - viewW / 2, y: focus.y - viewH / 2, zoom };
 }

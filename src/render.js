@@ -261,22 +261,23 @@ function drawEdgeArrow(ctx, W, H, from, target, color, label) {
  * Draws the world centred on `focus` into a W×H viewport whose top-left corner sits at (ox, oy) on screen,
  * so split screen can render each local player into its own half of the canvas.
  */
-export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced, offline, ox = 0, oy = 0 }) {
+export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced, offline, ox = 0, oy = 0, zoom = 1 }) {
   const time = animator.time;
   const shake = animator.shakeOffset;
-  const camX = focus.x - W / 2, camY = focus.y - H / 2;
+  const viewW = W / zoom, viewH = H / zoom;
+  const camX = focus.x - viewW / 2, camY = focus.y - viewH / 2;
   // The sprite camera folds in the viewport offset so world-space draws land inside this viewport.
-  Object.assign(view, { dpr, camX: camX - ox, camY: camY - oy, shakeX: shake.x, shakeY: shake.y });
-  const visible = (x, y, margin = 110) => x >= camX - margin && x <= camX + W + margin && y >= camY - margin && y <= camY + H + margin;
+  Object.assign(view, { dpr, zoom, ox, oy, camX, camY, shakeX: shake.x, shakeY: shake.y });
+  const visible = (x, y, margin = 110 / zoom) => x >= camX - margin && x <= camX + viewW + margin && y >= camY - margin && y <= camY + viewH + margin;
   const screenTransform = () => ctx.setTransform(dpr, 0, 0, dpr, ox * dpr, oy * dpr);
 
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.beginPath(); ctx.rect(ox, oy, W, H); ctx.clip();
   screenTransform();
-  drawTerrain(ctx, game.phase || 0, camX - shake.x, camY - shake.y, W, H);
+  drawTerrain(ctx, game.phase || 0, camX - shake.x, camY - shake.y, W, H, zoom);
   worldTransform(ctx);
-  drawAtmosphere(ctx, game.phase || 0, camX, camY, W, H, time, reduced);
+  drawAtmosphere(ctx, game.phase || 0, camX, camY, viewW, viewH, time, reduced);
 
   const altar = game.altar;
   if (altar && visible(altar.x, altar.y, 180)) {
@@ -522,7 +523,7 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
   }
   ctx.globalAlpha = 1;
   const inView = entity => {
-    const sx = entity.x - camX, sy = entity.y - camY;
+    const sx = (entity.x - camX) * zoom, sy = (entity.y - camY) * zoom;
     return sx >= 45 && sx <= W - 45 && sy >= 65 && sy <= H - 55;
   };
   if (!offline) {
