@@ -2,7 +2,7 @@ import { WebSocketServer } from 'ws';
 import crypto from 'node:crypto';
 import { activateDash, activateSpecial, addLatePlayer, applyPower, createGameState, createPlayer, rerollPowers, sendSignal, updateGame } from './game.js';
 import { campaignId } from './campaign.js';
-import { encodeState } from './protocol.js';
+import { PROTOCOL_VERSION, encodeState } from './protocol.js';
 import { sanitizeMeta } from './meta.js';
 import { sanitizeCurses } from './curses.js';
 
@@ -176,7 +176,12 @@ wss.on('connection', (/** @type {Client} */ ws) => {
       return Number.isFinite(message.t) && send(ws, { type: 'pong', t: message.t });
     }
     if (message.type === 'listRooms') {
-      return send(ws, { type: 'rooms', rooms: openRoomList(), capacity: { used: rooms.size, max: MAX_ROOMS } });
+      return send(ws, { type: 'rooms', rooms: openRoomList(), capacity: { used: rooms.size, max: MAX_ROOMS }, v: PROTOCOL_VERSION });
+    }
+    // Native clients ship on their own schedule: refuse a different wire format instead of misreading it.
+    // Web clients from before versioning send no `v` and speak version 1.
+    if (['create', 'join', 'resume'].includes(message.type) && (message.v ?? 1) !== PROTOCOL_VERSION) {
+      return send(ws, { type: 'error', code: 'PROTOCOL_MISMATCH', message: 'Atualize o jogo para jogar online.' });
     }
     if (ws.room && ['create', 'join', 'resume'].includes(message.type)) {
       return send(ws, { type: 'error', message: 'Você já está em uma sala.' });
