@@ -11,6 +11,7 @@
     "server": "node server/server.js",
     "test": "node --test server/*.test.js",
     "sim": "node scripts/balance-sim.mjs",
+    "fixtures:cpp": "node scripts/export-protocol-fixtures.mjs ../wizard_coop_cpp/tests/fixtures/protocol/snapshots.json",
     "lint": "eslint .",
     "typecheck": "tsc -p jsconfig.json",
     "check": "npm run lint && npm run typecheck && npm test",
