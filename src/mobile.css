@@ -108,6 +108,7 @@
   .power-choice b { font-size: 12px; }
   .power-choice small { font-size: 12px; }
   .codex-card { max-height: calc(100dvh - var(--hud-top) - var(--hud-bottom)); }
+  .shop-card { max-height: calc(100dvh - var(--hud-top) - var(--hud-bottom)); }
   .codex-list { grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
   .damage-row { grid-template-columns: 18px minmax(70px, 1fr) minmax(30px, 1fr) 48px; gap: 5px; font-size: 10px; }
 }

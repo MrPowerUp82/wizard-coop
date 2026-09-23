@@ -1,6 +1,7 @@
 // @ts-check
 import { SPELLS } from '../../../../server/game.js';
 import { SPECIALS } from '../../../../server/weapons.js';
+import { GOD, GOD_COST } from '../../../../server/god.js';
 import { CAMPAIGNS, campaignId } from '../../../../server/campaign.js';
 import { CURSES, dailyChallenge } from '../../../../server/curses.js';
 import { characterEffects, characterNames, dailyRecord } from '../../../../src/menu.js';
@@ -38,12 +39,20 @@ export function createVitaMenu({ controllers, wallet, audio, debugControllers, o
   let focus = 0;
   const character = savedCharacter('arcana-character', 0);
   const characters = [character, savedCharacter('arcana-character-p2', (character + 1) % SPELLS.length)];
+  if (characters[0] === GOD && !wallet.godUnlocked) characters[0] = 0;
+  if (characters[1] === GOD && !wallet.godUnlocked) characters[1] = 1;
   let campaign = campaignId(prefs.get('arcana-campaign'));
   const ready = [false, false];
   let message = null;
   let shopFocus = 0;
 
   const unlocked = id => (wallet.upgrades[id] || 0) > 0;
+  const nextCharacter = (color, step, other = -1) => {
+    let next = color;
+    do next = (next + step + SPELLS.length) % SPELLS.length;
+    while (next === other || (next === GOD && !wallet.godUnlocked));
+    return next;
+  };
   const campaigns = () => Object.keys(CAMPAIGNS).filter(id => id !== 'endless' || unlocked('endless'));
   if (!campaigns().includes(campaign)) campaign = 'quick';
   const say = value => { message = { value, age: 0 }; };
@@ -97,8 +106,8 @@ export function createVitaMenu({ controllers, wallet, audio, debugControllers, o
   }
 
   function soloInput(event) {
-    if (event.action === 'left') { characters[0] = (characters[0] + SPELLS.length - 1) % SPELLS.length; click(); }
-    else if (event.action === 'right') { characters[0] = (characters[0] + 1) % SPELLS.length; click(); }
+    if (event.action === 'left') { characters[0] = nextCharacter(characters[0], -1); click(); }
+    else if (event.action === 'right') { characters[0] = nextCharacter(characters[0], 1); click(); }
     else if (event.action === 'confirm') {
       prefs.set('arcana-character', characters[0]);
       onSolo(characters[0]);
@@ -126,15 +135,11 @@ export function createVitaMenu({ controllers, wallet, audio, debugControllers, o
     }
     if (event.action === 'left' && !ready[slot]) {
       const other = characters[1 - slot];
-      let pick = (characters[slot] + SPELLS.length - 1) % SPELLS.length;
-      if (pick === other) pick = (pick + SPELLS.length - 1) % SPELLS.length;
-      characters[slot] = pick;
+      characters[slot] = nextCharacter(characters[slot], -1, other);
       click();
     } else if (event.action === 'right' && !ready[slot]) {
       const other = characters[1 - slot];
-      let pick = (characters[slot] + 1) % SPELLS.length;
-      if (pick === other) pick = (pick + 1) % SPELLS.length;
-      characters[slot] = pick;
+      characters[slot] = nextCharacter(characters[slot], 1, other);
       click();
     } else if (event.action === 'confirm' || event.action === 'join') {
       ready[slot] = true;
@@ -156,7 +161,7 @@ export function createVitaMenu({ controllers, wallet, audio, debugControllers, o
       if (offer && wallet.buy(offer.id)) { say(`${offer.title} adquirido!`); audio.play('power'); }
       else click();
     } else if (event.action === 'alt') {
-      wallet.refund();
+      wallet.respec();
       say('Moedas redistribuídas');
       click();
     } else if (event.action === 'cancel') go('main');
@@ -177,7 +182,8 @@ export function createVitaMenu({ controllers, wallet, audio, debugControllers, o
     ctx.globalAlpha = 1;
     text(ctx, characterNames[color], x + width / 2, y + 104, { font: '700 18px Cinzel', align: 'center', color: spell.tint });
     text(ctx, spell.name, x + width / 2, y + 124, { font: '600 13px Inter', align: 'center', maxWidth: width - 16 });
-    wrapText(ctx, `${characterEffects[color]} · Especial: ${SPECIALS[color].name}`, x + 10, y + 144, width - 20, 15, { font: '500 11px Inter', color: COLORS.dim });
+    wrapText(ctx, color === GOD && !wallet.godUnlocked ? `Bloqueado · compre por ${GOD_COST} moedas no Grimório`
+      : `${characterEffects[color]} · Especial: ${SPECIALS[color].name}`, x + 10, y + 144, width - 20, 15, { font: '500 11px Inter', color: COLORS.dim });
   }
 
   function drawTitle(ctx, W, subtitle) {
@@ -223,8 +229,13 @@ export function createVitaMenu({ controllers, wallet, audio, debugControllers, o
         text(ctx, '↑ ↓ navegar · ✕ confirmar · ◯ voltar', W / 2, H - 18, { font: '600 13px Inter', align: 'center', color: COLORS.dim });
       } else if (screen === 'solo') {
         drawTitle(ctx, W, 'ESCOLHA SEU PERSONAGEM');
-        const cardW = 190, gap = 16, total = SPELLS.length * cardW + (SPELLS.length - 1) * gap;
-        SPELLS.forEach((_, color) => drawCharacter(ctx, color, (W - total) / 2 + color * (cardW + gap), 146, cardW, { active: color === characters[0], time }));
+        const cardW = 190, gap = 16, visible = 4;
+        const start = Math.max(0, Math.min(characters[0] - 1, SPELLS.length - visible));
+        SPELLS.slice(start, start + visible).forEach((_, index) => {
+          const color = start + index;
+          drawCharacter(ctx, color, (W - visible * cardW - (visible - 1) * gap) / 2 + index * (cardW + gap), 146, cardW,
+            { active: color === characters[0], time });
+        });
         text(ctx, `◀ ▶ escolher · ✕ confirmar · ◯ voltar · ${CAMPAIGNS[campaign].name}`, W / 2, H - 24, { font: '600 14px Inter', align: 'center', color: COLORS.mint });
       } else if (screen === 'lobby') {
         drawTitle(ctx, W, 'CO-OP LOCAL · TELA DIVIDIDA');

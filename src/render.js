@@ -2,6 +2,7 @@ import { ENEMIES } from '../server/phases.js';
 import { REVIVE, SPELLS } from '../server/game.js';
 import { ENCOUNTERS, WEAPONS } from '../server/balance.js';
 import { auraRadius, orbitRadius } from '../server/weapons.js';
+import { GOD, GOD_PLANETS, godPlanetPosition } from '../server/god.js';
 import { drawTerrain } from './terrain.js';
 import { drawEffects, drawNumbers } from './animation.js';
 import { ENEMY_SPRITES, PLAYER_SPRITES, SHOT_SPRITES, drawSprite, view, worldTransform } from './sprites.js';
@@ -486,12 +487,6 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
     ctx.fill();
     drawSprite(ctx, PLAYER_SPRITES[player.color ?? 0], player.x + pose.x, player.y + pose.y, 68, pose.rotation,
       pose.alpha * (player.connected === false ? 0.45 : 1), pose.sx, pose.sy, pose.flash);
-    if (alive && player.color === 5) {
-      ctx.save();
-      ctx.strokeStyle = '#ffd778'; ctx.lineWidth = 2; ctx.globalAlpha = 0.8;
-      ctx.beginPath(); ctx.ellipse(player.x, player.y - 34, 18, 6, 0, 0, TAU); ctx.stroke();
-      ctx.restore();
-    }
     if (alive && player.color === 4) {
       ctx.save();
       ctx.translate(player.x, player.y);
@@ -503,6 +498,21 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
       ctx.save();
       ctx.fillStyle = '#73ffe4'; ctx.textAlign = 'center'; ctx.font = 'bold 14px monospace';
       ctx.fillText('</>', player.x, player.y - 44);
+      ctx.restore();
+    }
+    if (alive && player.color === GOD) {
+      ctx.save();
+      for (let n = 0; n < GOD_PLANETS.count; n++) {
+        const { x, y } = godPlanetPosition(player, game.time || 0, n);
+        ctx.globalAlpha = 0.22; ctx.fillStyle = '#32c7ff';
+        circle(ctx, x, y, 18); ctx.fill();
+        ctx.globalAlpha = 1; ctx.fillStyle = '#08214e';
+        circle(ctx, x, y, 11); ctx.fill();
+        ctx.fillStyle = '#195fc2'; circle(ctx, x, y, 8); ctx.fill();
+        ctx.fillStyle = '#dcffff'; circle(ctx, x - 2, y - 2, 3); ctx.fill();
+        ctx.strokeStyle = '#73e6ff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(x, y, 16, 5, -0.35, 0, TAU); ctx.stroke();
+      }
       ctx.restore();
     }
     if (alive && powers.orbit) {

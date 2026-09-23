@@ -4,7 +4,7 @@ import { RENDER_TUNING } from './platform.js';
 export const MAX_EFFECTS = 128;
 export const MAX_NUMBERS = 60;
 const TAU = Math.PI * 2;
-const colors = ['#76dfff', '#ff9955', '#92ed68', '#c4a0ff', '#73ffe4', '#ffd778'];
+const colors = ['#76dfff', '#ff9955', '#92ed68', '#c4a0ff', '#73ffe4', '#ffd778', '#36bfff'];
 const SIGNAL_ICONS = { here: '⚑', help: '✚', danger: '⚠', look: '◉' };
 const EVENT_COLORS = { boom: '#ffb36b', elite: '#ffd36b', chest: '#ffe08a', magnet: '#8fd8ff', revive: '#9dffca', phoenix: '#ffb35c' };
 const FLOATING_TYPES = new Set(['wraith', 'eye', 'bat', 'lich', 'revenant', 'seer', 'voidling', 'archon']);
@@ -74,10 +74,11 @@ export function createAnimator({ onHit, onKill } = {}) {
   /** Each character's special gets its own layered effect: a shape, particles and a brief screen tint. */
   function special(event) {
     const seed = event.id * 7.31;
-    if (event.color === 5) {
-      effects.push({ kind: 'aurora', x: event.x, y: event.y, color: '#ffd778', age: 0, life: 0.9,
+    if (event.color === 5 || event.color === 6) {
+      const color = colors[event.color];
+      effects.push({ kind: 'aurora', x: event.x, y: event.y, color, age: 0, life: 0.9,
         radius: event.variant === 1 ? 160 : 300, variant: event.variant, major: true });
-      motes(event.x, event.y, 'star', '#ffe8aa', 16, { speed: 220, spread: 25, life: 0.8, size: 5 });
+      motes(event.x, event.y, 'star', color, 16, { speed: 220, spread: 25, life: 0.8, size: 5 });
       return;
     }
     if (event.color === 4) {
@@ -165,6 +166,9 @@ export function createAnimator({ onHit, onKill } = {}) {
       shake = Math.max(shake, 10);
     } else if (event.kind === 'evade') {
       burst(event.x, event.y, colors[event.color], 5, 50);
+    } else if (event.kind === 'auroraRay') {
+      effects.push({ kind: 'auroraRay', x: event.x, y: event.y, tx: event.tx, ty: event.ty,
+        color: '#ffd778', age: 0, life: 0.3 });
     } else if (event.kind === 'chain' && !reduced) {
       effects.push({ kind: 'chain', points: event.points, color: colors[event.color] || '#bfe8ff', age: 0, life: 0.28, seed: event.id });
     } else if (event.kind === 'familiar' && !reduced) {
@@ -693,7 +697,7 @@ function drawSystemReset(ctx, fx, progress) {
 }
 
 const DRAWERS = { aurora: drawAurora, systemReset: drawSystemReset, sigil: drawSigil, ascend: drawAscend, bloom: drawBloom, implode: drawImplode, convergence: drawConvergence, signal: drawSignal, mote: drawMote, nova: drawNova, meteor: drawMeteor, impact: drawImpact, thorns: drawThorns, lunar: drawLunar, familiar: drawFamiliarStrike };
-const UNCULLED = new Set(['chain', 'familiar', 'lunar', 'convergence']);
+const UNCULLED = new Set(['chain', 'familiar', 'lunar', 'convergence', 'auroraRay']);
 
 export function drawEffects(ctx, animator, drawGhost, visible) {
   for (const fx of animator.effects) {
@@ -714,6 +718,13 @@ export function drawEffects(ctx, animator, drawGhost, visible) {
     } else if (fx.kind === 'chain') {
       ctx.lineWidth = 5; ctx.globalAlpha = (1 - progress) * 0.35; jagged(ctx, fx.points, fx.seed, progress);
       ctx.lineWidth = 2; ctx.globalAlpha = 1 - progress; ctx.strokeStyle = '#f4fbff'; jagged(ctx, fx.points, fx.seed, progress);
+    } else if (fx.kind === 'auroraRay') {
+      ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+      ctx.globalAlpha = (1 - progress) * 0.45; ctx.lineWidth = 11;
+      ctx.beginPath(); ctx.moveTo(fx.x, fx.y); ctx.lineTo(fx.tx, fx.ty); ctx.stroke();
+      ctx.globalAlpha = 1 - progress; ctx.strokeStyle = '#fff9db'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(fx.x, fx.y); ctx.lineTo(fx.tx, fx.ty); ctx.stroke();
+      ctx.beginPath(); ctx.arc(fx.tx, fx.ty, 5 + progress * 9, 0, TAU); ctx.stroke();
     } else if (DRAWERS[fx.kind]) {
       DRAWERS[fx.kind](ctx, fx, progress);
     } else if (fx.kind === 'combo') {

@@ -6,7 +6,8 @@ import { rankOf } from './powers.js';
 import { damageEnemy, distanceSq, nextId, pushEvent } from './combat.js';
 import { retainTail } from './arrays.js';
 import { DEVELOPER } from './developer.js';
-import { AURORA } from './aurora.js';
+import { AURORA, AURORA_RAY } from './aurora.js';
+import { GOD, GOD_PLANETS, godPlanetPosition } from './god.js';
 
 export const SPELLS = Object.freeze([
   { name: 'Raio glacial', sprite: 'bolt', tint: '#76dfff', speed: 490, radius: 29, pierce: 1, slow: true },
@@ -14,7 +15,8 @@ export const SPELLS = Object.freeze([
   { name: 'Espinho', sprite: 'thorn', tint: '#92ed68', speed: 560, radius: 29, pierce: 3 },
   { name: 'Lâmina lunar', sprite: 'blade', tint: '#c4a0ff', speed: 400, radius: 48, pierce: 2 },
   { name: 'Código-fonte', sprite: 'developerBolt', tint: '#73ffe4', speed: 620, radius: 38, pierce: 6, slow: true, splash: 95 },
-  { name: 'Lança da aurora', sprite: 'auroraBolt', tint: '#ffd778', speed: 530, radius: 32, pierce: 2 }
+  { name: 'Lança da aurora', sprite: 'auroraBolt', tint: '#ffd778', speed: 530, radius: 32, pierce: 2 },
+  { name: 'Orbe cósmico', sprite: 'godBolt', tint: '#36bfff', speed: 550, radius: 33, pierce: 3 }
 ]);
 export const SPECIALS = Object.freeze([
   { name: 'Nova glacial', description: 'Congela inimigos próximos; desacelera chefes.' },
@@ -22,7 +24,8 @@ export const SPECIALS = Object.freeze([
   { name: 'Jardim de espinhos', description: 'Prende inimigos em raízes e causa dano por 4s.' },
   { name: 'Passo lunar', description: 'Avança na direção do movimento e lança lâminas que retornam.' },
   { name: 'Reescrever realidade', description: 'Pulso devastador em 600 unidades, apaga projéteis, cura 50% e protege por 3s. Recarrega sozinho em 10s.' },
-  { name: 'Alvorada', description: 'Explosão solar em 300 unidades com 6× de dano. Apaga projéteis próximos e protege por 1,5s.' }
+  { name: 'Alvorada', description: 'Explosão solar em 300 unidades com 6× de dano. Apaga projéteis próximos e protege por 1,5s.' },
+  { name: 'Big Bang', description: 'Explosão cósmica em 300 unidades com 6× de dano. Apaga projéteis e protege por 1,5s.' }
 ]);
 // Unlocked with "Segundo feitiço": one alternative special per character.
 export const ALT_SPECIALS = Object.freeze([
@@ -31,7 +34,8 @@ export const ALT_SPECIALS = Object.freeze([
   { name: 'Florescer', description: 'Cura você e aliados próximos em 30% e dispara 16 espinhos.' },
   { name: 'Eclipse', description: 'Um vórtice puxa inimigos para um ponto e explode depois de 2s.' },
   { name: 'Restauração do sistema', description: 'Elimina todos os inimigos presentes no mapa, incluindo chefes. Também cura aliados próximos, protege por 5s e apaga projéteis em 600 unidades.' },
-  { name: 'Coroa da aurora', description: 'Dispara 12 lanças solares ao redor, cada uma com 3× de dano e perfuração de dois alvos.' }
+  { name: 'Coroa da aurora', description: 'Dispara 12 lanças solares ao redor, cada uma com 3× de dano e perfuração de dois alvos.' },
+  { name: 'Constelação', description: 'Dispara 12 orbes cósmicos radiais, cada um com 3× de dano e perfuração de três alvos.' }
 ]);
 export const specialOf = p => (p?.specialVariant === 1 ? ALT_SPECIALS : SPECIALS)[p?.color ?? 0];
 
@@ -67,9 +71,9 @@ export function activateSpecial(s, playerId, random = Math.random) {
   if (!p?.alive || s.over || s.phaseStatus === 'transition' || p.pendingPowers || p.specialCharge < SPECIAL.max
     || p.specialCooldown > 0) return false;
   const alt = p.specialVariant === 1;
-  if (p.color === AURORA && alt && s.shots.length + 12 > LIMITS.shots) return false;
+  if ((p.color === AURORA || p.color === GOD) && alt && s.shots.length + 12 > LIMITS.shots) return false;
   if (alt ? p.color === 2 && s.shots.length + 16 > LIMITS.shots : p.color === 3 && s.shots.length + 8 > LIMITS.shots) return false;
-  if (p.color !== DEVELOPER && p.color !== AURORA && (alt ? p.color !== 2 : p.color === 1 || p.color === 2) && s.zones.length >= LIMITS.zones) return false;
+  if (p.color !== DEVELOPER && p.color !== AURORA && p.color !== GOD && (alt ? p.color !== 2 : p.color === 1 || p.color === 2) && s.zones.length >= LIMITS.zones) return false;
   p.specialCharge = 0;
   p.specialCooldown = SPECIAL_COOLDOWN;
   p.castCount++;
@@ -84,7 +88,7 @@ export function activateSpecial(s, playerId, random = Math.random) {
       ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * (alt ? 1 : 0.5) * healingScale(s));
       ally.invulnerableFor = Math.max(ally.invulnerableFor, alt ? 5 : 3);
     }
-  } else if (p.color === AURORA) {
+  } else if (p.color === AURORA || p.color === GOD) {
     if (alt) {
       for (let n = 0; n < 12; n++) s.shots.push(playerShot(p, n * Math.PI / 6, true));
     } else {
@@ -307,6 +311,32 @@ function updateOrbit(ctx, p, rank) {
 export const orbitRadius = (rank, evolved) => WEAPONS.orbit.radius + rank * 4 + (evolved ? 20 : 0);
 export const auraRadius = (rank, evolved) => WEAPONS.aura.radius + rank * WEAPONS.aura.radiusPerRank + (evolved ? WEAPONS.evolutions.sanctuary.radius : 0);
 
+function updateGodPlanets({ s, random, grid }, player) {
+  for (let n = 0; n < GOD_PLANETS.count; n++) {
+    const { x, y } = godPlanetPosition(player, s.time, n);
+    grid.query(x, y, GOD_PLANETS.hitRadius, enemy => {
+      if (enemy.hp > 0 && hitOnce(enemy, `g${player.id}`, s.time, GOD_PLANETS.hitEvery)) {
+        damageEnemy(s, enemy, player.damage * GOD_PLANETS.damage, random, { source: player, kind: 'orbit' });
+      }
+    });
+  }
+}
+
+function updateAuroraRay({ s, random, grid }, player) {
+  if (s.time < (player.auroraRayAt || 0)) return;
+  /** @type {any} */
+  let target = null;
+  let nearest = Infinity;
+  grid.query(player.x, player.y, AURORA_RAY.range, (enemy, d2) => {
+    if (enemy.hp > 0 && d2 < nearest) { target = enemy; nearest = d2; }
+  });
+  if (!target) { player.auroraRayAt = s.time + 0.25; return; }
+  player.auroraRayAt = s.time + AURORA_RAY.cooldown;
+  damageEnemy(s, target, player.damage * AURORA_RAY.damage, random, { source: player, kind: 'solarRay' });
+  pushEvent(s, 'auroraRay', { x: Math.round(player.x), y: Math.round(player.y - 25),
+    tx: Math.round(target.x), ty: Math.round(target.y), color: AURORA });
+}
+
 function updateAura(ctx, p, rank) {
   const { s, dt, random, grid, alive } = ctx;
   p.auraTimer = (p.auraTimer ?? 0) - dt;
@@ -447,6 +477,8 @@ export function updateWeapons(ctx) {
     const orbit = rankOf(p, 'orbit'), aura = rankOf(p, 'aura'), chain = rankOf(p, 'chain'), runes = rankOf(p, 'runes');
     const familiar = rankOf(p, 'familiar');
     if (orbit) updateOrbit(ctx, p, orbit);
+    if (p.color === GOD) updateGodPlanets(ctx, p);
+    if (p.color === AURORA) updateAuroraRay(ctx, p);
     if (aura) updateAura(ctx, p, aura);
     if (chain) updateChain(ctx, p, chain);
     if (runes) updateRunes(ctx, p, runes);
@@ -504,6 +536,8 @@ export function estimateDps(p) {
   const r = id => rankOf(p, id);
   if (r('orbit')) dps += p.damage * (orbit.damage + orbit.damagePerRank * r('orbit')) / orbit.hitEvery * 0.35 * (r('constellation') ? 2 : 1)
     * (r('solarcrown') ? WEAPONS.evolutions.solarcrown.damage : 1);
+  if (p.color === GOD) dps += p.damage * GOD_PLANETS.damage / GOD_PLANETS.hitEvery * 0.5;
+  if (p.color === AURORA) dps += p.damage * AURORA_RAY.damage / AURORA_RAY.cooldown * 0.8;
   if (r('aura')) dps += p.damage * (aura.damage + aura.damagePerRank * r('aura')) / aura.every * 0.6;
   if (r('chain')) dps += p.damage * (chain.damage + chain.damagePerRank * r('chain')) / Math.max(0.9, chain.cooldown - chain.cooldownPerRank * r('chain'));
   if (r('runes')) dps += p.damage * (runes.damage + runes.damagePerRank * r('runes')) / (runes.cooldown - runes.cooldownPerRank * r('runes')) * 0.3;

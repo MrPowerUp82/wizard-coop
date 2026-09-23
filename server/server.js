@@ -8,6 +8,7 @@ import { sanitizeCurses } from './curses.js';
 import { selectPlayerCharacter } from './developer.js';
 import { SPELLS } from './weapons.js';
 import { AURORA } from './aurora.js';
+import { GOD } from './god.js';
 
 const env = (name, fallback) => {
   const value = Number(process.env[name] ?? fallback);
@@ -105,6 +106,7 @@ function join(ws, room, name, requestedColor, meta, loadout, unlocks) {
   room.sessions.set(token, id);
   const player = createPlayer(id, (typeof name === 'string' && name.trim() || 'Arcanista').slice(0, 16), color, sanitizeMeta(meta), loadout);
   player.auroraUnlocked = unlocks?.aurora === true;
+  player.godUnlocked = unlocks?.god === true;
   if (room.running) addLatePlayer(room.state, player);
   else room.state.players[id] = player;
   send(ws, { type: 'joined', room: room.code, playerId: id, token, color, count: playerCount(room), visibility: room.visibility });
@@ -200,6 +202,10 @@ wss.on('connection', (/** @type {Client} */ ws) => {
     if (['create', 'join', 'selectCharacter'].includes(message.type) && message.color === AURORA
       && !(message.type === 'selectCharacter' ? player?.auroraUnlocked : message.unlocks?.aurora === true)) {
       return send(ws, { type: 'error', code: 'CHARACTER_LOCKED', message: 'Vença o modo Clássico para desbloquear o Guardião da Aurora.' });
+    }
+    if (['create', 'join', 'selectCharacter'].includes(message.type) && message.color === GOD
+      && !(message.type === 'selectCharacter' ? player?.godUnlocked : message.unlocks?.god === true)) {
+      return send(ws, { type: 'error', code: 'CHARACTER_LOCKED', message: 'Compre The God no Grimório para desbloqueá-lo.' });
     }
 
     if (message.type === 'create') {

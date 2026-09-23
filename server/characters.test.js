@@ -30,7 +30,7 @@ test('personagens escolhidos são únicos por sala, trocáveis no lobby e libera
     };
   }
   const host = await connect();
-  for (const color of [-1, 6, 1.5, '2', null, {}, []]) {
+  for (const color of [-1, 7, 1.5, '2', null, {}, []]) {
     host.send({ type: 'create', color });
     assert.match((await host.receive('error')).message, /inválido/);
   }
@@ -38,6 +38,10 @@ test('personagens escolhidos são únicos por sala, trocáveis no lobby e libera
   assert.equal((await host.receive('rooms')).capacity.used, 0);
   for (const unlocks of [undefined, { aurora: false }, { aurora: 'true' }]) {
     host.send({ type: 'create', color: 5, unlocks });
+    assert.equal((await host.receive('error')).code, 'CHARACTER_LOCKED');
+  }
+  for (const unlocks of [undefined, { god: false }, { god: 'true' }]) {
+    host.send({ type: 'create', color: 6, unlocks });
     assert.equal((await host.receive('error')).code, 'CHARACTER_LOCKED');
   }
   host.send({ type: 'listRooms' });
@@ -49,6 +53,8 @@ test('personagens escolhidos são únicos por sala, trocáveis no lobby e libera
   assert.equal(firstLobby.players[0].color, 2);
   assert.equal(firstLobby.hostId, created.playerId);
   host.send({ type: 'selectCharacter', color: 5, unlocks: { aurora: true } });
+  assert.equal((await host.receive('error')).code, 'CHARACTER_LOCKED');
+  host.send({ type: 'selectCharacter', color: 6, unlocks: { god: true } });
   assert.equal((await host.receive('error')).code, 'CHARACTER_LOCKED');
 
   const guest = await connect();

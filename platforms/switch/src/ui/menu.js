@@ -1,6 +1,7 @@
 // @ts-check
 import { SPELLS } from '../../../../server/game.js';
 import { SPECIALS } from '../../../../server/weapons.js';
+import { GOD, GOD_COST } from '../../../../server/god.js';
 import { CAMPAIGNS, campaignId } from '../../../../server/campaign.js';
 import { CURSES, dailyChallenge } from '../../../../server/curses.js';
 import { characterEffects, characterNames, dailyRecord } from '../../../../src/menu.js';
@@ -33,6 +34,8 @@ export function createSwitchMenu({ controllers, wallet, audio, debugControllers,
   let focus = 0;
   let character = savedCharacter('arcana-character', 0);
   const characters = [character, savedCharacter('arcana-character-p2', (character + 1) % SPELLS.length)];
+  if (characters[0] === GOD && !wallet.godUnlocked) characters[0] = character = 0;
+  if (characters[1] === GOD && !wallet.godUnlocked) characters[1] = 1;
   let campaign = campaignId(prefs.get('arcana-campaign'));
   let ready = [false, false];
   let message = null;
@@ -64,13 +67,17 @@ export function createSwitchMenu({ controllers, wallet, audio, debugControllers,
       ready = [false, false];
       controllers.setCoop(true);
       controllers.autoAssign();
-      if (characters[1] === characters[0]) characters[1] = (characters[0] + 1) % SPELLS.length;
+      if (characters[1] === characters[0]) {
+        do characters[1] = (characters[1] + 1) % SPELLS.length;
+        while (characters[1] === GOD && !wallet.godUnlocked);
+      }
     } else if (next === 'main') controllers.setCoop(false);
   }
 
   function cycleCharacter(slot, step) {
     let next = characters[slot];
-    do next = (next + step + SPELLS.length) % SPELLS.length; while (screen === 'lobby' && next === characters[1 - slot]);
+    do next = (next + step + SPELLS.length) % SPELLS.length;
+    while ((screen === 'lobby' && next === characters[1 - slot]) || (next === GOD && !wallet.godUnlocked));
     characters[slot] = next;
     prefs.set(slot ? 'arcana-character-p2' : 'arcana-character', String(next));
     click();
@@ -142,7 +149,8 @@ export function createSwitchMenu({ controllers, wallet, audio, debugControllers,
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
     text(ctx, characterNames[color], x + width / 2, y + 148, { font: '700 22px Cinzel', align: 'center', color: spell.tint });
     text(ctx, spell.name, x + width / 2, y + 172, { font: '600 15px Inter', align: 'center', maxWidth: width - 20 });
-    wrapText(ctx, `${characterEffects[color]} · Especial: ${SPECIALS[color].name}`, x + 14, y + 196, width - 28, 18, { font: '500 13px Inter', color: COLORS.dim });
+    wrapText(ctx, color === GOD && !wallet.godUnlocked ? `Bloqueado · compre por ${GOD_COST} moedas no Grimório`
+      : `${characterEffects[color]} · Especial: ${SPECIALS[color].name}`, x + 14, y + 196, width - 28, 18, { font: '500 13px Inter', color: COLORS.dim });
   }
 
   function drawTitle(ctx, W, subtitle) {
@@ -187,8 +195,13 @@ export function createSwitchMenu({ controllers, wallet, audio, debugControllers,
         text(ctx, '↑ ↓ navegar · A / ▶ confirmar', W / 2, H - 28, { font: '600 15px Inter', align: 'center', color: COLORS.dim });
       } else if (screen === 'solo') {
         drawTitle(ctx, W, 'ESCOLHA SEU PERSONAGEM');
-        const width = 250, gap = 24, total = SPELLS.length * width + (SPELLS.length - 1) * gap;
-        SPELLS.forEach((_, color) => drawCharacter(ctx, color, (W - total) / 2 + color * (width + gap), 220, width, { active: color === characters[0], time }));
+        const width = 250, gap = 24;
+        const visible = 4, start = Math.max(0, Math.min(characters[0] - 1, SPELLS.length - visible));
+        SPELLS.slice(start, start + visible).forEach((_, index) => {
+          const color = start + index;
+          drawCharacter(ctx, color, (W - visible * width - (visible - 1) * gap) / 2 + index * (width + gap), 220, width,
+            { active: color === characters[0], time });
+        });
         text(ctx, `◀ ▶ escolher · A confirmar · B voltar · ${CAMPAIGNS[campaign].name}`, W / 2, H - 40, { font: '600 17px Inter', align: 'center', color: COLORS.mint });
       } else if (screen === 'lobby') {
         drawTitle(ctx, W, 'CO-OP LOCAL · TELA DIVIDIDA');

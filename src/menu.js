@@ -8,12 +8,13 @@ import { renderCodex } from './codex.js';
 import { DEVELOPER } from '../server/developer.js';
 import { characterPortrait } from './characterPortrait.js';
 import { AURORA } from '../server/aurora.js';
+import { GOD, GOD_COST } from '../server/god.js';
 import { createAchievements } from './achievements.js';
 
 const $ = selector => document.querySelector(selector);
 const DEFAULT_SERVER = 'wss://vps65228.publiccloud.com.br/ws';
-export const characterNames = ['Azul', 'Vermelho', 'Verde', 'Roxo', 'O Desenvolvedor', 'Guardião da Aurora'];
-export const characterEffects = ['Desacelera inimigos', 'Explode em área', 'Atravessa 3 inimigos', 'Lâmina larga, até 2 alvos', 'Secreto · 5× vida, 4× dano, disparo triplo', '+50% vida · +35% dano · perfura 2 alvos'];
+export const characterNames = ['Azul', 'Vermelho', 'Verde', 'Roxo', 'O Desenvolvedor', 'Guardião da Aurora', 'The God'];
+export const characterEffects = ['Desacelera inimigos', 'Explode em área', 'Atravessa 3 inimigos', 'Lâmina larga, até 2 alvos', 'Secreto · 5× vida, 4× dano, disparo triplo', '+50% vida · +35% dano · perfura 2 alvos · raio solar periódico', '500 de vida · +50% dano · +20% velocidade · 12 armadura · ataques 15% mais rápidos · perfura 3 alvos · 2 planetas orbitais'];
 const achievements = createAchievements();
 
 const storage = {
@@ -22,8 +23,9 @@ const storage = {
 };
 let secretFound = false;
 const developerUnlocked = () => secretFound || storage.get('arcana-developer-unlocked') === '1';
-const characterAvailable = color => Number.isInteger(color) && color >= 0 && color < SPELLS.length
-  && (color !== DEVELOPER || developerUnlocked()) && (color !== AURORA || achievements.aurora);
+const godUnlocked = () => {
+  try { return JSON.parse(storage.get('arcana-meta') || '{}').godUnlocked === true; } catch { return false; }
+};
 
 export function serverUrl() {
   return new URLSearchParams(location.search).get('server') || storage.get('arcana-server') || DEFAULT_SERVER;
@@ -39,7 +41,7 @@ export function renderCharacterPicker(element, selected, players, ownId, onChoos
   element.replaceChildren(...SPELLS.flatMap((spell, color) => {
     if (color === DEVELOPER && !developerUnlocked()) return [];
     const occupant = players.find(p => p.color === color && p.id !== ownId);
-    const locked = color === AURORA && !achievements.aurora;
+    const locked = (color === AURORA && !achievements.aurora) || (color === GOD && !godUnlocked());
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'character-option'; button.dataset.color = String(color);
     button.setAttribute('aria-pressed', String(color === selected));
@@ -51,8 +53,9 @@ export function renderCharacterPicker(element, selected, players, ownId, onChoos
     const title = document.createElement('b'); title.textContent = characterNames[color];
     const power = document.createElement('span'); power.textContent = spell.name;
     const detail = document.createElement('small');
-    detail.textContent = locked ? 'Bloqueado · vença os seis reinos no modo Clássico' : occupant ? `Em uso: ${occupant.name}` : `${characterEffects[color]} · Especial: ${SPECIALS[color].name}`;
-    button.title = locked ? 'Derrote o último guardião no modo Clássico para desbloquear.' : SPECIALS[color].description;
+    detail.textContent = locked ? color === GOD ? `Bloqueado · compre por ${GOD_COST} moedas no Grimório` : 'Bloqueado · vença os seis reinos no modo Clássico'
+      : occupant ? `Em uso: ${occupant.name}` : `${characterEffects[color]} · Especial: ${SPECIALS[color].name}`;
+    button.title = locked ? color === GOD ? `Compre The God por ${GOD_COST} moedas no Grimório.` : 'Derrote o último guardião no modo Clássico para desbloquear.' : SPECIALS[color].description;
     button.append(portrait, title, power, detail);
     button.onclick = () => onChoose(color);
     return button;
@@ -77,6 +80,9 @@ export function saveDailyRecord(key, result) {
 }
 
 export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, onCreate, onJoin, isIdle, audio }) {
+  const characterAvailable = color => Number.isInteger(color) && color >= 0 && color < SPELLS.length
+    && (color !== DEVELOPER || developerUnlocked()) && (color !== AURORA || achievements.aurora)
+    && (color !== GOD || wallet.godUnlocked);
   const saved = Number(storage.get('arcana-character') ?? 0);
   let selected = characterAvailable(saved) ? saved : 0;
   let visibility = 'open';
@@ -243,7 +249,11 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
       buy.textContent = offer.cost === null ? 'Completo' : `Comprar · ${offer.cost}`;
       buy.disabled = offer.cost === null || wallet.coins < offer.cost;
       buy.onclick = () => {
-        if (wallet.buy(offer.id)) { audio.play('chest'); toast(offer.unlock ? `${offer.title} desbloqueado` : `${offer.title} aprimorado`); renderShop(); renderOptions(); }
+        if (wallet.buy(offer.id)) {
+          audio.play('chest'); toast(offer.unlock ? `${offer.title} desbloqueado` : `${offer.title} aprimorado`);
+          renderShop(); renderOptions();
+          if (offer.id === 'theGod') { renderCharacterPicker($('#characterPicker'), selected, [], null, selectCharacter); renderSplit(); }
+        }
       };
       if (offer.unlock) card.classList.add('unlock');
       card.append(title, pips, description, buy);
@@ -334,7 +344,7 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 
   return {
-    get unlocks() { return { aurora: achievements.aurora }; },
+    get unlocks() { return { aurora: achievements.aurora, god: wallet.godUnlocked }; },
     recordVictory(result) {
       const earned = achievements.recordVictory(result);
       if (earned) {

@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AURORA } from './aurora.js';
+import { AURORA, AURORA_RAY } from './aurora.js';
 import { createAchievements } from '../src/achievements.js';
 import { createPlayer, createGameState, activateSpecial, updateGame, publicState } from './game.js';
 import { DEVELOPER, selectPlayerCharacter } from './developer.js';
 import { LIMITS } from './balance.js';
 import { encodeState, decodeState } from './protocol.js';
 import { createAnimator } from '../src/animation.js';
+import { createGrid } from './spatial.js';
+import { estimateDps, updateWeapons } from './weapons.js';
 
 function memoryStorage() {
   const data = new Map();
@@ -98,4 +100,48 @@ test('aurora não tem recarga automática e transmite cor e animação próprias
     animator.update(next, 0.016);
     assert.ok(animator.effects.some(fx => fx.kind === 'aurora' && fx.variant === variant));
   }
+});
+
+test('auréola atinge o alvo mais próximo a cada cinco segundos e envia seu efeito', () => {
+  const game = createGameState();
+  const guardian = createPlayer('a', 'Aurora', AURORA);
+  guardian.x = 0; game.players.a = guardian;
+  const near = { id: 1, type: 'slime', x: 100, y: 0, hp: 1000, maxHp: 1000, age: 0 };
+  const farther = { id: 2, type: 'slime', x: 200, y: 0, hp: 1000, maxHp: 1000, age: 0 };
+  const outside = { id: 3, type: 'slime', x: AURORA_RAY.range + 50, y: 0, hp: 1000, maxHp: 1000, age: 0 };
+  game.enemies = [near, farther, outside];
+  const grid = createGrid(); game.enemies.forEach(enemy => grid.insert(enemy));
+  const tick = () => updateWeapons({ s: game, dt: 0, random: () => 0.9, grid, alive: [guardian] });
+  tick();
+  assert.equal(near.hp, 1000 - guardian.damage * AURORA_RAY.damage);
+  assert.equal(farther.hp, 1000); assert.equal(outside.hp, 1000);
+  assert.equal(game.events[0].kind, 'auroraRay');
+  const view = decodeState(encodeState(game, 'a'));
+  assert.equal(view.events[0].kind, 'auroraRay');
+  const animator = createAnimator();
+  animator.update({ ...view, events: [] }, 0.016);
+  animator.update(view, 0.016);
+  assert.ok(animator.effects.some(effect => effect.kind === 'auroraRay'));
+  game.time = AURORA_RAY.cooldown - 0.1;
+  tick(); assert.equal(game.events.length, 1);
+  game.time = AURORA_RAY.cooldown;
+  tick(); assert.equal(game.events.length, 2);
+  assert.ok(estimateDps(guardian) > guardian.damage / guardian.attackDelay);
+});
+
+test('auréola espera um alvo e pausa durante a escolha de poder', () => {
+  const game = createGameState();
+  const guardian = createPlayer('a', 'Aurora', AURORA);
+  guardian.x = 0; game.players.a = guardian;
+  const grid = createGrid();
+  const tick = () => updateWeapons({ s: game, dt: 0, random: () => 0.9, grid, alive: [guardian] });
+  tick();
+  assert.equal(game.events.length, 0);
+  const enemy = { id: 1, type: 'slime', x: 100, y: 0, hp: 1000, maxHp: 1000, age: 0 };
+  game.enemies.push(enemy); grid.insert(enemy);
+  game.time = 0.25;
+  guardian.pendingPowers = ['armor'];
+  tick(); assert.equal(enemy.hp, 1000);
+  guardian.pendingPowers = null;
+  tick(); assert.equal(enemy.hp, 1000 - guardian.damage * AURORA_RAY.damage);
 });

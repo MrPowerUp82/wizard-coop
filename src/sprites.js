@@ -21,9 +21,8 @@ const PHASE2_BOUNDS = {
   voidling: [0, 836, 418, 418], voidscarab: [418, 836, 418, 418], umbra: [836, 836, 418, 418]
 };
 const VARIANTS = {
-  aurora: { base: 'player', hue: -165, saturation: 0.8, lightness: 1.3 },
   auroraBolt: { base: 'bolt', hue: -165, saturation: 0.8, lightness: 1.3 },
-  developer: { base: 'player', hue: -35, saturation: 0.65, lightness: 1.35 },
+  godBolt: { base: 'bolt', hue: 0, saturation: 1.4, lightness: 1.3 },
   developerBolt: { base: 'bolt', hue: -35, saturation: 0.65, lightness: 1.35 },
   bladePurple: { base: 'blade', hue: 55 },
   batEmber: { base: 'bat', hue: 105, saturation: 1.2 },
@@ -40,9 +39,9 @@ const VARIANTS = {
   gemRare: { base: 'gem', hue: 70 },
   gemEpic: { base: 'gem', hue: 170, saturation: 1.2 }
 };
-export const PLAYER_SPRITES = ['player', 'player2', 'player3', 'player4', 'developer', 'aurora'];
+export const PLAYER_SPRITES = ['player', 'player2', 'player3', 'player4', 'developer', 'aurora', 'god'];
 export const ENEMY_SPRITES = { slimelet: 'slime', bat: 'batEmber', brute: 'bruteMagma' };
-export const SHOT_SPRITES = ['bolt', 'fire', 'thorn', 'bladePurple', 'developerBolt', 'auroraBolt'];
+export const SHOT_SPRITES = ['bolt', 'fire', 'thorn', 'bladePurple', 'developerBolt', 'auroraBolt', 'godBolt'];
 
 const atlas = new Image();
 atlas.src = assetUrl('assets/sprites.webp');
@@ -50,6 +49,12 @@ const phaseAtlas = new Image();
 phaseAtlas.src = assetUrl('assets/phases.webp');
 const phase2Atlas = new Image();
 phase2Atlas.src = assetUrl('assets/phases2.webp');
+const developerImage = new Image();
+developerImage.src = assetUrl('assets/developer.png');
+const godImage = new Image();
+godImage.src = assetUrl('assets/the-god.png');
+const auroraImage = new Image();
+auroraImage.src = assetUrl('assets/aurora.png');
 const cache = new Map();
 
 function rgbToHsl(r, g, b) {
@@ -85,12 +90,15 @@ function recolor(canvas, { hue = 0, saturation = 1, lightness = 1 }) {
 function bake(name) {
   const variant = VARIANTS[name];
   const base = variant?.base || name;
+  const standalone = name === 'developer' || name === 'god' || name === 'aurora';
   const phase2 = PHASE2_BOUNDS[base];
   const phase = PHASE_BOUNDS[base];
-  const source = phase2 ? phase2Atlas : phase ? phaseAtlas : atlas;
+  const source = name === 'developer' ? developerImage : name === 'god' ? godImage : name === 'aurora' ? auroraImage
+    : phase2 ? phase2Atlas : phase ? phaseAtlas : atlas;
   if (!source.complete || !source.naturalWidth) return null;
-  const bounds = phase2 || phase || [ATLAS_CELLS[base][0] * CELL, ATLAS_CELLS[base][1] * CELL, CELL, CELL];
-  const resolution = (phase || phase2) ? 256 : 128;
+  const bounds = standalone ? [0, 0, source.naturalWidth, source.naturalHeight]
+    : phase2 || phase || [ATLAS_CELLS[base][0] * CELL, ATLAS_CELLS[base][1] * CELL, CELL, CELL];
+  const resolution = (standalone || phase || phase2) ? 256 : 128;
   const canvas = createCanvas(resolution, resolution);
   const [sx, sy, sw, sh] = bounds;
   canvas.getContext('2d').drawImage(source, sx, sy, sw, sh, 0, 0, resolution, resolution);

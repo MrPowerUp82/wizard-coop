@@ -139,7 +139,7 @@ async function main() {
   });
 
   for (const file of readdirSync(join(root, 'public', 'assets'))) {
-    if (file.endsWith('.webp')) copyFileSync(join(root, 'public', 'assets', file), join(romfs, 'assets', file));
+    if (file.endsWith('.webp') || file.endsWith('.png')) copyFileSync(join(root, 'public', 'assets', file), join(romfs, 'assets', file));
   }
 
   writeFileSync(join(romfs, 'nxjs.ini'), `[renderer]
