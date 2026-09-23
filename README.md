@@ -129,6 +129,22 @@ No co-op, a escolha de poder tem 15 segundos; depois disso, a primeira opção �
 | Verde | Espinho: atravessa até três inimigos sem atingir o mesmo duas vezes |
 | Roxo | Lâmina lunar: colisão mais larga e atravessa até dois inimigos |
 
+### Personagem secreto: O Desenvolvedor
+
+Toque ou clique **sete vezes no título Arcana Survivors** no menu (também funciona com Enter/Espaço ao focar o título). O Desenvolvedor aparece na seleção e o desbloqueio fica salvo neste navegador.
+
+Ele tem 5× de vida, 4× de dano, ataques duas vezes mais rápidos, três projéteis iniciais, +35% de velocidade e 12 de armadura. **Código-fonte** atravessa até seis alvos, desacelera e explode em área. Seu visual combina um mago ciano com sigilos geométricos e a marca `</>`.
+
+**Reescrever realidade** produz uma onda ciano e atinge inimigos em um raio de 600 unidades com 24× o dano, apaga projéteis nesse raio, cura 50% da vida máxima e protege por 3 s. A carga se regenera em 10 s, além dos cristais. Com *Segundo feitiço*, **Restauração do sistema** produz uma varredura magenta e elimina todos os inimigos presentes no mapa no instante da ativação, incluindo elites e chefes, independentemente da distância ou vida. Mantém abates, dano, drops e progressão de fase normais; inimigos que surgirem depois da ativação não são afetados. Também cura aliados vivos em até 600 unidades em 100% e protege por 5 s. Maldições que reduzem cura continuam valendo.
+
+Disponível no solo e cooperativo web, mantendo personagens únicos por sala. O desafio diário continua sorteando apenas os quatro magos originais. O segredo é um desbloqueio local, sem exclusividade de conta de desenvolvedor.
+
+### Recompensa do Clássico: Guardião da Aurora
+
+Vença os seis reinos no modo **Clássico**, solo ou cooperativo, para desbloquear permanentemente o **Guardião da Aurora** neste navegador. O resultado anuncia a recompensa e libera o personagem no menu. Derrotas, abandonos, modo Rápido, Infinito e desafio diário não contam. O desbloqueio segue o mesmo modelo de progresso local do Grimório; vitórias anteriores à inclusão desta recompensa não foram registradas.
+
+O Guardião usa vestes douradas e uma auréola solar. Tem **150 de vida, +35% de dano, +10% de velocidade, 3 de armadura e intervalo de ataque 15% menor**, antes das melhorias permanentes. A **Lança da aurora** atravessa dois alvos. **Alvorada** causa 6× de dano em 300 unidades, apaga projéteis nesse raio e protege por 1,5 s. Com *Segundo feitiço*, **Coroa da aurora** dispara 12 lanças radiais com 3× de dano. Seus especiais carregam com cristais normalmente: não há recarga automática nem eliminação global como no Desenvolvedor. O desafio diário continua usando somente os quatro magos padrão.
+
 ### Drops e Grimório
 
 Inimigos derrotados deixam XP e podem deixar coração (5%), cristal verde (20%) ou moeda (20%). Quando o chão fica cheio, novos cristais de XP se fundem aos próximos, que mudam de cor conforme o valor. Assim nenhum XP é perdido no limite de 220 drops.

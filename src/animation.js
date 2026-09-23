@@ -4,7 +4,7 @@ import { RENDER_TUNING } from './platform.js';
 export const MAX_EFFECTS = 128;
 export const MAX_NUMBERS = 60;
 const TAU = Math.PI * 2;
-const colors = ['#76dfff', '#ff9955', '#92ed68', '#c4a0ff'];
+const colors = ['#76dfff', '#ff9955', '#92ed68', '#c4a0ff', '#73ffe4', '#ffd778'];
 const SIGNAL_ICONS = { here: '⚑', help: '✚', danger: '⚠', look: '◉' };
 const EVENT_COLORS = { boom: '#ffb36b', elite: '#ffd36b', chest: '#ffe08a', magnet: '#8fd8ff', revive: '#9dffca', phoenix: '#ffb35c' };
 const FLOATING_TYPES = new Set(['wraith', 'eye', 'bat', 'lich', 'revenant', 'seer', 'voidling', 'archon']);
@@ -74,6 +74,24 @@ export function createAnimator({ onHit, onKill } = {}) {
   /** Each character's special gets its own layered effect: a shape, particles and a brief screen tint. */
   function special(event) {
     const seed = event.id * 7.31;
+    if (event.color === 5) {
+      effects.push({ kind: 'aurora', x: event.x, y: event.y, color: '#ffd778', age: 0, life: 0.9,
+        radius: event.variant === 1 ? 160 : 300, variant: event.variant, major: true });
+      motes(event.x, event.y, 'star', '#ffe8aa', 16, { speed: 220, spread: 25, life: 0.8, size: 5 });
+      return;
+    }
+    if (event.color === 4) {
+      if (event.variant === 1) {
+        effects.push({ kind: 'systemReset', x: event.x, y: event.y, color: '#ff638f', age: 0, life: 1.1, radius: 1200, major: true });
+        motes(event.x, event.y, 'star', '#ff638f', 24, { speed: -240, spread: 300, life: 0.9, size: 8 });
+        flash = { color: '#ff638f', alpha: 0.16, life: 0.3, age: 0 };
+        shake = Math.max(shake, 6);
+      } else {
+        effects.push({ kind: 'ring', x: event.x, y: event.y, color: '#73ffe4', age: 0, life: 0.8, radius: 600, major: true });
+        motes(event.x, event.y, 'star', '#73ffe4', 24, { speed: 400, spread: 60, life: 1, size: 7 });
+      }
+      return;
+    }
     if (event.variant === 1) return altSpecial(event, seed);
     if (event.color === 0) {
       effects.push({ kind: 'nova', x: event.x, y: event.y, age: 0, life: 0.9, radius: 280, seed, major: true });
@@ -170,7 +188,7 @@ export function createAnimator({ onHit, onKill } = {}) {
       shake = Math.max(shake, 18);
       freezeFor = 0.22;
     } else if (event.kind === 'special') {
-      burst(event.x, event.y, colors[event.color], 16, 120);
+      if (event.color !== 4 || event.variant !== 1) burst(event.x, event.y, colors[event.color], 16, 120);
       if (!reduced) special(event);
     } else if (EVENT_COLORS[event.kind] && event.x !== undefined) {
       burst(event.x, event.y, EVENT_COLORS[event.kind], event.kind === 'magnet' ? 20 : 12, event.kind === 'magnet' ? 220 : 80);
@@ -631,7 +649,50 @@ function drawAscend(ctx, fx, progress) {
   ctx.strokeText('NÍVEL +', fx.x, y); ctx.fillText('NÍVEL +', fx.x, y);
 }
 
-const DRAWERS = { sigil: drawSigil, ascend: drawAscend, bloom: drawBloom, implode: drawImplode, convergence: drawConvergence, signal: drawSignal, mote: drawMote, nova: drawNova, meteor: drawMeteor, impact: drawImpact, thorns: drawThorns, lunar: drawLunar, familiar: drawFamiliarStrike };
+function drawAurora(ctx, fx, progress) {
+  const radius = 20 + easeOut(progress) * fx.radius;
+  ctx.translate(fx.x, fx.y);
+  ctx.strokeStyle = fx.color; ctx.lineWidth = 3 * (1 - progress) + 1;
+  ctx.beginPath(); ctx.arc(0, 0, radius * 0.6, 0, TAU); ctx.stroke();
+  for (let n = 0; n < 12; n++) {
+    const angle = n * TAU / 12;
+    const inner = fx.variant === 1 ? radius * 0.45 : radius * 0.7;
+    ctx.beginPath(); ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+    ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius); ctx.stroke();
+  }
+}
+
+function drawSystemReset(ctx, fx, progress) {
+  const fade = 1 - progress;
+  const radius = fx.radius;
+  ctx.translate(fx.x, fx.y);
+  ctx.strokeStyle = fx.color;
+  ctx.globalAlpha = fade * 0.25;
+  ctx.lineWidth = 1;
+  // A rectangular scan grid and collapsing brackets contrast with the cyan radial blast.
+  ctx.beginPath();
+  for (let offset = -radius; offset <= radius; offset += 100) {
+    ctx.moveTo(offset, -radius); ctx.lineTo(offset, radius);
+    ctx.moveTo(-radius, offset); ctx.lineTo(radius, offset);
+  }
+  ctx.stroke();
+  const scanY = -radius + progress * radius * 2;
+  ctx.globalAlpha = fade * 0.8;
+  ctx.fillStyle = fx.color;
+  ctx.fillRect(-radius, scanY, radius * 2, 6);
+  const edge = 45 + (1 - easeOut(progress)) * 300;
+  ctx.lineWidth = 4;
+  for (const side of [-1, 1]) {
+    ctx.beginPath(); ctx.moveTo(side * (edge - 24), -edge);
+    ctx.lineTo(side * edge, -edge); ctx.lineTo(side * edge, edge);
+    ctx.lineTo(side * (edge - 24), edge); ctx.stroke();
+  }
+  ctx.globalAlpha = fade;
+  ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+  ctx.fillText('RESTAURAÇÃO DO SISTEMA', 0, -64);
+}
+
+const DRAWERS = { aurora: drawAurora, systemReset: drawSystemReset, sigil: drawSigil, ascend: drawAscend, bloom: drawBloom, implode: drawImplode, convergence: drawConvergence, signal: drawSignal, mote: drawMote, nova: drawNova, meteor: drawMeteor, impact: drawImpact, thorns: drawThorns, lunar: drawLunar, familiar: drawFamiliarStrike };
 const UNCULLED = new Set(['chain', 'familiar', 'lunar', 'convergence']);
 
 export function drawEffects(ctx, animator, drawGhost, visible) {

@@ -5,16 +5,25 @@ import { CURSES, curseReward, dailyChallenge, sanitizeCurses } from '../server/c
 import { STARTING_WEAPONS } from '../server/meta.js';
 import { POWER_INFO } from './powerInfo.js';
 import { renderCodex } from './codex.js';
+import { DEVELOPER } from '../server/developer.js';
+import { characterPortrait } from './characterPortrait.js';
+import { AURORA } from '../server/aurora.js';
+import { createAchievements } from './achievements.js';
 
 const $ = selector => document.querySelector(selector);
 const DEFAULT_SERVER = 'wss://vps65228.publiccloud.com.br/ws';
-export const characterNames = ['Azul', 'Vermelho', 'Verde', 'Roxo'];
-export const characterEffects = ['Desacelera inimigos', 'Explode em área', 'Atravessa 3 inimigos', 'Lâmina larga, até 2 alvos'];
+export const characterNames = ['Azul', 'Vermelho', 'Verde', 'Roxo', 'O Desenvolvedor', 'Guardião da Aurora'];
+export const characterEffects = ['Desacelera inimigos', 'Explode em área', 'Atravessa 3 inimigos', 'Lâmina larga, até 2 alvos', 'Secreto · 5× vida, 4× dano, disparo triplo', '+50% vida · +35% dano · perfura 2 alvos'];
+const achievements = createAchievements();
 
 const storage = {
   get(key) { try { return localStorage.getItem(key); } catch { return null; } },
   set(key, value) { try { localStorage.setItem(key, value); } catch { /* preference only */ } }
 };
+let secretFound = false;
+const developerUnlocked = () => secretFound || storage.get('arcana-developer-unlocked') === '1';
+const characterAvailable = color => Number.isInteger(color) && color >= 0 && color < SPELLS.length
+  && (color !== DEVELOPER || developerUnlocked()) && (color !== AURORA || achievements.aurora);
 
 export function serverUrl() {
   return new URLSearchParams(location.search).get('server') || storage.get('arcana-server') || DEFAULT_SERVER;
@@ -27,21 +36,23 @@ export function playerName() {
 export function renderCharacterPicker(element, selected, players, ownId, onChoose, disabled = false) {
   const active = /** @type {HTMLElement | null} */ (document.activeElement);
   const focused = element.contains(active) ? active?.dataset.color : undefined;
-  element.replaceChildren(...SPELLS.map((spell, color) => {
+  element.replaceChildren(...SPELLS.flatMap((spell, color) => {
+    if (color === DEVELOPER && !developerUnlocked()) return [];
     const occupant = players.find(p => p.color === color && p.id !== ownId);
+    const locked = color === AURORA && !achievements.aurora;
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'character-option'; button.dataset.color = String(color);
     button.setAttribute('aria-pressed', String(color === selected));
     button.style.setProperty('--character-color', spell.tint);
-    button.disabled = disabled || Boolean(occupant);
+    button.disabled = disabled || Boolean(occupant) || locked;
     const portrait = document.createElement('span');
     portrait.className = 'character-portrait'; portrait.setAttribute('aria-hidden', 'true');
-    portrait.style.backgroundPosition = `${color * 100 / 3}% 0`;
+    characterPortrait(portrait, color);
     const title = document.createElement('b'); title.textContent = characterNames[color];
     const power = document.createElement('span'); power.textContent = spell.name;
     const detail = document.createElement('small');
-    detail.textContent = occupant ? `Em uso: ${occupant.name}` : `${characterEffects[color]} · Especial: ${SPECIALS[color].name}`;
-    button.title = SPECIALS[color].description;
+    detail.textContent = locked ? 'Bloqueado · vença os seis reinos no modo Clássico' : occupant ? `Em uso: ${occupant.name}` : `${characterEffects[color]} · Especial: ${SPECIALS[color].name}`;
+    button.title = locked ? 'Derrote o último guardião no modo Clássico para desbloquear.' : SPECIALS[color].description;
     button.append(portrait, title, power, detail);
     button.onclick = () => onChoose(color);
     return button;
@@ -67,35 +78,37 @@ export function saveDailyRecord(key, result) {
 
 export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, onCreate, onJoin, isIdle, audio }) {
   const saved = Number(storage.get('arcana-character') ?? 0);
-  let selected = Number.isInteger(saved) && saved >= 0 && saved < 4 ? saved : 0;
+  let selected = characterAvailable(saved) ? saved : 0;
   let visibility = 'open';
   let campaign = campaignId(storage.get('arcana-campaign'));
   let curses = sanitizeCurses(readJson('arcana-curses', []));
   let weapon = storage.get('arcana-weapon') || '';
   let variant = storage.get('arcana-variant') === '1' ? 1 : 0;
   const savedSecond = Number(storage.get('arcana-character-p2') ?? 1);
-  let second = Number.isInteger(savedSecond) && savedSecond >= 0 && savedSecond < 4 ? savedSecond : 1;
+  let second = characterAvailable(savedSecond) ? savedSecond : 1;
   let codexTab = 'powers';
   let cancelRoomRequest = () => {};
 
   function selectCharacter(color) {
+    if (!characterAvailable(color)) return;
     selected = color;
     storage.set('arcana-character', String(color));
     renderCharacterPicker($('#characterPicker'), color, [], null, selectCharacter);
-    $('.sprite-preview').style.backgroundPosition = `${color * 100 / 3}% 0`;
+    characterPortrait($('.sprite-preview'), color);
     renderSplit();
     renderOptions();
   }
 
   /** Split screen: player 2 picks any character player 1 is not using. */
   function selectSecond(color) {
+    if (!characterAvailable(color)) return;
     second = color;
     storage.set('arcana-character-p2', String(color));
     renderSplit();
   }
 
   function renderSplit() {
-    if (second === selected) second = (selected + 1) % SPELLS.length;
+    if (second === selected) second = SPELLS.findIndex((_, color) => color !== selected && characterAvailable(color));
     renderCharacterPicker($('#splitPicker'), second, [{ id: 'p1', color: selected, name: 'Jogador 1' }], null, selectSecond);
   }
 
@@ -239,6 +252,19 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
   }
 
   selectCharacter(selected);
+  let secretClicks = 0;
+  $('#secretTitle').onclick = () => {
+    if (!isIdle()) return;
+    if (developerUnlocked()) { selectCharacter(DEVELOPER); return; }
+    secretClicks++;
+    if (secretClicks === 4) toast('Uma presença observa… mais três toques.');
+    if (secretClicks < 7) return;
+    secretFound = true;
+    storage.set('arcana-developer-unlocked', '1');
+    selectCharacter(DEVELOPER);
+    audio.play('chest');
+    toast('Easter egg descoberto: O Desenvolvedor despertou!');
+  };
   const campaignSelect = $('#campaignSelect');
   campaignSelect.value = campaign;
   campaignSelect.onchange = () => { campaign = campaignId(campaignSelect.value); storage.set('arcana-campaign', campaign); };
@@ -308,6 +334,15 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 
   return {
+    get unlocks() { return { aurora: achievements.aurora }; },
+    recordVictory(result) {
+      const earned = achievements.recordVictory(result);
+      if (earned) {
+        renderCharacterPicker($('#characterPicker'), selected, [], null, selectCharacter);
+        renderSplit();
+      }
+      return earned;
+    },
     get character() { return selected; },
     get secondCharacter() { return second; },
     get campaign() { return campaign; },

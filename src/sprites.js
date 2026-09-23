@@ -21,6 +21,10 @@ const PHASE2_BOUNDS = {
   voidling: [0, 836, 418, 418], voidscarab: [418, 836, 418, 418], umbra: [836, 836, 418, 418]
 };
 const VARIANTS = {
+  aurora: { base: 'player', hue: -165, saturation: 0.8, lightness: 1.3 },
+  auroraBolt: { base: 'bolt', hue: -165, saturation: 0.8, lightness: 1.3 },
+  developer: { base: 'player', hue: -35, saturation: 0.65, lightness: 1.35 },
+  developerBolt: { base: 'bolt', hue: -35, saturation: 0.65, lightness: 1.35 },
   bladePurple: { base: 'blade', hue: 55 },
   batEmber: { base: 'bat', hue: 105, saturation: 1.2 },
   bruteMagma: { base: 'brute', hue: -18, saturation: 1.6, lightness: 1.08 },
@@ -36,9 +40,9 @@ const VARIANTS = {
   gemRare: { base: 'gem', hue: 70 },
   gemEpic: { base: 'gem', hue: 170, saturation: 1.2 }
 };
-export const PLAYER_SPRITES = ['player', 'player2', 'player3', 'player4'];
+export const PLAYER_SPRITES = ['player', 'player2', 'player3', 'player4', 'developer', 'aurora'];
 export const ENEMY_SPRITES = { slimelet: 'slime', bat: 'batEmber', brute: 'bruteMagma' };
-export const SHOT_SPRITES = ['bolt', 'fire', 'thorn', 'bladePurple'];
+export const SHOT_SPRITES = ['bolt', 'fire', 'thorn', 'bladePurple', 'developerBolt', 'auroraBolt'];
 
 const atlas = new Image();
 atlas.src = assetUrl('assets/sprites.webp');

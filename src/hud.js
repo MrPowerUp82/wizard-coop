@@ -5,6 +5,7 @@ import { PHASES } from '../server/phases.js';
 import { phaseDuration } from '../server/campaign.js';
 import { specialOf } from '../server/weapons.js';
 import { KIND_LABELS, POWER_INFO, requirementText } from './powerInfo.js';
+import { characterPortrait } from './characterPortrait.js';
 
 const $ = selector => document.querySelector(selector);
 
@@ -75,7 +76,7 @@ export function createHud() {
       const dot = document.createElement('div');
       const alive = player.alive !== false;
       dot.className = `player-dot${alive ? '' : ' dead'}${player.connected === false ? ' offline' : ''}`;
-      dot.style.backgroundPosition = `${(player.color ?? index) * 100 / 3}% 0`;
+      characterPortrait(dot, player.color ?? index);
       dot.title = `${player.name}${alive ? '' : ' — derrotado'}${player.connected === false ? ' — reconectando' : ''}`;
       return dot;
     }));

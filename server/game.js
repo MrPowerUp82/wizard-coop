@@ -13,6 +13,7 @@ import { updateEncounter } from './encounters.js';
 import { healingScale, sanitizeCurses } from './curses.js';
 import { createGrid } from './spatial.js';
 import { retainTail } from './arrays.js';
+import { DEVELOPER, selectPlayerCharacter } from './developer.js';
 
 export { DROP_TTL, LIMITS, REVIVE, SPECIAL } from './balance.js';
 export { POWERS, applyPower, availablePowers, rerollPowers } from './powers.js';
@@ -38,17 +39,18 @@ export function createGameState(campaign = 'classic', { curses = [], daily = nul
 
 export function createPlayer(id, name, color = 0, meta = null, loadout = null) {
   const player = {
-    id, name, color, x: color * 55, y: 0, hp: PLAYER_BASE.hp, maxHp: PLAYER_BASE.hp, xp: 0, level: 1,
+    id, name, color: 0, x: 0, y: 0, hp: PLAYER_BASE.hp, maxHp: PLAYER_BASE.hp, xp: 0, level: 1,
     alive: true, input: { x: 0, y: 0 }, speed: PLAYER_BASE.speed, damage: PLAYER_BASE.damage, attackDelay: PLAYER_BASE.attackDelay,
     attackCooldown: 0, projectiles: PLAYER_BASE.projectiles, pickupRadius: PLAYER_BASE.pickupRadius, armor: 0,
     hitCooldown: 0, invulnerableFor: 0, powers: {}, pendingPowers: null, powerTimer: 0, pendingChests: 0,
     specialCharge: 0, specialCooldown: 0, coins: 0, coinFrac: 0, coinMult: 1, xpMult: 1, rerolls: 1, phoenix: 0,
     dashFor: 0, dashCooldown: 0, dashX: 0, dashY: 1, moveX: 0, moveY: 1, motionId: 0,
     reviveProgress: 0, reviveBy: null, reviving: null, castCount: 0, castAngle: 0, orbitAngle: 0, inputSeq: 0,
-    specialVariant: 0, signalAt: -Infinity,
+    specialVariant: 0, signalAt: -Infinity, auroraUnlocked: false,
     stats: { damage: 0, kills: 0, revives: 0, taken: 0, by: {} }
   };
   if (meta || loadout) applyMeta(player, meta, loadout);
+  selectPlayerCharacter(player, color);
   return player;
 }
 
@@ -249,6 +251,7 @@ export function updateGame(s, dt, random = Math.random) {
     p.dashCooldown = Math.max(0, (p.dashCooldown || 0) - dt);
     p.specialCooldown = Math.max(0, (p.specialCooldown || 0) - dt);
     if (!p.pendingPowers) {
+      if (p.color === DEVELOPER) p.specialCharge = Math.min(SPECIAL.max, p.specialCharge + dt * 10);
       if (p.input.x || p.input.y) { p.moveX = p.input.x; p.moveY = p.input.y; }
       const movement = movementDelta(p, p.input, dt);
       p.x += movement.x; p.y += movement.y;

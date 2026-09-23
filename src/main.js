@@ -1,4 +1,5 @@
 import './style.css';
+import { characterPortrait } from './characterPortrait.js';
 import './enhancements.css';
 import './mobile.css';
 import './desktop.css';
@@ -142,6 +143,9 @@ function showDefeat(allDead) {
   $('#defeatTitle').textContent = view.victory ? 'Ritual concluído!' : allDead ? 'Ritual encerrado' : 'Você caiu';
   $('#defeatText').textContent = view.victory ? 'Todos os guardiões caíram. A aurora pertence aos arcanistas.'
     : allDead ? 'Nenhum arcanista permaneceu de pé.' : 'Um aliado pode ressuscitar você permanecendo dentro do círculo por 4 segundos.';
+  const unlockedAurora = allDead && menu.recordVictory(view);
+  $('#characterReward').classList.toggle('hidden', !unlockedAurora);
+  $('#characterReward').textContent = unlockedAurora ? '☀ Guardião da Aurora desbloqueado! Seu novo personagem está disponível no menu.' : '';
   $('#finalStats').textContent = `TEMPO ${format(view.time)}  •  NÍVEL ${me.level}  •  FASE ${(view.phase || 0) + 1}/${PHASES.length}${view.loop ? ` · VOLTA ${view.loop + 1}` : ''}  •  MOEDAS ${me.coins || 0}`;
   renderDamageBreakdown(allDead ? me : null);
   $('#dailyResult').classList.add('hidden');
@@ -289,7 +293,7 @@ function showGame(label, room = '') {
   $('#roomPill').classList.toggle('hidden', !room);
   $('#roomPill').querySelector('b').textContent = room;
   $('#playerName').textContent = playerName().toUpperCase();
-  $('.avatar').style.backgroundPosition = `${(mode === 'offline' ? menu.character : session?.color ?? 0) * 100 / 3}% 0`;
+  characterPortrait($('.avatar'), mode === 'offline' ? menu.character : session?.color ?? 0);
   $('#pauseBtn').classList.toggle('hidden', mode !== 'offline');
   $('#hud').classList.toggle('coop', mode === 'online');
   $('#hud').classList.toggle('split', isSplit());
@@ -372,9 +376,9 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
   let lobbyPlayers = [];
   let lobbyRunning = false;
   const entry = { action, code, visibility, name: playerName(), color: menu.character, meta: wallet.upgrades, campaign: menu.campaign,
-    curses: menu.curses, loadout: menu.loadout, resume };
+    curses: menu.curses, loadout: menu.loadout, unlocks: menu.unlocks, resume };
   const requestEntry = color => current.send({ type: action, v: PROTOCOL_VERSION, room: code, name: playerName(), visibility, color, meta: wallet.upgrades,
-    campaign: menu.campaign, curses: menu.curses, loadout: menu.loadout });
+    campaign: menu.campaign, curses: menu.curses, loadout: menu.loadout, unlocks: menu.unlocks });
   const renderLobbyCharacters = (disabled = false) => {
     renderCharacterPicker($('#lobbyCharacters'), current.playerId ? current.color : menu.character, lobbyPlayers, current.playerId, color => {
       if (session !== current) return;

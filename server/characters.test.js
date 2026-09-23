@@ -30,9 +30,15 @@ test('personagens escolhidos são únicos por sala, trocáveis no lobby e libera
     };
   }
   const host = await connect();
-  for (const color of [-1, 4, 1.5, '2', null, {}, []]) {
+  for (const color of [-1, 6, 1.5, '2', null, {}, []]) {
     host.send({ type: 'create', color });
     assert.match((await host.receive('error')).message, /inválido/);
+  }
+  host.send({ type: 'listRooms' });
+  assert.equal((await host.receive('rooms')).capacity.used, 0);
+  for (const unlocks of [undefined, { aurora: false }, { aurora: 'true' }]) {
+    host.send({ type: 'create', color: 5, unlocks });
+    assert.equal((await host.receive('error')).code, 'CHARACTER_LOCKED');
   }
   host.send({ type: 'listRooms' });
   assert.equal((await host.receive('rooms')).capacity.used, 0);
@@ -42,6 +48,8 @@ test('personagens escolhidos são únicos por sala, trocáveis no lobby e libera
   const firstLobby = await host.receive('lobby');
   assert.equal(firstLobby.players[0].color, 2);
   assert.equal(firstLobby.hostId, created.playerId);
+  host.send({ type: 'selectCharacter', color: 5, unlocks: { aurora: true } });
+  assert.equal((await host.receive('error')).code, 'CHARACTER_LOCKED');
 
   const guest = await connect();
   guest.send({ type: 'join', room: created.room, color: 2 });
@@ -71,8 +79,16 @@ test('personagens escolhidos são únicos por sala, trocáveis no lobby e libera
 
   // Uniqueness is scoped to the room, not the whole server.
   const otherHost = await connect();
-  otherHost.send({ type: 'create', color: 2 });
-  assert.equal((await otherHost.receive('joined')).color, 2);
+  otherHost.send({ type: 'create', color: 5, unlocks: { aurora: true } });
+  const secretHost = await otherHost.receive('joined');
+  assert.equal(secretHost.color, 5);
+  otherHost.send({ type: 'selectCharacter', color: 2 });
+  await otherHost.receive('lobby', m => m.players[0].color === 2);
+  otherHost.send({ type: 'selectCharacter', color: 4 });
+  await otherHost.receive('lobby', m => m.players[0].color === 4);
+  otherHost.send({ type: 'start' });
+  const secretState = decodeState((await otherHost.receive('start')).state);
+  assert.equal(secretState.players[secretHost.playerId].maxHp, 500);
   host.send({ type: 'start' });
   const started = decodeState((await host.receive('start')).state);
   assert.equal(started.players[created.playerId].color, 2);

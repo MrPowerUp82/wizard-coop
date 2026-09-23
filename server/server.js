@@ -5,6 +5,9 @@ import { campaignId } from './campaign.js';
 import { PROTOCOL_VERSION, encodeState } from './protocol.js';
 import { sanitizeMeta } from './meta.js';
 import { sanitizeCurses } from './curses.js';
+import { selectPlayerCharacter } from './developer.js';
+import { SPELLS } from './weapons.js';
+import { AURORA } from './aurora.js';
 
 const env = (name, fallback) => {
   const value = Number(process.env[name] ?? fallback);
@@ -90,7 +93,7 @@ function attach(ws, room, id, token) {
   if (!room.host || !room.clients.has(room.host)) room.host = ws;
 }
 
-function join(ws, room, name, requestedColor, meta, loadout) {
+function join(ws, room, name, requestedColor, meta, loadout, unlocks) {
   if (room.state.over) return send(ws, { type: 'error', message: 'Este ritual já terminou. Crie uma nova sala.' });
   if (playerCount(room) >= MAX_PLAYERS) return send(ws, { type: 'error', message: 'A sala está cheia.' });
   const usedColors = new Set(Object.values(room.state.players).map(p => p.color));
@@ -101,6 +104,7 @@ function join(ws, room, name, requestedColor, meta, loadout) {
   attach(ws, room, id, token);
   room.sessions.set(token, id);
   const player = createPlayer(id, (typeof name === 'string' && name.trim() || 'Arcanista').slice(0, 16), color, sanitizeMeta(meta), loadout);
+  player.auroraUnlocked = unlocks?.aurora === true;
   if (room.running) addLatePlayer(room.state, player);
   else room.state.players[id] = player;
   send(ws, { type: 'joined', room: room.code, playerId: id, token, color, count: playerCount(room), visibility: room.visibility });
@@ -188,11 +192,15 @@ wss.on('connection', (/** @type {Client} */ ws) => {
     }
     if (['create', 'join', 'selectCharacter'].includes(message.type)
       && (message.color !== undefined || message.type === 'selectCharacter')
-      && (!Number.isInteger(message.color) || message.color < 0 || message.color > 3)) {
+      && (!Number.isInteger(message.color) || message.color < 0 || message.color >= SPELLS.length)) {
       return send(ws, { type: 'error', message: 'Personagem inválido.' });
     }
     const room = ws.room;
     const player = room?.state.players[ws.id];
+    if (['create', 'join', 'selectCharacter'].includes(message.type) && message.color === AURORA
+      && !(message.type === 'selectCharacter' ? player?.auroraUnlocked : message.unlocks?.aurora === true)) {
+      return send(ws, { type: 'error', code: 'CHARACTER_LOCKED', message: 'Vença o modo Clássico para desbloquear o Guardião da Aurora.' });
+    }
 
     if (message.type === 'create') {
       if (rooms.size >= MAX_ROOMS) {
@@ -206,18 +214,17 @@ wss.on('connection', (/** @type {Client} */ ws) => {
         visibility: message.visibility === 'open' ? 'open' : 'closed' };
       created.expire = setTimeout(() => { if (!created.running) destroyRoom(created, 4001, 'Sala expirou antes da batalha'); }, LOBBY_IDLE_MS);
       rooms.set(created.code, created);
-      join(ws, created, message.name, message.color, message.meta, message.loadout);
+      join(ws, created, message.name, message.color, message.meta, message.loadout, message.unlocks);
       if (!ws.room) destroyRoom(created);
     } else if (message.type === 'join') {
       const target = rooms.get(String(message.room || '').toUpperCase());
-      target ? join(ws, target, message.name, message.color, message.meta, message.loadout) : send(ws, { type: 'error', message: 'Sala não encontrada.' });
+      target ? join(ws, target, message.name, message.color, message.meta, message.loadout, message.unlocks) : send(ws, { type: 'error', message: 'Sala não encontrada.' });
     } else if (message.type === 'resume') {
       resume(ws, message);
     } else if (message.type === 'selectCharacter' && room) {
       if (room.running || room.state.over) return send(ws, { type: 'error', message: 'O personagem só pode ser trocado antes da batalha.' });
       if (Object.values(room.state.players).some(p => p.id !== ws.id && p.color === message.color)) return characterTaken(ws, room);
-      player.color = message.color;
-      player.x = message.color * 55;
+      selectPlayerCharacter(player, message.color);
       broadcast(room, lobbyState(room));
     } else if (message.type === 'start' && room?.host === ws) {
       start(room);

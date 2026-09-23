@@ -5,25 +5,33 @@ import { dashDirection } from './movement.js';
 import { rankOf } from './powers.js';
 import { damageEnemy, distanceSq, nextId, pushEvent } from './combat.js';
 import { retainTail } from './arrays.js';
+import { DEVELOPER } from './developer.js';
+import { AURORA } from './aurora.js';
 
 export const SPELLS = Object.freeze([
   { name: 'Raio glacial', sprite: 'bolt', tint: '#76dfff', speed: 490, radius: 29, pierce: 1, slow: true },
   { name: 'Bola de fogo', sprite: 'fire', tint: '#ff9955', speed: 430, radius: 29, pierce: 1, splash: 75 },
   { name: 'Espinho', sprite: 'thorn', tint: '#92ed68', speed: 560, radius: 29, pierce: 3 },
-  { name: 'Lâmina lunar', sprite: 'blade', tint: '#c4a0ff', speed: 400, radius: 48, pierce: 2 }
+  { name: 'Lâmina lunar', sprite: 'blade', tint: '#c4a0ff', speed: 400, radius: 48, pierce: 2 },
+  { name: 'Código-fonte', sprite: 'developerBolt', tint: '#73ffe4', speed: 620, radius: 38, pierce: 6, slow: true, splash: 95 },
+  { name: 'Lança da aurora', sprite: 'auroraBolt', tint: '#ffd778', speed: 530, radius: 32, pierce: 2 }
 ]);
 export const SPECIALS = Object.freeze([
   { name: 'Nova glacial', description: 'Congela inimigos próximos; desacelera chefes.' },
   { name: 'Meteoro', description: 'Explode sobre o inimigo mais próximo e deixa brasas.' },
   { name: 'Jardim de espinhos', description: 'Prende inimigos em raízes e causa dano por 4s.' },
-  { name: 'Passo lunar', description: 'Avança na direção do movimento e lança lâminas que retornam.' }
+  { name: 'Passo lunar', description: 'Avança na direção do movimento e lança lâminas que retornam.' },
+  { name: 'Reescrever realidade', description: 'Pulso devastador em 600 unidades, apaga projéteis, cura 50% e protege por 3s. Recarrega sozinho em 10s.' },
+  { name: 'Alvorada', description: 'Explosão solar em 300 unidades com 6× de dano. Apaga projéteis próximos e protege por 1,5s.' }
 ]);
 // Unlocked with "Segundo feitiço": one alternative special per character.
 export const ALT_SPECIALS = Object.freeze([
   { name: 'Tempestade de granizo', description: 'Granizo cai ao seu redor por 3,5s, ferindo e desacelerando.' },
   { name: 'Égide flamejante', description: 'Um escudo de fogo gira com você por 5s e queima projéteis inimigos.' },
   { name: 'Florescer', description: 'Cura você e aliados próximos em 30% e dispara 16 espinhos.' },
-  { name: 'Eclipse', description: 'Um vórtice puxa inimigos para um ponto e explode depois de 2s.' }
+  { name: 'Eclipse', description: 'Um vórtice puxa inimigos para um ponto e explode depois de 2s.' },
+  { name: 'Restauração do sistema', description: 'Elimina todos os inimigos presentes no mapa, incluindo chefes. Também cura aliados próximos, protege por 5s e apaga projéteis em 600 unidades.' },
+  { name: 'Coroa da aurora', description: 'Dispara 12 lanças solares ao redor, cada uma com 3× de dano e perfuração de dois alvos.' }
 ]);
 export const specialOf = p => (p?.specialVariant === 1 ? ALT_SPECIALS : SPECIALS)[p?.color ?? 0];
 
@@ -59,13 +67,34 @@ export function activateSpecial(s, playerId, random = Math.random) {
   if (!p?.alive || s.over || s.phaseStatus === 'transition' || p.pendingPowers || p.specialCharge < SPECIAL.max
     || p.specialCooldown > 0) return false;
   const alt = p.specialVariant === 1;
+  if (p.color === AURORA && alt && s.shots.length + 12 > LIMITS.shots) return false;
   if (alt ? p.color === 2 && s.shots.length + 16 > LIMITS.shots : p.color === 3 && s.shots.length + 8 > LIMITS.shots) return false;
-  if ((alt ? p.color !== 2 : p.color === 1 || p.color === 2) && s.zones.length >= LIMITS.zones) return false;
+  if (p.color !== DEVELOPER && p.color !== AURORA && (alt ? p.color !== 2 : p.color === 1 || p.color === 2) && s.zones.length >= LIMITS.zones) return false;
   p.specialCharge = 0;
   p.specialCooldown = SPECIAL_COOLDOWN;
   p.castCount++;
   const event = { x: Math.round(p.x), y: Math.round(p.y), color: p.color, variant: alt ? 1 : 0 };
-  if (alt) castAltSpecial(s, p, event);
+  if (p.color === DEVELOPER) {
+    s.enemyShots = s.enemyShots.filter(shot => distanceSq(p, shot) > 600 ** 2);
+    // Snapshot the targets: enemies spawned after the cast are not part of the reset.
+    for (const enemy of [...s.enemies]) if (enemy.hp > 0 && (alt || distanceSq(p, enemy) <= 600 ** 2)) {
+      damageEnemy(s, enemy, alt ? enemy.hp : p.damage * 24, random, { source: p, slow: !alt, kind: 'special' });
+    }
+    for (const ally of Object.values(s.players)) if (ally.alive && (alt ? distanceSq(p, ally) <= 600 ** 2 : ally === p)) {
+      ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * (alt ? 1 : 0.5) * healingScale(s));
+      ally.invulnerableFor = Math.max(ally.invulnerableFor, alt ? 5 : 3);
+    }
+  } else if (p.color === AURORA) {
+    if (alt) {
+      for (let n = 0; n < 12; n++) s.shots.push(playerShot(p, n * Math.PI / 6, true));
+    } else {
+      for (const enemy of [...s.enemies]) if (enemy.hp > 0 && distanceSq(p, enemy) <= 300 ** 2) {
+        damageEnemy(s, enemy, p.damage * 6, random, { source: p, kind: 'special' });
+      }
+      s.enemyShots = s.enemyShots.filter(shot => distanceSq(p, shot) > 300 ** 2);
+      p.invulnerableFor = Math.max(p.invulnerableFor, 1.5);
+    }
+  } else if (alt) castAltSpecial(s, p, event);
   else if (p.color === 0) {
     for (const enemy of [...s.enemies]) if (distanceSq(p, enemy) < 280 ** 2 && enemy.hp > 0) {
       enemy.freezeFor = enemy.boss ? 0 : 2;

@@ -486,6 +486,25 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
     ctx.fill();
     drawSprite(ctx, PLAYER_SPRITES[player.color ?? 0], player.x + pose.x, player.y + pose.y, 68, pose.rotation,
       pose.alpha * (player.connected === false ? 0.45 : 1), pose.sx, pose.sy, pose.flash);
+    if (alive && player.color === 5) {
+      ctx.save();
+      ctx.strokeStyle = '#ffd778'; ctx.lineWidth = 2; ctx.globalAlpha = 0.8;
+      ctx.beginPath(); ctx.ellipse(player.x, player.y - 34, 18, 6, 0, 0, TAU); ctx.stroke();
+      ctx.restore();
+    }
+    if (alive && player.color === 4) {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(reduced ? 0 : time * 0.7);
+      ctx.strokeStyle = '#73ffe4'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.7;
+      ctx.strokeRect(-35, -35, 70, 70);
+      ctx.rotate(Math.PI / 4); ctx.strokeRect(-29, -29, 58, 58);
+      ctx.restore();
+      ctx.save();
+      ctx.fillStyle = '#73ffe4'; ctx.textAlign = 'center'; ctx.font = 'bold 14px monospace';
+      ctx.fillText('</>', player.x, player.y - 44);
+      ctx.restore();
+    }
     if (alive && powers.orbit) {
       const evolved = powers.constellation;
       const count = WEAPONS.orbit.counts[powers.orbit - 1] + (evolved ? WEAPONS.evolutions.constellation.extraOrbs : 0);

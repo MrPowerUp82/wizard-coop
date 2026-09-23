@@ -147,6 +147,28 @@ test('especiais de cada personagem geram efeitos próprios que somem sozinhos', 
   }
 });
 
+test('especiais do desenvolvedor têm visuais distintos, não se repetem e respeitam movimento reduzido', () => {
+  for (const variant of [0, 1]) for (const reduced of [false, true]) {
+    const game = fixture(); const animator = createAnimator();
+    animator.update(game, 0.016, { reduced });
+    game.events = [{ id: 1, kind: 'special', t: 0, x: 0, y: 0, color: 4, variant }];
+    animator.update(game, 0.016, { reduced });
+    if (reduced) {
+      assert.equal(animator.effects.length, 0);
+      assert.equal(animator.flash, null);
+    } else {
+      assert.ok(animator.effects.some(fx => fx.kind === (variant ? 'systemReset' : 'ring')));
+      assert.ok(!animator.effects.some(fx => fx.kind === (variant ? 'ring' : 'systemReset')));
+      const count = animator.effects.length;
+      animator.update(game, 0.016);
+      assert.equal(animator.effects.length, count);
+      for (let n = 0; n < 40; n++) animator.update(game, 0.05);
+      assert.equal(animator.effects.length, 0);
+      assert.equal(animator.flash, null);
+    }
+  }
+});
+
 test('movimento reduzido não gera efeitos de especial nem clarão', () => {
   const game = fixture(); const animator = createAnimator();
   animator.update(game, 0.016, { reduced: true });
