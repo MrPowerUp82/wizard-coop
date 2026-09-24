@@ -443,3 +443,18 @@ body, .menu-shell { min-height: 100dvh; }
 .character-option[data-color="6"] { border-color: #267dc4; background: linear-gradient(135deg, #102e56, #10162d); }
 .character-option[data-color="6"][aria-pressed="true"] { border-color: #36bfff; }
 .modal-card .character-reward { color: #ffd778; padding: 12px; border: 1px solid #a7823a; border-radius: 8px; }
+
+/* Opening seal and credits (mirror the native frontend). */
+.splash { position: fixed; inset: 0; z-index: 50; background: #060610; cursor: pointer; transition: opacity .25s; }
+.splash canvas { display: block; width: 100%; height: 100%; }
+.splash.leaving { opacity: 0; pointer-events: none; }
+.menu-links { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; }
+.credits-card { width: min(92vw, 460px); padding-top: 22px; }
+.credits-seal { display: block; width: 116px; height: 116px; margin: 0 auto; }
+.credits-card h2 { color: #ffd778; letter-spacing: .06em; text-transform: uppercase; }
+.credits-by { margin: 14px 0 2px; color: #8b9bb0; font-size: 13px; }
+.credits-dev { display: block; font-family: Cinzel, serif; font-size: 24px; color: #c8d4ff; }
+.credits-list { margin: 20px 0 16px; display: grid; gap: 12px; }
+.credits-list dt { color: #8b9bb0; font-size: 12px; }
+.credits-list dd { margin: 2px 0 0; color: #eef8f5; font-size: 15px; }
+.credits-legal { display: block; margin-bottom: 18px; color: #78829f; }

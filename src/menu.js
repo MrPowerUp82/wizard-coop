@@ -5,6 +5,7 @@ import { CURSES, curseReward, dailyChallenge, sanitizeCurses } from '../server/c
 import { STARTING_WEAPONS } from '../server/meta.js';
 import { POWER_INFO } from './powerInfo.js';
 import { renderCodex } from './codex.js';
+import { animateCreditsSeal } from './intro.js';
 import { DEVELOPER } from '../server/developer.js';
 import { characterPortrait } from './characterPortrait.js';
 import { AURORA } from '../server/aurora.js';
@@ -331,6 +332,14 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
     code.length < 4 ? toast('Digite o código da sala') : onJoin(code);
   };
   $('#settingsBtn').onclick = () => $('#settings').classList.toggle('hidden');
+  const closeCredits = () => $('#creditsModal').classList.add('hidden');
+  $('#creditsBtn').onclick = () => {
+    $('#creditsModal').classList.remove('hidden');
+    animateCreditsSeal($('#creditsSeal'), () => !$('#creditsModal').classList.contains('hidden'));
+    $('#creditsClose').focus();
+  };
+  $('#creditsClose').onclick = closeCredits;
+  addEventListener('keydown', event => { if (event.key === 'Escape') closeCredits(); });
   $('#serverUrl').value = serverUrl();
   $('#saveServer').onclick = () => { storage.set('arcana-server', $('#serverUrl').value.trim()); toast('Servidor salvo'); fetchOpenRooms(); };
   $('#playerNameInput').value = storage.get('arcana-player-name') || '';

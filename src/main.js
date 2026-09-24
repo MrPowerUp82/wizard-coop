@@ -30,6 +30,7 @@ import { createMenu, playerName, renderCharacterPicker, saveDailyRecord, serverU
 import { createSession, savedSession } from './net.js';
 import { DAMAGE_SOURCES, POWER_INFO } from './powerInfo.js';
 import { createWallet } from './wallet.js';
+import { playSplash } from './intro.js';
 
 const $ = selector => document.querySelector(selector);
 const canvas = $('#game');
@@ -298,6 +299,7 @@ function showGame(label, room = '') {
   $('#hud').classList.toggle('coop', mode === 'online');
   $('#hud').classList.toggle('split', isSplit());
   $('#codexModal').classList.add('hidden');
+  $('#creditsModal').classList.add('hidden');
   $('#muteBtn').textContent = audio.muted ? '♪̸' : '♪';
 }
 
@@ -470,6 +472,8 @@ $('#pauseBtn').onclick = () => togglePause();
 $('#resumeBtn').onclick = () => togglePause(false);
 $('#muteBtn').onclick = () => { $('#muteBtn').textContent = audio.toggleMute() ? '♪̸' : '♪'; };
 addEventListener('pointerdown', () => audio.unlock(), { once: true });
+
+playSplash();
 
 const pendingResume = savedSession();
 if (pendingResume && navigator.onLine) connect('join', pendingResume.room, 'closed', pendingResume);

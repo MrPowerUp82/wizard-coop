@@ -86,7 +86,7 @@
             <p id="roomCapacity" role="status"></p>
             <div id="openRoomsList" class="open-rooms-list" aria-live="polite"><small>Buscando rituais disponíveis…</small></div>
           </section>
-          <button id="settingsBtn" class="text-btn">⚙ Configurar servidor</button>
+          <div class="menu-links"><button id="settingsBtn" class="text-btn">⚙ Configurar servidor</button><button id="creditsBtn" class="text-btn">✧ Créditos</button></div>
           <div id="settings" class="settings hidden">
             <label>Servidor WebSocket <input id="serverUrl" placeholder="wss://jogo.seudominio.com/ws" /></label>
             <button id="saveServer" class="compact">Salvar</button>
@@ -119,6 +119,24 @@
           <div id="codexTabs" class="codex-tabs" role="group" aria-label="Seções do Códex"></div>
           <div id="codexList" class="codex-list"></div>
           <button id="codexClose" class="primary compact">Voltar</button>
+        </div>
+      </section>
+
+      <section id="creditsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="creditsTitle">
+        <div class="modal-card credits-card">
+          <canvas id="creditsSeal" class="credits-seal" aria-hidden="true"></canvas>
+          <h2 id="creditsTitle">Arcana Survivors</h2>
+          <p class="credits-by">Criado e desenvolvido por</p>
+          <strong class="credits-dev">MrPowerUp82</strong>
+          <dl class="credits-list">
+            <div><dt>Programação</dt><dd>MrPowerUp82</dd></div>
+            <div><dt>Versão web · JavaScript / Canvas 2D</dt><dd>MrPowerUp82</dd></div>
+            <div><dt>Port nativo C++ / SDL2</dt><dd>MrPowerUp82</dd></div>
+            <div><dt>Plataformas</dt><dd>Navegador · Nintendo Switch · PS Vita · PSP · Windows · Linux</dd></div>
+            <div><dt>Fontes</dt><dd>Cinzel · Inter (SIL Open Font License)</dd></div>
+          </dl>
+          <small class="credits-legal">© 2026 MrPowerUp82 · Licença MIT</small>
+          <button id="creditsClose" class="primary compact">Voltar</button>
         </div>
       </section>
 
