@@ -454,6 +454,13 @@ body, .menu-shell { min-height: 100dvh; }
   background-size: cover;
   background-repeat: no-repeat;
 }
+/* The key art replaces the old moon + faded sprite decoration, and the panels over it are frosted
+   glass so the painted wizards blur into colour instead of showing through as half-transparent ghosts. */
+.preview-card { display: none !important; }
+.menu-actions button, .pwa-panel, .room-setup, .join-box {
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  backdrop-filter: blur(12px) saturate(1.15);
+}
 @media (max-width: 800px) {
   .menu-shell {
     background-image: linear-gradient(rgba(5, 9, 17, .9), rgba(5, 9, 17, .92)), url('/assets/title-art.webp');
