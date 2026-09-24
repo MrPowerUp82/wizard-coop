@@ -1,5 +1,7 @@
 # Arcana Survivors
 
+![Arte de Arcana Survivors: quatro arcanistas enfrentam hordas diante de um castelo sob a lua](docs/arcana-banner.png)
+
 Survival roguelite cooperativo para a web, de 1 a 4 jogadores. O cliente estático funciona no GitHub Pages, e o servidor WebSocket roda separadamente em Node.js na VPS. A mesma simulação (`server/game.js`) roda no navegador no modo offline e no servidor autoritativo no co-op.
 
 > [!NOTE]
@@ -229,3 +231,7 @@ Atualize sempre a pasta `server` inteira junto com o frontend e reinicie o proce
 | `src/music.js` · `codex.js` | Trilha generativa adaptativa (menu, horda, chefe, fúria, vitória) e Códex |
 
 Arte: `public/assets/sprites.webp` (magos, inimigos antigos, projéteis e drops), `public/assets/phases.webp` (fases 1 a 3) e `public/assets/phases2.webp` (fases 4 a 6). Prompts e recortes em `public/assets/phases-art.md` e `public/assets/phases2-art.md`. Variações de cor, como a lâmina roxa, o morcego de brasa e o golem de magma, são geradas uma única vez no navegador. A preferência do sistema por movimento reduzido desativa balanços, partículas, rastros, tremor de tela e giros; avisos de perigo e o progresso da ressurreição continuam visíveis.
+
+## Créditos
+
+Ideias e sugestões para o jogo: **Guilherme de Lucca Moraes** e **Luis Paula Alves**.

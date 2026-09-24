@@ -448,6 +448,19 @@ body, .menu-shell { min-height: 100dvh; }
 .splash { position: fixed; inset: 0; z-index: 50; background: #060610; cursor: pointer; transition: opacity .25s; }
 .splash canvas { display: block; width: 100%; height: 100%; }
 .splash.leaving { opacity: 0; pointer-events: none; }
+.menu-shell {
+  background-image: linear-gradient(90deg, rgba(5, 9, 17, .97), rgba(5, 9, 17, .87) 47%, rgba(5, 9, 17, .54)), url('/assets/title-art.webp');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+@media (max-width: 800px) {
+  .menu-shell {
+    background-image: linear-gradient(rgba(5, 9, 17, .9), rgba(5, 9, 17, .92)), url('/assets/title-art.webp');
+    background-position: right center;
+    background-size: auto 100%;
+  }
+}
 .menu-links { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; }
 .credits-card { width: min(92vw, 460px); padding-top: 22px; }
 .credits-seal { display: block; width: 116px; height: 116px; margin: 0 auto; }
