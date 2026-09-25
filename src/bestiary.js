@@ -82,7 +82,7 @@ export function renderBestiary(list, progress) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, 128, 128);
       worldTransform(ctx);
-      drawAnimatedSprite(ctx, sprite, 64, 64, 96, pose);
+      drawAnimatedSprite(ctx, sprite, 64, 64, 88, pose);
     }
     Object.assign(view, original);
   };

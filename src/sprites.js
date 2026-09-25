@@ -225,9 +225,13 @@ export function drawAnimatedSprite(ctx, name, x, y, size, pose, alpha = 1, flash
   ctx.globalAlpha = alpha;
   const inset = CLEAN_SHEETS.has(name) ? 0 : FRAME_INSET;
   const cropped = FRAME - inset * 2;
-  const drawnSize = size * cropped / FRAME;
+  // The blue wizard occupies less of its generated cell than the other three.
+  // Match their visible height and keep the feet on the same baseline.
+  const blueWizard = name === 'player';
+  const drawnSize = size * cropped / FRAME * (blueWizard ? 1.25 : 1);
+  const offsetY = blueWizard ? -size * 0.11 : 0;
   ctx.drawImage(sheet, frame * FRAME + inset, row * FRAME + inset,
-    cropped, cropped, -drawnSize / 2, -drawnSize / 2, drawnSize, drawnSize);
+    cropped, cropped, -drawnSize / 2, -drawnSize / 2 + offsetY, drawnSize, drawnSize);
   if (flash > 0) {
     const sprite = spriteFor(name);
     if (sprite) {
