@@ -1,4 +1,4 @@
-import { assetUrl, createCanvas } from './platform.js';
+import { assetUrl, createCanvas, RENDER_TUNING } from './platform.js';
 
 // Sprites are cut from the atlases once into small canvases, with recolored and flash variants baked in
 // ahead of time. Drawing never uses ctx.filter (slow in Chrome, missing in Safari).
@@ -56,6 +56,16 @@ godImage.src = assetUrl('assets/the-god.png');
 const auroraImage = new Image();
 auroraImage.src = assetUrl('assets/aurora.png');
 const cache = new Map();
+const animationSheets = new Map();
+const animationVariants = new Map();
+const ANIMATED = new Set([...PLAYER_SPRITES, ...Object.keys(PHASE_BOUNDS), ...Object.keys(PHASE2_BOUNDS),
+  'slime', 'bat', 'brute', 'eye', ...Object.keys(VARIANTS).filter(name =>
+    !['auroraBolt', 'godBolt', 'developerBolt', 'bladePurple', 'gemRare', 'gemEpic'].includes(name))]);
+const FRAME = 128;
+// Generated attack effects can reach a cell boundary. Keep a small transparent gutter
+// so adjacent frames never leak into the current one when the sheet is sampled.
+const FRAME_INSET = 6;
+const CLEAN_SHEETS = new Set(['player', 'aurora', 'archon', 'scorpion']);
 
 function rgbToHsl(r, g, b) {
   const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
@@ -116,6 +126,30 @@ function bake(name) {
 
 export const spriteFor = name => cache.get(name) || bake(name);
 
+function sheetFor(name) {
+  if (!RENDER_TUNING.animatedSheets || !ANIMATED.has(name)) return null;
+  const variant = VARIANTS[name];
+  if (variant) {
+    const base = sheetFor(variant.base);
+    if (!base) return null;
+    let colored = animationVariants.get(name);
+    if (!colored) {
+      colored = createCanvas(base.width, base.height);
+      colored.getContext('2d').drawImage(base, 0, 0);
+      recolor(colored, variant);
+      animationVariants.set(name, colored);
+    }
+    return colored;
+  }
+  let sheet = animationSheets.get(name);
+  if (!sheet) {
+    sheet = new Image();
+    sheet.src = assetUrl(`assets/animated/${name}.webp`);
+    animationSheets.set(name, sheet);
+  }
+  return sheet.complete && sheet.naturalWidth ? sheet : null;
+}
+
 /** Shared camera so sprite draws can set one transform instead of save/translate/rotate/restore. */
 export const view = { dpr: 1, zoom: 1, ox: 0, oy: 0, camX: 0, camY: 0, shakeX: 0, shakeY: 0 };
 
@@ -168,6 +202,38 @@ export function drawSprite(ctx, name, x, y, size, rotation = 0, alpha = 1, sx = 
   if (flash > 0) {
     ctx.globalAlpha = alpha * Math.min(1, flash) * 0.6;
     ctx.drawImage(sprite.flash, -half, -half, size, size);
+  }
+  worldTransform(ctx);
+}
+
+/** Draw one frame from a 4-column sheet. Rows: idle, move, attack, interact, hurt. */
+export function drawAnimatedSprite(ctx, name, x, y, size, pose, alpha = 1, flash = 0) {
+  const sheet = sheetFor(name);
+  if (!sheet) {
+    drawSprite(ctx, name, x, y, size, pose.rotation, alpha, pose.sx, pose.sy, flash);
+    return;
+  }
+  const row = Math.max(0, Math.min(4, pose.animationRow || 0));
+  const frame = Math.max(0, Math.min(3, pose.animationFrame || 0));
+  const zoom = view.zoom || 1;
+  const dpr = view.dpr * zoom;
+  const cos = Math.cos(pose.rotation), sin = Math.sin(pose.rotation);
+  const tx = ((x + view.shakeX - view.camX) * zoom + (view.ox || 0)) * view.dpr;
+  const ty = ((y + view.shakeY - view.camY) * zoom + (view.oy || 0)) * view.dpr;
+  ctx.setTransform(dpr * cos * pose.sx, dpr * sin * pose.sx,
+    -dpr * sin * pose.sy, dpr * cos * pose.sy, tx, ty);
+  ctx.globalAlpha = alpha;
+  const inset = CLEAN_SHEETS.has(name) ? 0 : FRAME_INSET;
+  const cropped = FRAME - inset * 2;
+  const drawnSize = size * cropped / FRAME;
+  ctx.drawImage(sheet, frame * FRAME + inset, row * FRAME + inset,
+    cropped, cropped, -drawnSize / 2, -drawnSize / 2, drawnSize, drawnSize);
+  if (flash > 0) {
+    const sprite = spriteFor(name);
+    if (sprite) {
+      ctx.globalAlpha = alpha * Math.min(1, flash) * 0.6;
+      ctx.drawImage(sprite.flash, -size / 2, -size / 2, size, size);
+    }
   }
   worldTransform(ctx);
 }

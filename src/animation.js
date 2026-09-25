@@ -9,6 +9,18 @@ const SIGNAL_ICONS = { here: '⚑', help: '✚', danger: '⚠', look: '◉' };
 const EVENT_COLORS = { boom: '#ffb36b', elite: '#ffd36b', chest: '#ffe08a', magnet: '#8fd8ff', revive: '#9dffca', phoenix: '#ffb35c' };
 const FLOATING_TYPES = new Set(['wraith', 'eye', 'bat', 'lich', 'revenant', 'seer', 'voidling', 'archon']);
 
+function facingNearestPlayer(entity, players, fallback = 1) {
+  let distance = Infinity, facing = fallback;
+  for (const id in players) {
+    const player = players[id];
+    if (player.alive === false) continue;
+    const dx = player.x - entity.x, dy = player.y - entity.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < distance) { distance = d2; if (Math.abs(dx) > 0.1) facing = Math.sign(dx); }
+  }
+  return facing;
+}
+
 /** @param {{ onHit?: (entity: any, amount: number) => void, onKill?: (actor: any) => void }} [hooks] */
 export function createAnimator({ onHit, onKill } = {}) {
   const actors = new Map();
@@ -21,7 +33,7 @@ export function createAnimator({ onHit, onKill } = {}) {
   let freezeFor = 0;
   let lastEventId = null;
   let updateStamp = 0;
-  const emptyPose = Object.freeze({ x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 1, flash: 0 });
+  const emptyPose = Object.freeze({ x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 1, flash: 0, animationRow: 0, animationFrame: 0 });
   const shakeResult = { x: 0, y: 0 };
   const flashResult = { color: '#ffffff', alpha: 0 };
   const signalScratch = [];
@@ -241,11 +253,13 @@ export function createAnimator({ onHit, onKill } = {}) {
         if (!old) {
           actors.set(key, { x: entity.x, y: entity.y, hp: entity.hp, alive, type: entity.type,
             boss: entity.boss, elite: entity.elite, color, seed: actors.size * 2.39, movedAt: -10, dx: 0,
-            stride: 0, walking: 0, hit: 0, cast: 0, down: alive ? 0 : 1, facing: 1,
+            stride: 0, walking: 0, hit: 0, cast: 0, down: alive ? 0 : 1,
+            facing: player ? 1 : facingNearestPlayer(entity, game.players),
             castCount: entity.castCount || 0, charge: entity.specialCharge || 0, level: entity.level,
             bossCooldown: entity.attackCooldown, rangedCooldown: entity.rangedCooldown,
-            dashFor: entity.dashFor || 0, trailAt: -1, seen: stamp, poseStamp: -1,
-            pose: { x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 1, flash: 0 } });
+            dashFor: entity.dashFor || 0, interacting: false, windup: entity.windup || 0,
+            trailAt: -1, seen: stamp, poseStamp: -1,
+            pose: { x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 1, flash: 0, animationRow: 0, animationFrame: 0 } });
           return;
         }
         if (!player && entity.distant) {
@@ -273,9 +287,9 @@ export function createAnimator({ onHit, onKill } = {}) {
         }
         if (distance > 0.1 && alive && !game.over) {
           old.movedAt = time; old.dx = Math.sign(entity.x - old.x);
-          // Keep the last horizontal direction when stationary or moving vertically.
           // Position deltas work for both local simulation and remote snapshots.
-          if (player && Math.abs(entity.x - old.x) > 0.1) old.facing = Math.sign(entity.x - old.x);
+          // Keep the last horizontal direction when moving only vertically.
+          if (Math.abs(entity.x - old.x) > 0.1) old.facing = Math.sign(entity.x - old.x);
         }
         old.walking += ((time - old.movedAt < 0.14 && alive && !game.over ? 1 : 0) - old.walking) * Math.min(1, dt * 14);
         old.stride += dt * (player ? 13 : entity.boss ? 6 : 11) * old.walking;
@@ -294,6 +308,9 @@ export function createAnimator({ onHit, onKill } = {}) {
         if (!alive && old.alive) burst(entity.x, entity.y, color, 8, 40);
         const cast = player ? (entity.castCount || 0) !== old.castCount
           : entity.attackCooldown > old.bossCooldown || entity.rangedCooldown > old.rangedCooldown;
+        if (!player && alive && (cast || entity.windup > 0)) {
+          old.facing = facingNearestPlayer(entity, game.players, old.facing);
+        }
         if (cast && alive) {
           old.cast = 1;
           old.castAngle = entity.castAngle || 0;
@@ -310,7 +327,10 @@ export function createAnimator({ onHit, onKill } = {}) {
         old.x = entity.x; old.y = entity.y; old.hp = entity.hp; old.alive = alive;
         old.castCount = entity.castCount || 0; old.charge = entity.specialCharge || 0; old.level = entity.level;
         old.bossCooldown = entity.attackCooldown; old.rangedCooldown = entity.rangedCooldown;
-        old.dashFor = entity.dashFor || 0; old.seen = stamp;
+        old.dashFor = entity.dashFor || 0;
+        old.interacting = player && ((entity.reviveProgress || 0) > 0 || (entity.shopProgress || 0) > 0 ||
+          (entity.pendingPowers?.length || 0) > 0);
+        old.windup = entity.windup || 0; old.seen = stamp;
       };
       for (const id in game.players) { const p = game.players[id]; track(p, `p:${p.id}`, true); }
       for (const enemy of game.enemies) track(enemy, `e:${enemy.id}`, false);
@@ -361,6 +381,10 @@ export function createAnimator({ onHit, onKill } = {}) {
         }
         out.alpha = 1 - down * 0.72; out.flash = a.hit;
       }
+      out.animationRow = a.hit > 0.35 ? 4 : a.interacting ? 3 : (a.cast > 0.15 || a.windup > 0) ? 2 : a.walking > 0.3 ? 1 : 0;
+      out.animationFrame = reduced ? 0 : out.animationRow === 1 ? Math.floor(a.stride * 0.65) & 3
+        : out.animationRow === 2 ? Math.min(3, Math.floor((1 - Math.max(a.cast, Math.min(1, a.windup))) * 4))
+          : Math.floor(time * (out.animationRow === 3 ? 5 : 3) + a.seed) & 3;
       a.poseStamp = updateStamp;
       return out;
     },

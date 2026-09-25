@@ -386,6 +386,7 @@ body, .menu-shell { min-height: 100dvh; }
 .loadout label { display: grid; gap: 5px; }
 .loadout select { width: 100%; padding: 9px; color: #d8fff1; background: #112328; border: 1px solid #386458; border-radius: 8px; font: inherit; font-size: 12px; }
 .codex-card { width: min(96vw, 820px); max-height: 92vh; display: flex; flex-direction: column; }
+.codex-card #codexClose { flex-shrink: 0; min-height: 44px !important; margin-top: 14px; }
 .codex-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 8px 0 14px; }
 .codex-tab { padding: 7px 12px; border: 1px solid #315d53; border-radius: 20px; background: #0f1d22; color: #9fbdb5; font-size: 11px; }
 .codex-tab.selected { border-color: #7ce0c1; background: #1d3c37; color: #e6fff7; }
@@ -398,6 +399,16 @@ body, .menu-shell { min-height: 100dvh; }
 .codex-entry small { grid-column: 1 / -1; color: #6f8c86 !important; font-size: 10px; }
 .codex-entry.locked { opacity: .55; border-style: dashed; }
 .codex-entry.locked i { color: #5e7772; }
+.codex-list.bestiary-list { display: flex; flex-direction: column; gap: 12px; }
+.bestiary-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 6px 2px; color: #cfe7e0; font-size: 12px; }
+.bestiary-toolbar select, .bestiary-toolbar button { padding: 7px 10px; border: 1px solid #3a7566; border-radius: 8px; background: #102626; color: #ddfff2; font: inherit; }
+.bestiary-toolbar button[aria-pressed="true"] { background: #29584b; border-color: #8ff4cd; }
+.bestiary-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; }
+.bestiary-gallery h3 { grid-column: 1 / -1; margin: 9px 0 0; color: #a7ead0; font: 700 12px Cinzel, serif; }
+.bestiary-entry { display: flex; flex-direction: column; align-items: center; min-width: 0; padding: 8px 5px 10px; border: 1px solid #315d53; border-radius: 10px; background: linear-gradient(145deg, #142a2c, #0b171e); text-align: center; }
+.bestiary-entry canvas { width: 112px; height: 112px; max-width: 100%; margin-bottom: 4px; border-radius: 8px; background: radial-gradient(circle, #1b3b37, #0a181c 70%); }
+.bestiary-entry b { color: #e1fff3; font: 700 11px Cinzel, serif; }
+.bestiary-entry small { margin-top: 3px; color: #91aaa4; font-size: 10px; }
 .damage-breakdown { display: grid; gap: 6px; margin: 14px 0 4px; text-align: left; }
 .damage-breakdown h3 { margin: 0 0 4px; font: 700 11px Cinzel, serif; color: #a7ead0; letter-spacing: .08em; }
 .damage-row { display: grid; grid-template-columns: 22px 110px 1fr 70px; align-items: center; gap: 8px; font-size: 11px; color: #cfe7e0; }

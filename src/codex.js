@@ -1,6 +1,7 @@
 import { BEHAVIORS, ENEMIES, PHASES } from '../server/phases.js';
 import { POWERS } from '../server/powers.js';
 import { KIND_LABELS, POWER_INFO, REACTIONS, requirementText } from './powerInfo.js';
+import { BESTIARY, renderBestiary } from './bestiary.js';
 
 // The Códex remembers, in this browser, every power, combo, creature, guardian and encounter the player has met.
 const KEY = 'arcana-codex';
@@ -125,16 +126,18 @@ export function createCodex({ onDiscover } = {}) {
 export function renderCodex(codex, { tabs, list, progress }, active = 'powers', onTab = () => {}) {
   const { found, total } = codex.progress();
   progress.textContent = `${found}/${total} registros descobertos`;
-  tabs.replaceChildren(...Object.entries(CODEX_SECTIONS).map(([id, section]) => {
+  tabs.replaceChildren(...Object.entries({ ...CODEX_SECTIONS, bestiary: { title: 'Bestiário', entries: () => BESTIARY } }).map(([id, section]) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `codex-tab${id === active ? ' selected' : ''}`;
     button.setAttribute('aria-pressed', String(id === active));
     const entries = section.entries();
-    button.textContent = `${section.title} ${entries.filter(entry => codex.has(id, entry.id)).length}/${entries.length}`;
+    button.textContent = id === 'bestiary' ? `${section.title} ${entries.length}` : `${section.title} ${entries.filter(entry => codex.has(id, entry.id)).length}/${entries.length}`;
     button.onclick = () => onTab(id);
     return button;
   }));
+  if (active === 'bestiary') return renderBestiary(list, progress);
+  list.classList.remove('bestiary-list');
   list.replaceChildren(...CODEX_SECTIONS[active].entries().map(entry => {
     const unlocked = codex.has(active, entry.id);
     const card = document.createElement('article');

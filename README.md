@@ -33,6 +33,10 @@ Para conectar ao backend local, abra `http://localhost:5173/?server=ws://localho
 
 O workflow do GitHub Pages executa lint, checagem de tipos e testes antes de publicar.
 
+### Spritesheets da versão web
+
+As 29 folhas base em `public/assets/animated/` foram criadas com o modelo de geração de imagem, usando a arte existente como referência. Cada arquivo tem quatro colunas de quadros e cinco linhas: repouso, movimento, ataque, interação e dano. As variantes de cor usam esses mesmos quadros, recoloridos no navegador. O renderizador escolhe o quadro pelos estados visuais acompanhados em `src/animation.js`; até a folha carregar, a arte original continua visível. As folhas fazem parte do cache offline do PWA. O processo e as referências estão em `docs/animated-sheets.md`.
+
 ## Nintendo Switch (homebrew)
 
 > [!IMPORTANT]
@@ -158,6 +162,7 @@ Inimigos derrotados deixam XP e podem deixar coração (5%), cristal verde (20%)
 As moedas da partida vão para o **Grimório** (menu inicial), que vende melhorias permanentes salvas no navegador (Vigor, Potência, Celeridade, Agilidade, Égide, Alcance, Sabedoria, Ganância, Canalização, Destino, Pacto familiar e Fênix) e desbloqueios: **Arsenal** (escolher a arma inicial), **Segundo feitiço** (especial alternativo), **Ritual infinito** e **The God**. O servidor valida graus, desbloqueios e escolhas antes de aplicá-los.
 
 O **Códex** (menu inicial) registra no navegador cada poder, combo, criatura, guardião e encontro descoberto, com a explicação de como funciona; entradas ainda não descobertas mostram só uma dica.
+Na aba **Bestiário** do Códex, todos os 30 personagens, criaturas e guardiões ficam visíveis sem exigir descoberta. As prévias usam o mesmo renderizador de sprites da partida e permitem ver repouso, movimento, ataque, interação e dano, inclusive com espelhamento.
 
 A tela final mostra nível, abates, dano e resgates de cada arcanista, além do **seu dano por fonte** (feitiço, especial, cada arma, combos e convergências).
 

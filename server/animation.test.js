@@ -42,6 +42,26 @@ test('player vira com o movimento horizontal e mantém o lado parado ou andando 
   }
 });
 
+test('inimigos espelham conforme aproximação e miram o jogador ao atacar', () => {
+  const game = fixture(); const animator = createAnimator();
+  const enemy = { id: 11, type: 'mushroom', x: 60, y: 0, hp: 20, maxHp: 20, windup: 0 };
+  game.enemies.push(enemy);
+  animator.update(game, 0.05);
+  assert.ok(animator.pose('e:11').sx < 0); // Nasce à direita do jogador.
+  enemy.x = 50;
+  animator.update(game, 0.05);
+  assert.ok(animator.pose('e:11').sx < 0);
+  enemy.y += 8;
+  animator.update(game, 0.05);
+  assert.ok(animator.pose('e:11').sx < 0); // Movimento vertical conserva a direção.
+  enemy.x = -10;
+  animator.update(game, 0.05);
+  assert.ok(animator.pose('e:11').sx < 0);
+  enemy.x = -20; enemy.windup = 0.5;
+  animator.update(game, 0.05);
+  assert.ok(animator.pose('e:11').sx > 0); // O ataque se volta para o alvo à direita.
+});
+
 test('animação observa snapshots sem alterar simulação, colisões ou protocolo', () => {
   const game = fixture();
   const animator = createAnimator();
@@ -55,6 +75,25 @@ test('animação observa snapshots sem alterar simulação, colisões ou protoco
   assert.ok(animator.effects.length > 0);
   assert.notEqual(animator.pose('p:p').rotation, 0);
   assert.equal(game.players.p.x, 4);
+});
+
+test('spritesheet acompanha movimento, ataque, interação e dano', () => {
+  const game = fixture(); const animator = createAnimator();
+  animator.update(game, 0.05);
+  assert.equal(animator.pose('p:p').animationRow, 0);
+  game.players.p.x += 8;
+  animator.update(game, 0.05);
+  assert.equal(animator.pose('p:p').animationRow, 1);
+  game.players.p.castCount++;
+  animator.update(game, 0.05);
+  assert.equal(animator.pose('p:p').animationRow, 2);
+  for (let i = 0; i < 8; i++) animator.update(game, 0.05);
+  game.players.p.shopProgress = 1;
+  animator.update(game, 0.05);
+  assert.equal(animator.pose('p:p').animationRow, 3);
+  game.players.p.hp -= 5;
+  animator.update(game, 0.05);
+  assert.equal(animator.pose('p:p').animationRow, 4);
 });
 
 test('pausa congela efeitos; movimento reduzido mantém legibilidade sem partículas', () => {
@@ -71,7 +110,8 @@ test('pausa congela efeitos; movimento reduzido mantém legibilidade sem partíc
   game.players.p.alive = false;
   animator.update(game, 0.016, { reduced: true });
   assert.equal(animator.effects.length, 0);
-  assert.deepEqual(animator.pose('p:p'), { x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 0.28, flash: 0 });
+  assert.deepEqual(animator.pose('p:p'), { x: 0, y: 0, rotation: 0, sx: 1, sy: 1, alpha: 0.28, flash: 0,
+    animationRow: 4, animationFrame: 0 });
 });
 
 test('morte, ressurreição e especial produzem efeitos e removem estados antigos', () => {

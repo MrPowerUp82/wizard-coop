@@ -11,4 +11,4 @@ export function createCanvas(width, height) {
 export const assetUrl = path => `romfs:/${path}`;
 
 /** nx.js benefits from avoiding hundreds of per-projectile CanvasGradient objects in late hordes. */
-export const RENDER_TUNING = Object.freeze({ fastTrails: true, atmosphere: false, simpleShadows: true, cachedGlows: true, crowdShadows: false, enemyHealthBars: 'damaged', terrainMacro: 2, fastCrowdSprites: true });
+export const RENDER_TUNING = Object.freeze({ fastTrails: true, atmosphere: false, simpleShadows: true, cachedGlows: true, crowdShadows: false, enemyHealthBars: 'damaged', terrainMacro: 2, fastCrowdSprites: true, animatedSheets: false });

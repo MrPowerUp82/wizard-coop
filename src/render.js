@@ -5,7 +5,7 @@ import { auraRadius, orbitRadius } from '../server/weapons.js';
 import { GOD, GOD_PLANETS, godPlanetPosition } from '../server/god.js';
 import { drawTerrain } from './terrain.js';
 import { drawEffects, drawNumbers } from './animation.js';
-import { ENEMY_SPRITES, PLAYER_SPRITES, SHOT_SPRITES, drawSprite, view, worldTransform } from './sprites.js';
+import { ENEMY_SPRITES, PLAYER_SPRITES, SHOT_SPRITES, drawAnimatedSprite, drawSprite, view, worldTransform } from './sprites.js';
 import { RENDER_TUNING } from './platform.js';
 import { drawSoftGlow } from './glow.js';
 
@@ -419,8 +419,8 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
       else ctx.ellipse(enemy.x, enemy.y + size * 0.36, size * 0.28, size * 0.09, 0, 0, TAU);
       ctx.fill();
     }
-    drawSprite(ctx, ENEMY_SPRITES[enemy.type] || type.sprite || enemy.type, enemy.x + pose.x, enemy.y + pose.y, size,
-      pose.rotation, pose.alpha, pose.sx, pose.sy, Math.max(pose.flash, enemy.windup > 0 ? 0.45 : 0));
+    drawAnimatedSprite(ctx, ENEMY_SPRITES[enemy.type] || type.sprite || enemy.type, enemy.x + pose.x, enemy.y + pose.y, size,
+      pose, pose.alpha, Math.max(pose.flash, enemy.windup > 0 ? 0.45 : 0));
     if (enemy.windup > 0) {
       ctx.fillStyle = '#ff6b5e'; ctx.font = '800 18px Inter'; ctx.textAlign = 'center';
       ctx.fillText('!', enemy.x, enemy.y - size * 0.55);
@@ -485,8 +485,8 @@ export function renderWorld(ctx, game, { me, focus, animator, W, H, dpr, reduced
     if (RENDER_TUNING.simpleShadows) ctx.arc(player.x, player.y + 24, 10, 0, TAU);
     else ctx.ellipse(player.x, player.y + 24, 19, 6, 0, 0, TAU);
     ctx.fill();
-    drawSprite(ctx, PLAYER_SPRITES[player.color ?? 0], player.x + pose.x, player.y + pose.y, 68, pose.rotation,
-      pose.alpha * (player.connected === false ? 0.45 : 1), pose.sx, pose.sy, pose.flash);
+    drawAnimatedSprite(ctx, PLAYER_SPRITES[player.color ?? 0], player.x + pose.x, player.y + pose.y, 68,
+      pose, pose.alpha * (player.connected === false ? 0.45 : 1), pose.flash);
     if (alive && player.color === 4) {
       ctx.save();
       ctx.translate(player.x, player.y);

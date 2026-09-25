@@ -94,6 +94,7 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
   const savedSecond = Number(storage.get('arcana-character-p2') ?? 1);
   let second = characterAvailable(savedSecond) ? savedSecond : 1;
   let codexTab = 'powers';
+  let stopBestiary = () => {};
   let cancelRoomRequest = () => {};
 
   function selectCharacter(color) {
@@ -169,7 +170,8 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
   }
 
   function showCodex() {
-    renderCodex(codex, { tabs: $('#codexTabs'), list: $('#codexList'), progress: $('#codexProgress') }, codexTab, tab => { codexTab = tab; showCodex(); });
+    stopBestiary();
+    stopBestiary = renderCodex(codex, { tabs: $('#codexTabs'), list: $('#codexList'), progress: $('#codexProgress') }, codexTab, tab => { codexTab = tab; showCodex(); }) || (() => {});
   }
 
   function renderOpenRooms(rooms) {
@@ -284,7 +286,7 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
   $('#variantSelect').onchange = event => { variant = event.target.value === '1' ? 1 : 0; storage.set('arcana-variant', String(variant)); renderOptions(); };
   $('#dailyBtn').onclick = () => onDaily(dailyChallenge());
   $('#codexBtn').onclick = () => { showCodex(); $('#codexModal').classList.remove('hidden'); };
-  $('#codexClose').onclick = () => { $('#codexModal').classList.add('hidden'); renderOptions(); };
+  $('#codexClose').onclick = () => { stopBestiary(); $('#codexModal').classList.add('hidden'); renderOptions(); };
   renderShop();
   $('#offlineBtn').onclick = () => onOffline();
   $('#shopBtn').onclick = () => { renderShop(); $('#shopModal').classList.remove('hidden'); };

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <base href="../">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arcana · diagnóstico dos spritesheets</title>
+  <style>
+    body { margin: 0; padding: 20px; background: #10151f; color: #e9eef6; font: 14px system-ui; }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    #summary { margin: 12px 0 20px; color: #9ed5bd; }
+    label { margin-right: 18px; }
+    select { background: #202c3b; color: white; border: 1px solid #667585; padding: 6px; }
+    canvas { display: block; max-width: 100%; background: #1a2533; border: 1px solid #485266; margin: 14px 0; }
+    #overview { width: 1160px; }
+    #frames { width: 1010px; }
+    table { border-collapse: collapse; }
+    td, th { padding: 5px 10px; text-align: left; border-bottom: 1px solid #354050; }
+    .warn { color: #ffd98c; }
+    .fail { color: #ff9b9b; }
+  </style>
+</head>
+<body>
+  <h1>Diagnóstico de animação · Canvas real</h1>
+  <label>Entidade <select id="entity"></select></label>
+  <label>Escala <select id="scale"><option value="68">Jogo (68 px)</option><option value="128">Ampliada (128 px)</option></select></label>
+  <p id="summary">Carregando folhas…</p>
+  <h2>Visão geral: caminhada normal / espelhada</h2>
+  <canvas id="overview" width="1160" height="1900"></canvas>
+  <h2>Todos os estados: normal / espelhado</h2>
+  <canvas id="frames" width="1010" height="730"></canvas>
+  <h2>Verificação das células</h2>
+  <table><thead><tr><th>Folha</th><th>Quadros vazios</th><th>Pixels na borda de corte</th></tr></thead><tbody id="report"></tbody></table>
+  <script type="module">
+    import { drawAnimatedSprite, view, worldTransform } from '../src/sprites.js';
+
+    const names = ['player', 'player2', 'player3', 'player4', 'developer', 'aurora', 'god',
+      'slime', 'bat', 'brute', 'eye', 'mushroom', 'beetle', 'treant', 'skeleton', 'wraith', 'lich',
+      'imp', 'scorpion', 'demon', 'spore', 'revenant', 'bogwarden', 'sentinel', 'seer', 'archon',
+      'voidling', 'voidscarab', 'umbra'];
+    const labels = ['Repouso', 'Movimento', 'Ataque', 'Interação', 'Dano'];
+    const select = document.querySelector('#entity');
+    const scale = document.querySelector('#scale');
+    const overview = document.querySelector('#overview');
+    const frames = document.querySelector('#frames');
+    const report = document.querySelector('#report');
+    const summary = document.querySelector('#summary');
+    const images = new Map();
+    for (const name of names) select.add(new Option(name, name));
+
+    function drawEntity(ctx, name, x, y, size, row, frame, facing) {
+      Object.assign(view, { dpr: 1, zoom: 1, ox: 0, oy: 0, camX: 0, camY: 0, shakeX: 0, shakeY: 0 });
+      worldTransform(ctx);
+      drawAnimatedSprite(ctx, name, x, y, size,
+        { x: 0, y: 0, rotation: 0, sx: facing, sy: 1, animationRow: row, animationFrame: frame });
+    }
+
+    function inspect(name, img) {
+      const c = document.createElement('canvas'); c.width = 512; c.height = 640;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, 512, 640).data;
+      let empty = 0, borders = 0;
+      for (let row = 0; row < 5; row++) for (let col = 0; col < 4; col++) {
+        let pixels = 0, edge = 0;
+        for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+          const alpha = data[((row * 128 + y) * 512 + col * 128 + x) * 4 + 3];
+          if (alpha > 32) {
+            pixels++;
+            if (x < 2 || x > 125 || y < 2 || y > 125) edge++;
+          }
+        }
+        if (pixels < 50) empty++;
+        borders += edge;
+      }
+      return { name, empty, borders };
+    }
+
+    function drawOverview() {
+      const ctx = overview.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, overview.width, overview.height);
+      ctx.fillStyle = '#e9eef6'; ctx.font = '13px system-ui';
+      names.forEach((name, i) => {
+        const y = 30 + i * 63;
+        ctx.fillText(name, 12, y + 10);
+        for (let frame = 0; frame < 4; frame++) {
+          drawEntity(ctx, name, 220 + frame * 82, y, 58, 1, frame, 1);
+          drawEntity(ctx, name, 670 + frame * 82, y, 58, 1, frame, -1);
+        }
+      });
+    }
+
+    function drawFrames() {
+      const ctx = frames.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, frames.width, frames.height);
+      ctx.fillStyle = '#e9eef6'; ctx.font = '13px system-ui';
+      const size = Number(scale.value);
+      for (let row = 0; row < 5; row++) {
+        const y = 75 + row * 140;
+        ctx.fillText(labels[row], 10, y);
+        for (let frame = 0; frame < 4; frame++) {
+          drawEntity(ctx, select.value, 150 + frame * 105, y, size, row, frame, 1);
+          drawEntity(ctx, select.value, 620 + frame * 95, y, size, row, frame, -1);
+        }
+      }
+    }
+
+    select.addEventListener('change', drawFrames);
+    scale.addEventListener('change', drawFrames);
+    const results = await Promise.all(names.map(async name => {
+      const img = new Image(); img.src = `../assets/animated/${name}.webp`;
+      await img.decode(); images.set(name, img);
+      if (img.naturalWidth !== 512 || img.naturalHeight !== 640) throw new Error(`${name}: dimensões incorretas`);
+      return inspect(name, img);
+    }));
+    // Populate the renderer's lazy image cache before inspecting its output.
+    drawOverview(); drawFrames();
+    await new Promise(resolve => setTimeout(resolve, 300));
+    drawOverview(); drawFrames();
+    for (const result of results) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${result.name}</td><td class="${result.empty ? 'fail' : ''}">${result.empty}</td><td class="${result.borders ? 'warn' : ''}">${result.borders}</td>`;
+      report.append(tr);
+    }
+    const empty = results.reduce((n, r) => n + r.empty, 0);
+    const borders = results.reduce((n, r) => n + r.borders, 0);
+    summary.textContent = `${names.length} folhas · ${names.length * 20} quadros · ${empty} vazios · ${borders} pixels opacos nas bordas de células`;
+    window.spriteDiagnostics = { results, empty, borders, ready: true };
+  </script>
+</body>
+</html>
