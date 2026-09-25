@@ -66,6 +66,12 @@ const FRAME = 128;
 // so adjacent frames never leak into the current one when the sheet is sampled.
 const FRAME_INSET = 6;
 const CLEAN_SHEETS = new Set(['player', 'aurora', 'archon', 'scorpion']);
+// The blue wizard's sheet is drawn smaller and sits higher in its cells as the rows go on (feet at
+// y≈125 idle, ≈97 hurt, of 128). Per-row shifts, in sprite sizes, put his feet and body centre where
+// the other three wizards' are.
+const BLUE_WIZARD_SCALE = 1.25;
+const BLUE_WIZARD_OFFSET_X = 0.025;
+const BLUE_WIZARD_OFFSET_Y = [-0.15, -0.15, -0.07, 0.02, 0.07];
 
 function rgbToHsl(r, g, b) {
   const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
@@ -225,13 +231,12 @@ export function drawAnimatedSprite(ctx, name, x, y, size, pose, alpha = 1, flash
   ctx.globalAlpha = alpha;
   const inset = CLEAN_SHEETS.has(name) ? 0 : FRAME_INSET;
   const cropped = FRAME - inset * 2;
-  // The blue wizard occupies less of its generated cell than the other three.
-  // Match their visible height and keep the feet on the same baseline.
   const blueWizard = name === 'player';
-  const drawnSize = size * cropped / FRAME * (blueWizard ? 1.25 : 1);
-  const offsetY = blueWizard ? -size * 0.11 : 0;
+  const drawnSize = size * cropped / FRAME * (blueWizard ? BLUE_WIZARD_SCALE : 1);
+  const offsetX = blueWizard ? size * BLUE_WIZARD_OFFSET_X : 0;
+  const offsetY = blueWizard ? size * BLUE_WIZARD_OFFSET_Y[row] : 0;
   ctx.drawImage(sheet, frame * FRAME + inset, row * FRAME + inset,
-    cropped, cropped, -drawnSize / 2, -drawnSize / 2 + offsetY, drawnSize, drawnSize);
+    cropped, cropped, -drawnSize / 2 + offsetX, -drawnSize / 2 + offsetY, drawnSize, drawnSize);
   if (flash > 0) {
     const sprite = spriteFor(name);
     if (sprite) {
