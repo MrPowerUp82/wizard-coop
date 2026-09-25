@@ -1,7 +1,7 @@
 import { BEHAVIORS, ENEMIES, PHASES } from '../server/phases.js';
 import { POWERS } from '../server/powers.js';
 import { KIND_LABELS, POWER_INFO, REACTIONS, requirementText } from './powerInfo.js';
-import { BESTIARY, renderBestiary } from './bestiary.js';
+import { BESTIARY, bestiaryKnown, renderBestiary } from './bestiary.js';
 
 // The Códex remembers, in this browser, every power, combo, creature, guardian and encounter the player has met.
 const KEY = 'arcana-codex';
@@ -123,7 +123,9 @@ export function createCodex({ onDiscover } = {}) {
 
 /** Fills the Códex modal: section tabs plus one card per entry; unknown entries only show a hint. */
 /** @param {(tab: string) => void} [onTab] */
-export function renderCodex(codex, { tabs, list, progress }, active = 'powers', onTab = () => {}) {
+export function renderCodex(codex, { tabs, list, progress }, active = 'powers', onTab = () => {},
+  heroAvailable = /** @type {(color: number) => boolean} */ (color => color < 4)) {
+  const bestiaryFound = entry => bestiaryKnown(entry, codex, heroAvailable);
   const { found, total } = codex.progress();
   progress.textContent = `${found}/${total} registros descobertos`;
   tabs.replaceChildren(...Object.entries({ ...CODEX_SECTIONS, bestiary: { title: 'Bestiário', entries: () => BESTIARY } }).map(([id, section]) => {
@@ -132,11 +134,12 @@ export function renderCodex(codex, { tabs, list, progress }, active = 'powers', 
     button.className = `codex-tab${id === active ? ' selected' : ''}`;
     button.setAttribute('aria-pressed', String(id === active));
     const entries = section.entries();
-    button.textContent = id === 'bestiary' ? `${section.title} ${entries.length}` : `${section.title} ${entries.filter(entry => codex.has(id, entry.id)).length}/${entries.length}`;
+    const found = entries.filter(entry => id === 'bestiary' ? bestiaryFound(entry) : codex.has(id, entry.id)).length;
+    button.textContent = `${section.title} ${found}/${entries.length}`;
     button.onclick = () => onTab(id);
     return button;
   }));
-  if (active === 'bestiary') return renderBestiary(list, progress);
+  if (active === 'bestiary') return renderBestiary(list, progress, bestiaryFound);
   list.classList.remove('bestiary-list');
   list.replaceChildren(...CODEX_SECTIONS[active].entries().map(entry => {
     const unlocked = codex.has(active, entry.id);

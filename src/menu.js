@@ -171,7 +171,7 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
 
   function showCodex() {
     stopBestiary();
-    stopBestiary = renderCodex(codex, { tabs: $('#codexTabs'), list: $('#codexList'), progress: $('#codexProgress') }, codexTab, tab => { codexTab = tab; showCodex(); }) || (() => {});
+    stopBestiary = renderCodex(codex, { tabs: $('#codexTabs'), list: $('#codexList'), progress: $('#codexProgress') }, codexTab, tab => { codexTab = tab; showCodex(); }, characterAvailable) || (() => {});
   }
 
   function renderOpenRooms(rooms) {

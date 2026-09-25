@@ -162,7 +162,7 @@ Inimigos derrotados deixam XP e podem deixar coração (5%), cristal verde (20%)
 As moedas da partida vão para o **Grimório** (menu inicial), que vende melhorias permanentes salvas no navegador (Vigor, Potência, Celeridade, Agilidade, Égide, Alcance, Sabedoria, Ganância, Canalização, Destino, Pacto familiar e Fênix) e desbloqueios: **Arsenal** (escolher a arma inicial), **Segundo feitiço** (especial alternativo), **Ritual infinito** e **The God**. O servidor valida graus, desbloqueios e escolhas antes de aplicá-los.
 
 O **Códex** (menu inicial) registra no navegador cada poder, combo, criatura, guardião e encontro descoberto, com a explicação de como funciona; entradas ainda não descobertas mostram só uma dica.
-Na aba **Bestiário** do Códex, todos os 30 personagens, criaturas e guardiões ficam visíveis sem exigir descoberta. As prévias usam o mesmo renderizador de sprites da partida e permitem ver repouso, movimento, ataque, interação e dano, inclusive com espelhamento.
+Na aba **Bestiário** do Códex estão os 30 personagens, criaturas e guardiões. Quem ainda não foi encontrado aparece como silhueta animada, com uma dica de onde procurar; os heróis secretos se revelam ao serem desbloqueados. As prévias usam o mesmo renderizador de sprites da partida e permitem ver repouso, movimento, ataque, interação e dano, inclusive com espelhamento.
 
 A tela final mostra nível, abates, dano e resgates de cada arcanista, além do **seu dano por fonte** (feitiço, especial, cada arma, combos e convergências).
 

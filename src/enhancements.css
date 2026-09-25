@@ -409,6 +409,9 @@ body, .menu-shell { min-height: 100dvh; }
 .bestiary-entry canvas { width: 112px; height: 112px; max-width: 100%; margin-bottom: 4px; border-radius: 8px; background: radial-gradient(circle, #1b3b37, #0a181c 70%); }
 .bestiary-entry b { color: #e1fff3; font: 700 11px Cinzel, serif; }
 .bestiary-entry small { margin-top: 3px; color: #91aaa4; font-size: 10px; }
+.bestiary-entry.locked { border-style: dashed; border-color: #26433d; }
+.bestiary-entry.locked canvas { background: radial-gradient(circle, #2c4a45, #0d1d21 70%); }
+.bestiary-entry.locked b { color: #7f958f; letter-spacing: 2px; }
 .damage-breakdown { display: grid; gap: 6px; margin: 14px 0 4px; text-align: left; }
 .damage-breakdown h3 { margin: 0 0 4px; font: 700 11px Cinzel, serif; color: #a7ead0; letter-spacing: .08em; }
 .damage-row { display: grid; grid-template-columns: 22px 110px 1fr 70px; align-items: center; gap: 8px; font-size: 11px; color: #cfe7e0; }
