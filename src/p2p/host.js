@@ -52,7 +52,7 @@ export function serveRoom(room, roomHost) {
 /**
  * Starts hosting a room in this browser. `connect()` gives the host's own player a loopback transport;
  * closing it, calling `stop()` or closing the page ends the room for everyone with code 4003.
- * @param {{ openRoom: (id: string, options?: { passive?: boolean }) => any, code?: string } & Record<string, any>} options
+ * @param {{ openRoom: (id: string) => any, code?: string } & Record<string, any>} options
  *   anything else is passed to createRoomHost (timings for tests)
  */
 export function hostRoom({ openRoom, code = createCode(), ...hostOptions }) {

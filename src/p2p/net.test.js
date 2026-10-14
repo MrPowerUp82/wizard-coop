@@ -39,3 +39,24 @@ test('createSession avisa transporte inválido sem derrubar quem chamou', () => 
   assert.equal(errors.length, 1);
   assert.equal(errors[0].transport, true);
 });
+
+test('a sessão guardada para retomar some quando o anfitrião encerra a sala de vez', async t => {
+  const store = new Map();
+  globalThis.sessionStorage = { getItem: key => store.get(key) ?? null, setItem: (key, value) => store.set(key, value), removeItem: key => store.delete(key) };
+  t.after(() => { delete globalThis.sessionStorage; });
+  const roomHost = createRoomHost({ code: 'ABC234' });
+  t.after(() => roomHost.destroy());
+  const connect = () => { const [client, server] = loopbackPair(); attachTransport(roomHost, server); return client; };
+  const owner = createSession(connect, entry('create'), {});
+  await waitFor(() => owner.playerId);
+  const closed = [];
+  const guest = createSession(connect, entry('join', { color: 1 }), { onClosed: event => closed.push(event.code) });
+  await waitFor(() => guest.playerId);
+  owner.send({ type: 'start' });
+  await waitFor(() => guest.inGame);
+  assert.ok(store.get('arcana-session'), 'o convidado guardou a sessão enquanto joga');
+  roomHost.destroy(4003, 'O anfitrião saiu.');
+  await waitFor(() => closed.length === 1);
+  assert.equal(closed[0], 4003);
+  assert.equal(store.get('arcana-session'), undefined, 'sem sala para voltar, nada fica guardado');
+});

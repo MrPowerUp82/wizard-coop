@@ -26,8 +26,11 @@ import { createFeedback, newRound } from './feedback.js';
 import { createHud, format } from './hud.js';
 import { bindActionButton, createInput } from './input.js';
 import { advanceOfflineRun, chooserOf, createOfflineRun, localPlayersOf, offlineActor, renderLocalViews } from './localCoop.js';
-import { createMenu, playerName, renderCharacterPicker, saveDailyRecord, serverUrl } from './menu.js';
+import { createMenu, playerName, renderCharacterPicker, saveDailyRecord } from './menu.js';
 import { createSession, savedSession } from './net.js';
+import { guestTransport } from './p2p/guest.js';
+import { hostRoom, roomId } from './p2p/host.js';
+import { openRoom } from './p2p/room.js';
 import { DAMAGE_SOURCES, POWER_INFO } from './powerInfo.js';
 import { createWallet } from './wallet.js';
 import { playSplash } from './intro.js';
@@ -60,7 +63,8 @@ let mode = 'menu'; // menu | offline | online
 let run = null;    // offline run (see localCoop.js)
 let game = null;   // offline simulation, run.game
 let session = null;
-let view = null;   // what is drawn this frame (offline state or interpolated co-op snapshot)
+let hosting = null; // the room this browser hosts, if any
+let view = null;  // what is drawn this frame (offline state or interpolated co-op snapshot)
 let meId = null;
 let paused = false;
 let last = performance.now();
@@ -331,6 +335,7 @@ function endGame() {
   round = null;
   const previous = session;
   session = null;
+  hosting = null;
   previous?.close();
   hud.setReconnecting(false);
   hud.hidePowers();
@@ -348,6 +353,11 @@ function togglePause(force) {
 }
 addEventListener('blur', () => { controls.reset(); togglePause(true); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { controls.reset(); togglePause(true); } });
+let hostWasHidden = false;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hostWasHidden = Boolean(hosting && mode === 'online'); return; }
+  if (hostWasHidden) { hostWasHidden = false; hud.toast('A aba ficou oculta: os outros jogadores podem ter travado. Mantenha-a visível.'); }
+});
 
 /** The player a keyboard slot acts for, or null when that player cannot act right now. */
 function actor(slot) {
@@ -377,7 +387,9 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
   if (session || mode !== 'menu') return;
   let lobbyPlayers = [];
   let lobbyRunning = false;
-  const entry = { action, code, visibility, name: playerName(), color: menu.character, meta: wallet.upgrades, campaign: menu.campaign,
+  hosting = action === 'create' ? hostRoom({ openRoom }) : null;
+  const room = hosting?.code ?? code.toUpperCase();
+  const entry ={ action, code, visibility, name: playerName(), color: menu.character, meta: wallet.upgrades, campaign: menu.campaign,
     curses: menu.curses, loadout: menu.loadout, unlocks: menu.unlocks, resume };
   const requestEntry = color => current.send({ type: action, v: PROTOCOL_VERSION, room: code, name: playerName(), visibility, color, meta: wallet.upgrades,
     campaign: menu.campaign, curses: menu.curses, loadout: menu.loadout, unlocks: menu.unlocks });
@@ -388,7 +400,9 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
       else { menu.selectCharacter(color); requestEntry(color); }
     }, disabled || lobbyRunning);
   };
-  const current = session = createSession(resume?.url || serverUrl(), entry, {
+  const current = session = createSession(
+    hosting ? hosting.connect : useResume => guestTransport(openRoom(roomId(room)), { resume: useResume }),
+    entry, {
     onJoined(message) {
       if (session !== current) return;
       if (Number.isInteger(message.color)) menu.selectCharacter(message.color);
@@ -414,6 +428,7 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
       if (session !== current) return;
       mode = 'online';
       showGame('CO-OP', current.room);
+      if (hosting) hud.toast('Você é o anfitrião: mantenha esta aba aberta e visível, ou a partida trava para todos.');
     },
     onReconnecting(active) { if (session === current) hud.setReconnecting(active); },
     onError(message) {
@@ -437,6 +452,7 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
     onClosed({ over, failure, reason }) {
       if (session !== current) return;
       session = null;
+      hosting = null;
       hud.setReconnecting(false);
       if (mode === 'online') {
         if (!over) { endGame(); hud.toast(reason || 'Conexão encerrada. Você pode iniciar outro ritual.'); }
@@ -451,7 +467,7 @@ function connect(action, code = '', visibility = 'closed', resume = null) {
   $('#roomCode').textContent = '------';
   $('#startBtn').disabled = true;
   $('#lobby').classList.remove('hidden');
-  $('#lobbyStatus').textContent = 'Conectando ao servidor…';
+  $('#lobbyStatus').textContent = action === 'create' ? 'Criando a sala…' : 'Procurando a sala…';
   $('#lobbyCharacterHint').textContent = 'Você pode trocar de personagem antes da batalha.';
   renderLobbyCharacters(true);
 }

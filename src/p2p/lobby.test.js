@@ -48,14 +48,14 @@ test('salas fechadas, em andamento encerrado ou sem snapshot nunca são anunciad
   assert.deepEqual(seen, []);
 });
 
-test('o observador entra no lobby como passivo e anúncios malformados são ignorados', { timeout: 10000 }, async t => {
+test('o observador entra no lobby como par ativo (um par passivo nunca descobre ninguém) e anúncios malformados são ignorados', { timeout: 10000 }, async t => {
   const swarm = createFakeSwarm();
   const joined = [];
   const spy = (roomId, options) => { joined.push([roomId, options]); return swarm.openRoom(roomId, options); };
   const lists = [];
   const watcher = watchRooms({ openRoom: spy, onUpdate: list => lists.push(list) });
   t.after(() => watcher.stop());
-  assert.deepEqual(joined, [[LOBBY_ROOM, { passive: true }]]);
+  assert.deepEqual(joined, [[LOBBY_ROOM, undefined]]);
   const rogue = swarm.openRoom(LOBBY_ROOM);
   const rooms = rogue.makeAction('rooms');
   await new Promise(resolve => setTimeout(resolve, 20));

@@ -11,9 +11,10 @@ import { characterPortrait } from './characterPortrait.js';
 import { AURORA } from '../server/aurora.js';
 import { GOD, GOD_COST } from '../server/god.js';
 import { createAchievements } from './achievements.js';
+import { openRoom } from './p2p/room.js';
+import { watchRooms } from './p2p/lobby.js';
 
 const $ = selector => document.querySelector(selector);
-const DEFAULT_SERVER = 'wss://vps65228.publiccloud.com.br/ws';
 export const characterNames = ['Azul', 'Vermelho', 'Verde', 'Roxo', 'O Desenvolvedor', 'Guardião da Aurora', 'The God'];
 export const characterEffects = ['Desacelera inimigos', 'Explode em área', 'Atravessa 3 inimigos', 'Lâmina larga, até 2 alvos', 'Secreto · 5× vida, 4× dano, disparo triplo', '+50% vida · +35% dano · perfura 2 alvos · raio solar periódico', '500 de vida · +50% dano · +20% velocidade · 12 armadura · ataques 15% mais rápidos · perfura 3 alvos · 2 planetas orbitais'];
 const achievements = createAchievements();
@@ -27,10 +28,6 @@ const developerUnlocked = () => secretFound || storage.get('arcana-developer-unl
 const godUnlocked = () => {
   try { return JSON.parse(storage.get('arcana-meta') || '{}').godUnlocked === true; } catch { return false; }
 };
-
-export function serverUrl() {
-  return new URLSearchParams(location.search).get('server') || storage.get('arcana-server') || DEFAULT_SERVER;
-}
 
 export function playerName() {
   return ($('#playerNameInput').value.trim() || 'Arcanista').slice(0, 16);
@@ -194,7 +191,7 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
       const occupancy = document.createElement('em');
       occupancy.textContent = `${room.count}/4  ›`;
       button.append(description, occupancy);
-      button.onclick = () => onJoin(room.code);
+      button.onclick = () => { cancelRoomRequest(); onJoin(room.code); };
       return button;
     }));
   }
@@ -205,33 +202,21 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
     $('#openRoomsList').replaceChildren(small);
   }
 
+  /** Watches the P2P lobby while the join panel is open; closing the panel (or starting a game) stops it. */
   function fetchOpenRooms() {
     cancelRoomRequest();
     $('#roomCapacity').textContent = '';
+    if ($('#joinBox').classList.contains('hidden') || !isIdle()) return;
     if (!navigator.onLine) { listMessage('Sem internet. Você pode jogar offline ou iniciar o desafio diário.'); return; }
-    let listSocket;
-    try { listSocket = new WebSocket(serverUrl()); } catch { listMessage('Endereço do servidor inválido.'); return; }
-    const timeout = setTimeout(() => { listMessage('O servidor demorou para responder.'); cancelRoomRequest(); }, 5000);
-    cancelRoomRequest = () => {
-      clearTimeout(timeout);
-      listSocket.onopen = listSocket.onmessage = listSocket.onclose = null;
-      listSocket.onerror = () => {};
-      listSocket.close();
-      cancelRoomRequest = () => {};
-    };
-    listSocket.onopen = () => listSocket.send(JSON.stringify({ type: 'listRooms' }));
-    listSocket.onmessage = ({ data }) => {
-      let message;
-      try { message = JSON.parse(data); } catch { return; }
-      if (!message || message.type !== 'rooms' || !Array.isArray(message.rooms)) return;
-      renderOpenRooms(message.rooms);
-      if (message.capacity) {
-        const { used, max } = message.capacity;
-        $('#roomCapacity').textContent = `${used}/${max} salas em uso${used >= max ? ' • Limite atingido. Entre em uma sala com vagas.' : ''}`;
-      }
-      cancelRoomRequest();
-    };
-    listSocket.onerror = listSocket.onclose = () => { listMessage('Não foi possível consultar as salas.'); cancelRoomRequest(); };
+    listMessage('Procurando salas abertas…');
+    let settled = false;
+    let latest = [];
+    let watcher;
+    try {
+      watcher = watchRooms({ openRoom, onUpdate: rooms => { latest = rooms; if (settled || rooms.length) renderOpenRooms(rooms); } });
+    } catch { listMessage('Não foi possível buscar salas neste navegador.'); return; }
+    const settle = setTimeout(() => { settled = true; renderOpenRooms(latest); }, 5000);
+    cancelRoomRequest = () => { clearTimeout(settle); watcher.stop(); cancelRoomRequest = () => {}; };
   }
 
   function renderShop() {
@@ -292,6 +277,7 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
   $('#shopBtn').onclick = () => { renderShop(); $('#shopModal').classList.remove('hidden'); };
   $('#shopClose').onclick = () => $('#shopModal').classList.add('hidden');
   $('#splitBtn').onclick = () => {
+    cancelRoomRequest();
     $('#joinBox').classList.add('hidden');
     $('#createBox').classList.add('hidden');
     const box = $('#splitBox');
@@ -300,6 +286,7 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
   };
   $('#confirmSplitBtn').onclick = () => onSplit();
   $('#createBtn').onclick = () => {
+    cancelRoomRequest();
     $('#splitBox').classList.add('hidden');
     $('#joinBox').classList.add('hidden');
     const box = $('#createBox');
@@ -311,7 +298,8 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
     $('#createBox').classList.add('hidden');
     const box = $('#joinBox');
     box.classList.toggle('hidden');
-    if (!box.classList.contains('hidden')) {
+    if (box.classList.contains('hidden')) cancelRoomRequest();
+    else {
       fetchOpenRooms();
       requestAnimationFrame(() => box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
     }
@@ -327,13 +315,12 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
       $('#confirmCreateBtn').textContent = visibility === 'open' ? 'Criar sala aberta' : 'Criar sala fechada';
     };
   });
-  $('#confirmCreateBtn').onclick = () => onCreate(visibility);
+  $('#confirmCreateBtn').onclick = () => { cancelRoomRequest(); onCreate(visibility); };
   $('#refreshRoomsBtn').onclick = fetchOpenRooms;
   $('#joinBtn').onclick = () => {
     const code = $('#roomInput').value.trim().toUpperCase();
-    code.length < 4 ? toast('Digite o código da sala') : onJoin(code);
+    code.length < 4 ? toast('Digite o código da sala') : (cancelRoomRequest(), onJoin(code));
   };
-  $('#settingsBtn').onclick = () => $('#settings').classList.toggle('hidden');
   const closeCredits = () => $('#creditsModal').classList.add('hidden');
   $('#creditsBtn').onclick = () => {
     $('#creditsModal').classList.remove('hidden');
@@ -342,17 +329,12 @@ export function createMenu({ wallet, codex, toast, onOffline, onSplit, onDaily, 
   };
   $('#creditsClose').onclick = closeCredits;
   addEventListener('keydown', event => { if (event.key === 'Escape') closeCredits(); });
-  $('#serverUrl').value = serverUrl();
-  $('#saveServer').onclick = () => { storage.set('arcana-server', $('#serverUrl').value.trim()); toast('Servidor salvo'); fetchOpenRooms(); };
   $('#playerNameInput').value = storage.get('arcana-player-name') || '';
   $('#playerNameInput').addEventListener('change', () => storage.set('arcana-player-name', playerName()));
 
-  const refresh = () => { if (!document.hidden && isIdle()) fetchOpenRooms(); };
-  refresh();
-  addEventListener('online', refresh);
-  addEventListener('offline', refresh);
-  setInterval(refresh, 10000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  addEventListener('online', () => fetchOpenRooms());
+  addEventListener('offline', () => fetchOpenRooms());
+  document.addEventListener('visibilitychange', () => { if (document.hidden) cancelRoomRequest(); else fetchOpenRooms(); });
 
   return {
     get unlocks() { return { aurora: achievements.aurora, god: wallet.godUnlocked }; },

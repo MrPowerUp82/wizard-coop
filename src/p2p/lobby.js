@@ -36,11 +36,11 @@ export function announceRooms({ openRoom, snapshot, intervalMs = ANNOUNCE_EVERY_
 }
 
 /**
- * The menu calls this while the join panel is open. Joins the lobby as a passive peer (it only connects to
- * announcers, not to other watchers) and reports the current list whenever it changes.
+ * The menu calls this while the join panel is open and reports the current list whenever it changes.
+ * It must be an active peer: a Trystero "passive" peer never announces itself, so it would never find anyone.
  */
 export function watchRooms({ openRoom, onUpdate, ttlMs = ROOM_TTL_MS, now = Date.now }) {
-  const room = openRoom(LOBBY_ROOM, { passive: true });
+  const room = openRoom(LOBBY_ROOM);
   const known = new Map();
   let last = '';
   const publish = () => {

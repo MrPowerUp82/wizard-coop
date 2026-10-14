@@ -1,6 +1,6 @@
 import { createCanvas, RENDER_TUNING } from './platform.js';
 
-// Small cached tiles: the floor is drawn locally and never sent over WebSocket.
+// Small cached tiles: the floor is drawn locally and never sent over the network.
 const palettes = [
   ['#101f1a', '#172b20', '#213b29', '#395439'],
   ['#111e2b', '#1b2f40', '#2a4355', '#547687'],

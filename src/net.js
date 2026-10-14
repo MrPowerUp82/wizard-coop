@@ -117,7 +117,7 @@ export function createSession(connect, entry, handlers) {
       setTimeout(() => { if (!closedByUser) open(true); }, RETRY_DELAYS[retries++]);
       return;
     }
-    if (over) rememberSession(null);
+    rememberSession(null); // not retrying: there is nothing left to come back to
     handlers.onClosed?.({ inGame, over, failure: session.failure, code: event.code, reason: event.reason });
   }
 
