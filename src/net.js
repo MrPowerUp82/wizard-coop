@@ -29,8 +29,9 @@ function rememberSession(session) {
 /**
  * One co-op connection: lobby messages, a snapshot buffer rendered ~100ms in the past,
  * client-side prediction for the local player and automatic resume after a dropped connection.
+ * `connect(resume)` returns a transport (see src/p2p/transport.js) and is called again on every resume attempt.
  */
-export function createSession(url, entry, handlers) {
+export function createSession(connect, entry, handlers) {
   let socket = null;
   let closedByUser = false;
   let retries = 0;
@@ -55,7 +56,7 @@ export function createSession(url, entry, handlers) {
 
   function open(resume) {
     let ws;
-    try { ws = new WebSocket(url); } catch { handlers.onError?.({ message: 'Endereço do servidor inválido' }); return; }
+    try { ws = connect(resume); } catch { handlers.onError?.({ message: 'Não foi possível iniciar a conexão.', transport: true }); return; }
     socket = ws;
     ws.onopen = () => {
       if (resume) ws.send(JSON.stringify({ type: 'resume', v: PROTOCOL_VERSION, room: session.room, token: session.token }));
@@ -65,7 +66,7 @@ export function createSession(url, entry, handlers) {
       ping();
       pingTimer = setInterval(ping, 2000);
     };
-    ws.onerror = () => { if (socket === ws && !inGame) handlers.onError?.({ message: 'Não foi possível alcançar o servidor.', transport: true }); };
+    ws.onerror = () => { if (socket === ws && !inGame) handlers.onError?.({ message: 'Não foi possível conectar à sala.', transport: true }); };
     ws.onmessage = ({ data }) => { if (socket === ws) receive(data); };
     ws.onclose = event => { if (socket === ws) closed(event); };
   }
@@ -102,7 +103,7 @@ export function createSession(url, entry, handlers) {
       reconcile(state, at);
       over = state.over;
       if (message.type === 'start' && !inGame) { inGame = true; handlers.onStart?.(); }
-      if (session.token) rememberSession(over ? null : { url, room: session.room, token: session.token });
+      if (session.token && entry.action === 'join') rememberSession(over ? null : { room: session.room, token: session.token });
     }
   }
 
@@ -180,11 +181,15 @@ export function createSession(url, entry, handlers) {
   if (entry.resume) Object.assign(session, { room: entry.resume.room, token: entry.resume.token });
   open(Boolean(entry.resume));
 
+  // Object.assign would copy a getter's value once; defineProperties keeps these live.
+  Object.defineProperties(session, {
+    inGame: { get: () => inGame },
+    rtt: { get: () => rtt },
+    hasState: { get: () => snapshots.length > 0 }
+  });
+
   return Object.assign(session, {
     send,
-    get inGame() { return inGame; },
-    get rtt() { return rtt; },
-    get hasState() { return snapshots.length > 0; },
     close() {
       closedByUser = true;
       rememberSession(null);
