@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/server.js",
-    "test": "node --test server/*.test.js",
+    "test": "node --test server/*.test.js src/p2p/*.test.js",
     "sim": "node scripts/balance-sim.mjs",
     "fixtures:cpp": "node scripts/export-protocol-fixtures.mjs ../wizard_coop_cpp/tests/fixtures/protocol/snapshots.json",
     "lint": "eslint .",
