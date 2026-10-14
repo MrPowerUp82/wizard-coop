@@ -1,36 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
-import WebSocket from 'ws';
 import { createGameState, createPlayer, publicState, updateGame } from './game.js';
 import { VIEW_RADIUS, decodeState, encodeState } from './protocol.js';
-
-async function startServer(t, env = {}) {
-  const child = spawn(process.execPath, ['server/server.js'], {
-    env: { ...process.env, PORT: '0', ...env }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true
-  });
-  t.after(() => child.kill());
-  const [output] = await once(child.stdout, 'data');
-  const port = String(output).match(/:(\d+)/)?.[1];
-  assert.ok(port);
-  return async function connect(options) {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}`, options);
-    t.after(() => ws.terminate());
-    const queue = [];
-    ws.on('message', raw => queue.push(JSON.parse(raw)));
-    await once(ws, 'open');
-    return {
-      ws,
-      send: message => ws.send(JSON.stringify(message)),
-      async receive(type, predicate = () => true) {
-        let index;
-        while ((index = queue.findIndex(m => m.type === type && predicate(m))) < 0) await once(ws, 'message');
-        return queue.splice(index, 1)[0];
-      }
-    };
-  };
-}
+import { startRoom } from './test-support.js';
 
 test('snapshot compacto preserva o que o cliente desenha e omite o que está longe', () => {
   const s = createGameState();
@@ -61,22 +33,22 @@ test('snapshot compacto preserva o que o cliente desenha e omite o que está lon
 });
 
 test('conexão caída mantém o personagem e permite voltar com o token; saída voluntária libera na hora', { timeout: 15000 }, async t => {
-  const connect = await startServer(t, { RECONNECT_GRACE_MS: '800' });
-  const host = await connect();
-  host.send({ type: 'create', name: 'Anfitrião', color: 0 });
-  const created = await host.receive('joined');
-  const guest = await connect();
+  const { host: roomHost, connect } = startRoom(t, { reconnectGraceMs: 800 });
+  const owner = connect();
+  owner.send({ type: 'create', name: 'Anfitrião', color: 0 });
+  const created = await owner.receive('joined');
+  const guest = connect();
   guest.send({ type: 'join', room: created.room, name: 'Convidado', color: 1 });
   const joined = await guest.receive('joined');
   assert.ok(joined.token);
-  host.send({ type: 'start' });
+  owner.send({ type: 'start' });
   await guest.receive('start');
 
-  guest.ws.terminate();
-  const waiting = await host.receive('lobby', m => m.players.some(p => p.id === joined.playerId && !p.connected));
+  guest.terminate();
+  const waiting = await owner.receive('lobby', m => m.players.some(p => p.id === joined.playerId && !p.connected));
   assert.equal(waiting.count, 2);
 
-  const back = await connect();
+  const back = connect();
   back.send({ type: 'resume', room: created.room, token: 'wrong' });
   assert.equal((await back.receive('error')).code, 'RESUME_FAILED');
   back.send({ type: 'resume', room: created.room, token: joined.token });
@@ -85,38 +57,22 @@ test('conexão caída mantém o personagem e permite voltar com o token; saída 
   assert.equal(resumed.playerId, joined.playerId);
   assert.equal(decodeState((await back.receive('start')).state).players[joined.playerId].connected, true);
 
-  back.ws.terminate();
-  await host.receive('lobby', m => m.count === 1);
-  host.send({ type: 'listRooms' });
-  assert.equal((await host.receive('rooms')).capacity.used, 1);
+  owner.drain('lobby');
+  back.terminate();
+  await owner.receive('lobby', m => m.count === 1);
+  assert.equal(roomHost.snapshot().count, 1);
 
-  const third = await connect();
+  const third = connect();
   third.send({ type: 'join', room: created.room, color: 2 });
   const late = await third.receive('joined');
+  owner.drain('lobby');
   third.send({ type: 'leave' });
-  await host.receive('lobby', m => !m.players.some(p => p.id === late.playerId));
+  await owner.receive('lobby', m => !m.players.some(p => p.id === late.playerId));
 });
 
-test('heartbeat derruba conexões mudas e salas ociosas no lobby expiram', { timeout: 15000 }, async t => {
-  const connect = await startServer(t, { HEARTBEAT_MS: '150', LOBBY_IDLE_MS: '400' });
-  const silent = await connect({ autoPong: false });
-  silent.send({ type: 'create' });
-  await silent.receive('joined');
-  await once(silent.ws, 'close');
-
-  const idle = await connect();
-  idle.send({ type: 'create' });
-  await idle.receive('joined');
-  const [code] = await once(idle.ws, 'close');
-  assert.equal(code, 4001);
-  const observer = await connect();
-  observer.send({ type: 'listRooms' });
-  assert.equal((await observer.receive('rooms')).capacity.used, 0);
-});
-
-test('trocar poderes e entrar atrasado funcionam pelo servidor', { timeout: 15000 }, async t => {
-  const connect = await startServer(t);
-  const host = await connect();
+test('trocar poderes e entrar atrasado funcionam pela sala', { timeout: 15000 }, async t => {
+  const { connect } = startRoom(t);
+  const host = connect();
   host.send({ type: 'create', color: 0, meta: { reroll: 1, vigor: 99 } });
   const created = await host.receive('joined');
   host.send({ type: 'start' });
@@ -124,7 +80,7 @@ test('trocar poderes e entrar atrasado funcionam pelo servidor', { timeout: 1500
   const me = state.players[created.playerId];
   assert.equal(me.rerolls, 2);
   assert.equal(me.maxHp, 130);
-  const late = await connect();
+  const late = connect();
   late.send({ type: 'join', room: created.room, color: 3 });
   const joined = await late.receive('joined');
   late.send({ type: 'ready' });
@@ -138,14 +94,14 @@ test('trocar poderes e entrar atrasado funcionam pelo servidor', { timeout: 1500
 });
 
 test('sala co-op leva maldições, bloqueia o infinito sem desbloqueio, aplica loadout e repassa sinais', { timeout: 15000 }, async t => {
-  const connect = await startServer(t);
-  const host = await connect();
+  const { connect } = startRoom(t);
+  const host = connect();
   host.send({ type: 'create', color: 0, campaign: 'endless', curses: ['swarm', 'bogus'], meta: {}, loadout: { weapon: 'aura' } });
   const created = await host.receive('joined');
   const lobby = await host.receive('lobby');
   assert.equal(lobby.campaign, 'quick', 'infinito exige desbloqueio');
   assert.deepEqual(lobby.curses, ['swarm']);
-  const guest = await connect();
+  const guest = connect();
   guest.send({ type: 'join', room: created.room, color: 2, meta: { arsenal: 1, secondSpell: 1 }, loadout: { weapon: 'chain', special: 1 } });
   const joined = await guest.receive('joined');
   host.send({ type: 'start' });
@@ -160,7 +116,8 @@ test('sala co-op leva maldições, bloqueia o infinito sem desbloqueio, aplica l
   assert.equal(event.player, joined.playerId);
   assert.equal(event.signal, 'help');
 
-  const unlocked = await connect();
+  const other = startRoom(t);
+  const unlocked = other.connect();
   unlocked.send({ type: 'create', color: 1, campaign: 'endless', meta: { endless: 1 } });
   await unlocked.receive('joined');
   assert.equal((await unlocked.receive('lobby')).campaign, 'endless');

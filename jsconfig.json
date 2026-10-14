@@ -26,6 +26,10 @@
   ],
   "exclude": [
     "server/**/*.test.js",
+    "server/test-support.js",
+    "src/**/*.test.js",
+    "src/p2p/test-support.js",
+    "src/p2p/fake-room.js",
     "dist",
     "node_modules"
   ]
