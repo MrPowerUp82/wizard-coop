@@ -62,24 +62,23 @@ host.destroy(code, reason);
 - Remove-se: `rooms` Map, `MAX_ROOMS`, `createCode` global, heartbeat de `ws`, `maxPayload`/`perMessageDeflate`. `listRooms` sai do host (agora é `lobby.js`).
 - Mantém-se: `RECONNECT_GRACE_MS` (30 s), `LOBBY_IDLE_MS` (20 min), `ENDED_ROOM_MS` (90 s), TICK 30, SNAPSHOT_EVERY 2.
 - Limite de tamanho de mensagem: o host descarta cargas > 4096 caracteres antes de `JSON.parse`.
-- Contrapressão: sem `bufferedAmount` em loopback; para peers WebRTC, descarta snapshot se o buffer do canal passar de 256 kB, como hoje.
+- Contrapressão: o anfitrião para de enviar snapshots a um convidado com mais de 8 envios pendentes (a API do Trystero não expõe o buffer do canal).
 
 ## Fluxo
 
 ### Criar sala
 1. Gera código de 6 letras (mesmo alfabeto atual) e entra na sala Trystero `arcana:CODE`.
-2. Envia `probe`; se algum peer responder `taken`, sorteia outro código (evita colisão entre dois anfitriões).
-3. Cria `createRoomHost`, conecta o jogador local por `loopbackPair()` e executa o `create` normalmente.
-4. Para cada peer que entra (`onPeerJoin`), cria um cliente de `host.connect` ligado a um canal Trystero (`action` única `msg`, JSON em string).
-5. Se a sala for **aberta**, `announceRoom` a cada 3 s enquanto não estiver cheia; para quando fechar/encher/terminar.
+2. Cria `createRoomHost`, conecta o jogador local por `loopbackPair()` e executa o `create` normalmente. (Não há verificação de colisão de código: com 31⁶ ≈ 887 milhões de códigos a chance é desprezível, e sondar atrasaria toda criação de sala.)
+3. Quando um convidado diz `hello` no canal de controle, cria um cliente de `host.connect` ligado ao canal Trystero `msg` (JSON em string) e responde `ack`.
+4. Se a sala for **aberta**, `announceRooms` a cada 3 s enquanto não estiver cheia; para quando fechar/encher/terminar.
 
 ### Entrar por código
-1. Entra em `arcana:CODE`, envia `hello`; o anfitrião responde `hello-ack` (com `PROTOCOL_VERSION`).
-2. Sem resposta em 8 s: erro "Sala não encontrada." Resposta com versão diferente: `PROTOCOL_MISMATCH`.
+1. Entra em `arcana:CODE`, envia `hello`; o anfitrião responde `ack`.
+2. Sem resposta em 12 s (5 s ao retomar): erro "Sala não encontrada." (ao retomar, fecha com 1006 para o `net.js` tentar de novo). Versão diferente do protocolo: o `room-host` responde `PROTOCOL_MISMATCH` no `create/join/resume`.
 3. O transporte abre e `net.js` envia `join` como hoje.
 
 ### Lista de salas abertas
-- Sala Trystero fixa `arcana-lobby`. O menu entra enquanto estiver ocioso e sai ao iniciar partida/lobby.
+- Sala Trystero fixa `arcana-lobby`. O menu entra como par **ativo** só enquanto o painel "Entrar" está aberto (um par `passive` do Trystero nunca anuncia nem descobre ninguém) e sai ao fechar o painel ou iniciar partida/lobby.
 - Anúncio: `{ code, count, running, host, campaign, curses }`. O menu mantém um mapa por `code` e expira entradas após 8 s sem anúncio.
 - Salas fechadas nunca anunciam. A capacidade "N/M salas" some da UI.
 - O botão "Atualizar" reinicia a escuta e aguarda ~2 s antes de mostrar "Nenhuma sala aberta".

@@ -141,7 +141,7 @@ Específico do Switch (`platforms/switch/src/`):
   do jogo usam isso, então esse `fill()` vira `clip()` + `fillRect()` (mesmos pixels);
 - `debug/` — painel de controles, profiler e *autoplay* de medição (só em build debug).
 
-O co-op online (servidor, protocolo, mensagens, WebSocket) não mudou e continua na web; ele não foi portado para o Switch.
+O co-op online (protocolo, mensagens, WebRTC) não mudou e continua na web; ele não foi portado para o Switch.
 
 ## Depuração
 

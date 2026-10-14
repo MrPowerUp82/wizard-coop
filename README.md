@@ -2,7 +2,7 @@
 
 ![Arte de Arcana Survivors: quatro arcanistas enfrentam hordas diante de um castelo sob a lua](docs/arcana-banner.png)
 
-Survival roguelite cooperativo para a web, de 1 a 4 jogadores. O cliente estático funciona no GitHub Pages, e o servidor WebSocket roda separadamente em Node.js na VPS. A mesma simulação (`server/game.js`) roda no navegador no modo offline e no servidor autoritativo no co-op.
+Survival roguelite cooperativo para a web, de 1 a 4 jogadores. O jogo é um site estático (GitHub Pages) e o co-op online é peer-to-peer: quem cria a sala roda a simulação (`server/game.js`) no próprio navegador e os outros jogadores se conectam a ele por WebRTC, sem servidor próprio. A mesma simulação roda no modo offline.
 
 > [!NOTE]
 > **Ports para consoles (Nintendo Switch, PS Vita, PSP):** A continuação e evolução dos ports foi transferida para o projeto dedicado em C++20: [wizard-coop-ports](https://github.com/MrPowerUp82/wizard-coop-ports) ([README local](../wizard_coop_cpp/README.md)). O novo projeto substitui o port em JavaScript (nx.js) por uma implementação nativa de alta performance (60 FPS, renderer em lote e zero heap por frame).
@@ -14,13 +14,7 @@ npm install
 npm run dev
 ```
 
-Em outro terminal:
-
-```bash
-npm run server
-```
-
-Para conectar ao backend local, abra `http://localhost:5173/?server=ws://localhost:8081` (ou a porta definida em `PORT`). Sem configuração, o menu usa o endereço remoto definido em `src/menu.js`. Em produção, abra **Configurar servidor** ou use `?server=wss://jogo.seudominio.com/ws`.
+O co-op funciona direto no `npm run dev`: abra duas abas (ou dois navegadores), crie uma sala em uma e entre pela lista ou pelo código na outra. Os pares se encontram por relays públicos do Trystero (trackers BitTorrent), então é preciso internet. Em redes onde a conexão direta falha, informe um servidor TURN: `?turn=turn:host:3478&turnUser=usuario&turnCred=senha`.
 
 | Comando | O que faz |
 | --- | --- |
@@ -63,7 +57,7 @@ em [platforms/switch/README.md](platforms/switch/README.md). A simulação, o re
 
 Abra a versão publicada em HTTPS (ou `localhost`) uma vez com internet e aguarde **Pronto para jogar sem internet** no menu. Os arquivos do jogo, fontes e imagens dos seis reinos ficam salvos no navegador. Depois, é possível fechar e reabrir o jogo sem conexão, pelo mesmo endereço ou pelo aplicativo instalado.
 
-Use **Instalar jogo** quando disponível, a opção de instalação do navegador ou, no iPhone/iPad, **Compartilhar → Adicionar à Tela de Início**. Jogar solo, desafio diário, Grimório e Códex funcionam offline; salas cooperativas precisam do servidor e de internet. O progresso permanente continua salvo neste navegador; partidas em andamento não são salvas ao fechar o aplicativo. Limpar os dados do site também remove o cache e o progresso.
+Use **Instalar jogo** quando disponível, a opção de instalação do navegador ou, no iPhone/iPad, **Compartilhar → Adicionar à Tela de Início**. Jogar solo, desafio diário, Grimório e Códex funcionam offline; salas cooperativas precisam de internet. O progresso permanente continua salvo neste navegador; partidas em andamento não são salvas ao fechar o aplicativo. Limpar os dados do site também remove o cache e o progresso.
 
 Novas versões exibem **Atualizar jogo** no menu e só recarregam após esse clique. Termine a partida antes de atualizar. Para testar localmente, execute `npm run build` e `npm run preview`, visite o endereço informado, aguarde a preparação e recarregue com a rede desativada. O service worker fica desabilitado em `npm run dev`.
 
@@ -159,7 +153,7 @@ O Guardião usa vestes douradas e uma auréola solar. Tem **150 de vida, +35% de
 
 Inimigos derrotados deixam XP e podem deixar coração (5%), cristal verde (20%) ou moeda (20%). Quando o chão fica cheio, novos cristais de XP se fundem aos próximos, que mudam de cor conforme o valor. Assim nenhum XP é perdido no limite de 220 drops.
 
-As moedas da partida vão para o **Grimório** (menu inicial), que vende melhorias permanentes salvas no navegador (Vigor, Potência, Celeridade, Agilidade, Égide, Alcance, Sabedoria, Ganância, Canalização, Destino, Pacto familiar e Fênix) e desbloqueios: **Arsenal** (escolher a arma inicial), **Segundo feitiço** (especial alternativo), **Ritual infinito** e **The God**. O servidor valida graus, desbloqueios e escolhas antes de aplicá-los.
+As moedas da partida vão para o **Grimório** (menu inicial), que vende melhorias permanentes salvas no navegador (Vigor, Potência, Celeridade, Agilidade, Égide, Alcance, Sabedoria, Ganância, Canalização, Destino, Pacto familiar e Fênix) e desbloqueios: **Arsenal** (escolher a arma inicial), **Segundo feitiço** (especial alternativo), **Ritual infinito** e **The God**. O anfitrião valida graus, desbloqueios e escolhas antes de aplicá-los.
 
 O **Códex** (menu inicial) registra no navegador cada poder, combo, criatura, guardião e encontro descoberto, com a explicação de como funciona; entradas ainda não descobertas mostram só uma dica.
 Na aba **Bestiário** do Códex estão os 30 personagens, criaturas e guardiões. Quem ainda não foi encontrado aparece como silhueta animada, com uma dica de onde procurar; os heróis secretos se revelam ao serem desbloqueados. As prévias usam o mesmo renderizador de sprites da partida e permitem ver repouso, movimento, ataque, interação e dano, inclusive com espelhamento.
@@ -170,54 +164,18 @@ A tela final mostra nível, abates, dano e resgates de cada arcanista, além do 
 
 - Salas por código, abertas (listadas) ou fechadas. Cada personagem só pode ser usado por um jogador na mesma sala.
 - Quem entra numa partida em andamento nasce ao lado de um aliado e recebe XP de recuperação.
-- O servidor simula a 30 Hz e envia 15 snapshots por segundo. Cada cliente recebe apenas o que está a até 1.250 unidades do seu personagem, em arrays compactos (`server/protocol.js`) com compressão permessage-deflate. Cada snapshot tem cerca de 3 KB comprimido.
+- O anfitrião simula a 30 Hz e envia 15 snapshots por segundo a cada convidado. Cada um recebe apenas o que está a até 1.250 unidades do seu personagem, em arrays compactos (`server/protocol.js`).
 - O cliente desenha os outros jogadores e inimigos interpolados 100 ms no passado e prevê o próprio movimento, corrigindo a posição com base no tempo de ida e volta medido por ping.
-- **Reconexão**: se a conexão cair, o personagem continua na partida por 30 segundos e o cliente tenta voltar automaticamente, inclusive após recarregar a página. Sem ninguém conectado, a partida congela até alguém voltar.
-- Um heartbeat derruba conexões mortas; salas que nunca começaram expiram em 20 minutos e partidas encerradas liberam a vaga 90 segundos após o fim.
+- **Reconexão**: se a conexão de um convidado cair, o personagem continua na partida por 30 segundos e o cliente tenta voltar automaticamente, inclusive após recarregar a página. Sem ninguém conectado, a partida congela até alguém voltar.
+- **Limites do P2P**: se o anfitrião fechar ou recarregar a aba, a partida termina para todos. Mantenha a aba do anfitrião visível: abas em segundo plano são desaceleradas pelo navegador. Cerca de 10 a 15% das redes (NAT simétrico, algumas operadoras móveis) só conectam com um servidor TURN. Sem servidor neutro, o anfitrião tem a última palavra sobre a partida.
+- Os ports nativos continuam falando o mesmo protocolo de mensagens, mas por WebSocket; eles não encontram salas P2P da web até ganharem suporte a WebRTC.
+- Salas que nunca começaram expiram em 20 minutos e partidas encerradas fecham 90 segundos após o fim.
 
 ## Publicar o frontend no GitHub Pages
 
 1. Suba o repositório no GitHub.
 2. Em **Settings → Pages**, selecione **GitHub Actions**.
 3. O workflow incluso valida, compila e publica o diretório `dist`.
-4. Defina a URL WebSocket no menu. Ela fica salva no navegador.
-
-## Backend na VPS com aaPanel
-
-1. Instale Node.js 20+ pelo **Node Project Manager** do aaPanel.
-2. Envie o projeto e execute `npm ci --omit=dev`.
-3. Crie um projeto Node com arquivo inicial `server/server.js` e porta `8080`.
-4. Crie um domínio/subdomínio com SSL, por exemplo `jogo.seudominio.com`.
-5. No proxy reverso, encaminhe `/ws` para `http://127.0.0.1:8080` com upgrade WebSocket habilitado.
-6. No frontend use `wss://jogo.seudominio.com/ws`. O GitHub Pages exige `wss://`, pois a página usa HTTPS.
-
-Exemplo Nginx para o bloco `/ws`:
-
-```nginx
-location /ws {
-    proxy_pass http://127.0.0.1:8080;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_read_timeout 60s;
-}
-```
-
-Atualize sempre a pasta `server` inteira junto com o frontend e reinicie o processo Node: o protocolo de snapshots mudou, e um backend antigo não conversa com o cliente novo.
-
-### Variáveis de ambiente
-
-| Variável | Padrão | Uso |
-| --- | --- | --- |
-| `PORT` | `8081` | Porta do WebSocket |
-| `MAX_ROOMS` | `3` | Salas simultâneas (até 4 jogadores cada) |
-| `HEARTBEAT_MS` | `15000` | Intervalo do ping que detecta conexões mortas |
-| `RECONNECT_GRACE_MS` | `30000` | Tempo que um jogador desconectado mantém o personagem |
-| `LOBBY_IDLE_MS` | `1200000` | Expiração de salas que nunca começaram |
-| `ENDED_ROOM_MS` | `90000` | Tempo até fechar uma sala encerrada |
-
-`MAX_ROOMS=3` é um ponto de partida conservador para a VPS informada (1 vCPU, 460 MiB de RAM), e não uma capacidade garantida por teste de carga. Nas medições com bots, um tick da simulação custa menos de 0,1 ms e o gargalo é a banda, reduzida pelo protocolo compacto. Meça CPU, memória e latência na própria VPS antes de aumentar o limite. Use apenas uma instância do backend: salas e limites ficam em memória por processo.
 
 ## Arquitetura
 
@@ -229,7 +187,8 @@ Atualize sempre a pasta `server` inteira junto com o frontend e reinicie o proce
 | `server/powers.js` · `meta.js` | Poderes, evoluções, trocas, melhorias permanentes e desbloqueios |
 | `server/curses.js` · `encounters.js` · `objectives.js` | Maldições, semente do desafio diário, encontros e altar |
 | `server/spatial.js` | Grid espacial usado nas colisões |
-| `server/protocol.js` · `server.js` | Snapshots compactos, salas, heartbeat e reconexão |
+| `server/protocol.js` · `room-host.js` | Snapshots compactos e as regras de uma sala (lobby, entrada, reconexão, tick) |
+| `src/p2p/` | Transporte WebRTC (Trystero), anfitrião e convidado, lista de salas abertas |
 | `src/net.js` | Sessão co-op, interpolação, previsão e reconexão no cliente |
 | `src/render.js` · `sprites.js` · `terrain.js` · `animation.js` | Desenho, sprites pré-recortados, pisos e efeitos visuais |
 | `src/hud.js` · `menu.js` · `audio.js` · `input.js` · `wallet.js` | Interface, menu e loja, sons sintetizados, controles e moedas |

@@ -4,15 +4,13 @@
     {
       "name": "vite",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--port", "5173", "--strictPort"],
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5173",
+        "--strictPort"
+      ],
       "port": 5173
-    },
-    {
-      "name": "server",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["server/server.js"],
-      "env": { "PORT": "8080" },
-      "port": 8080
     }
   ]
 }
